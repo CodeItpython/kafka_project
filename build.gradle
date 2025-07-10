@@ -7,10 +7,6 @@ plugins {
 group = 'kafka'
 version = '0.0.1-SNAPSHOT'
 
-springBoot {
-    mainClass = 'kafka.backend.KafkaProjectBeApplication'
-}
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -52,5 +48,6 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
-tasks.named('bootJar') {
+bootJar {
+    mainClassName = 'kafka.backend.KafkaProjectBeApplication'
 }

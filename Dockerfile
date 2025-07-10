@@ -15,6 +15,8 @@ COPY gradle ./gradle
 
 RUN chmod +x gradlew
 
+COPY src ./src
+
 RUN ./gradlew bootJar
 
 # 빌드된 Spring Boot JAR 파일을 컨테이너로 복사합니다.
