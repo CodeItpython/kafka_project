@@ -1,5 +1,5 @@
  # Java 17 기반의 경량화된 OpenJDK 이미지를 사용합니다.
-FROM openjdk:17-jdk-slim
+FROM openjdk:21-jdk-slim
 
 # 컨테이너 내부의 작업 디렉토리를 /app으로 설정합니다.
 
