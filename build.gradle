@@ -49,5 +49,7 @@ tasks.named('test') {
 }
 
 tasks.named('bootJar') {
-    mainClassName = 'kafka.backend.KafkaProjectBeApplication'
+    manifest {
+        attributes 'Main-Class': 'kafka.backend.KafkaProjectBeApplication'
+    }
 }
