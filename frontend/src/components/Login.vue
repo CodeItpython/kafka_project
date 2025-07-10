@@ -72,7 +72,7 @@ export default {
       }
     },
     oauth2Login(provider) {
-      window.location.href = `http://localhost:8080/oauth2/callback/${provider}`;
+      window.location.href = `${process.env.VITE_APP_BACKEND_URL}/oauth2/callback/${provider}`;
     },
     toggleForm() {
       this.isLogin = !this.isLogin;
