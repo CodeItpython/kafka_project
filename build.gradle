@@ -47,3 +47,8 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+bootJar {
+    archiveFileName = "app.jar"
+    mainClassName = 'kafka.backend.KafkaProjectBeApplication'
+}
