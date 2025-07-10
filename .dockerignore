@@ -1,0 +1,11 @@
+.git
+.gitignore
+.gradle
+.idea
+build/
+frontend/node_modules/
+node_modules/
+uploads/
+*.iml
+*.log
+tmp/

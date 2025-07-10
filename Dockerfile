@@ -2,7 +2,20 @@
 FROM openjdk:17-jdk-slim
 
 # 컨테이너 내부의 작업 디렉토리를 /app으로 설정합니다.
+
 WORKDIR /app
+
+# Gradle Wrapper를 복사합니다.
+# build.gradle, settings.gradle, gradlew, gradlew.bat, gradle/wrapper 디렉토리가 필요합니다.
+COPY build.gradle settings.gradle ./
+COPY gradlew gradlew.bat ./
+COPY gradle ./gradle
+
+
+
+RUN chmod +x gradlew
+
+RUN ./gradlew bootJar
 
 # 빌드된 Spring Boot JAR 파일을 컨테이너로 복사합니다.
 # 'build/libs/backend-0.0.1-SNAPSHOT.jar'는 Gradle 빌드 시 생성되는 기본 JAR 파일 이름입니다.
