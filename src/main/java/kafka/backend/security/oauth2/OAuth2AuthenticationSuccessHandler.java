@@ -43,7 +43,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         String token = tokenProvider.generateToken(authentication);
 
         // Redirect to frontend with token and userId
-        String redirectUrl = UriComponentsBuilder.fromUriString("http://localhost:5173/oauth2/redirect")
+        String redirectUrl = UriComponentsBuilder.fromUriString("https://kafkaproj.vercel.app/oauth2/redirect")
                 .queryParam("token", token)
                 .queryParam("userId", userId) // Pass the actual database userId
                 .queryParam("username", URLEncoder.encode(username, StandardCharsets.UTF_8.toString())) // URL-encode the username
