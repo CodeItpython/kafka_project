@@ -22,7 +22,8 @@ public class WebConfig implements WebMvcConfigurer {
                 // 로컬 개발을 위해 "http://localhost:5173"도 포함하는 것이 좋습니다.
                 .allowedOrigins(
                     "https://kafkaproj-guns-projects-3aacdd9d.vercel.app", // Vercel 프론트엔드 도메인
-                    "http://localhost:5173" // 로컬 개발 환경
+                    "http://localhost:5173", // 로컬 개발 환경
+                    "https://kafkaproj.vercel.app"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS") // 허용할 HTTP 메서드
                 .allowedHeaders("*") // 모든 헤더 허용
