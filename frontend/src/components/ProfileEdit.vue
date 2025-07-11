@@ -35,7 +35,7 @@ export default {
     },
     async getCurrentUser() {
       try {
-        const response = await axios.get('http://localhost:8080/api/users/me', {
+        const response = await axios.get('https://kafka-project-1x9o.onrender.com/api/users/me', {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
           }
@@ -54,7 +54,7 @@ export default {
       }
 
       try {
-        const response = await axios.put(`http://localhost:8080/api/users/${this.userId}`, formData, {
+        const response = await axios.put(`https://kafka-project-1x9o.onrender.com/api/users/${this.userId}`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${localStorage.getItem('token')}`

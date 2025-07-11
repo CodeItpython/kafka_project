@@ -51,7 +51,7 @@ export default {
       }
     },
     connectWebSocket() {
-      const socket = new SockJS('http://localhost:8080/ws');
+      const socket = new SockJS('https://kafka-project-1x9o.onrender.com/ws');
       this.stompClient = Stomp.over(socket);
       const token = localStorage.getItem('jwtToken');
       const headers = {};
@@ -94,7 +94,7 @@ export default {
           this.errorMessage = 'User not logged in.';
           return;
         }
-        const response = await axios.get(`http://localhost:8080/api/friends/${userId}`);
+        const response = await axios.get(`https://kafka-project-1x9o.onrender.com/api/friends/${userId}`);
         this.friends = response.data;
       } catch (error) {
         this.errorMessage = error.response?.data || 'Failed to fetch friends.';

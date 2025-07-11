@@ -49,7 +49,7 @@ export default {
       try {
         let response;
         if (this.isLogin) {
-          response = await axios.post('http://localhost:8080/api/auth/login', {
+          response = await axios.post('https://kafka-project-1x9o.onrender.com/api/auth/login', {
             username: this.username,
             password: this.password,
           });
@@ -58,7 +58,7 @@ export default {
           localStorage.setItem('username', response.data.username);
           this.$router.push('/friends');
         } else {
-          response = await axios.post('http://localhost:8080/api/auth/register', {
+          response = await axios.post('https://kafka-project-1x9o.onrender.com/api/auth/register', {
             username: this.username,
             email: `${this.username}-${Date.now()}@example.com`, // Generate a more unique email
             password: this.password,

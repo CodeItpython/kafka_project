@@ -80,7 +80,7 @@ export default {
   methods: {
     async fetchUserProfile(userId, type) {
       try {
-        const response = await axios.get(`http://localhost:8080/api/users/${userId}`, {
+        const response = await axios.get(`https://kafka-project-1x9o.onrender.com/api/users/${userId}`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('jwtToken')}`
           }
@@ -96,7 +96,7 @@ export default {
       }
     },
     connectWebSocket() {
-      const socket = new SockJS('http://localhost:8080/ws');
+      const socket = new SockJS('https://kafka-project-1x9o.onrender.com/ws');
       this.stompClient = Stomp.over(socket);
       const token = localStorage.getItem('jwtToken'); // Get JWT token from localStorage
       const headers = {};
@@ -151,7 +151,7 @@ export default {
 
       try {
         const token = localStorage.getItem('jwtToken');
-        await axios.post('http://localhost:8080/upload-image', formData, {
+        await axios.post('https://kafka-project-1x9o.onrender.com/upload-image', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             'Authorization': `Bearer ${token}`
