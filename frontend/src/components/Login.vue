@@ -72,7 +72,7 @@ export default {
       }
     },
     oauth2Login(provider) {
-      window.location.href = `${process.env.VITE_APP_BACKEND_URL}/oauth2/callback/${provider}`;
+      window.location.href = `https://kafka-project-1x9o.onrender.com/oauth2/authorization/${provider}`;
     },
     toggleForm() {
       this.isLogin = !this.isLogin;
