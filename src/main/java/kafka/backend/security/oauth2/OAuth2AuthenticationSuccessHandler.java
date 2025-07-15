@@ -33,9 +33,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             CustomOAuth2User customOAuth2User = (CustomOAuth2User) oAuth2User;
             userId = customOAuth2User.getUserId();
             username = customOAuth2User.getName();
+            System.out.println("CustomOAuth2User detected. UserId: " + userId + ", Username: " + username);
         } else {
             // Fallback for non-custom OAuth2 users if necessary
             username = String.valueOf(oAuth2User.getAttributes().get("id"));
+            System.out.println("Fallback OAuth2User detected. Username from attributes: " + username);
             // You might need to fetch userId from your database here if it's not a CustomOAuth2User
         }
 

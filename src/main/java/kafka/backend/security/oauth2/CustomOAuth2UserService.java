@@ -22,6 +22,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         OAuth2User oAuth2User = super.loadUser(userRequest);
 
+        System.out.println("oAuth2User attributes: " + oAuth2User.getAttributes());
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
         String userNameAttributeName = userRequest.getClientRegistration().getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
 
@@ -32,8 +33,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         if ("kakao".equals(registrationId)) {
             Map<String, Object> kakaoAccount = oAuth2User.getAttribute("kakao_account");
+            providerId = String.valueOf(oAuth2User.getAttributes().get("id"));
             if (kakaoAccount != null) {
-                providerId = String.valueOf((Long) oAuth2User.getAttribute(userNameAttributeName));
                 email = (String) kakaoAccount.get("email");
                 Map<String, Object> profile = (Map<String, Object>) kakaoAccount.get("profile");
                 if (profile != null) {
