@@ -48,8 +48,11 @@ export default {
       this.errorMessage = '';
       try {
         let response;
+        const baseUrl = window.location.hostname === 'localhost' 
+          ? 'http://localhost:8080' 
+          : 'https://kafka-project-1x9o.onrender.com';
         if (this.isLogin) {
-          response = await axios.post('https://kafka-project-1x9o.onrender.com/api/auth/login', {
+          response = await axios.post(`${baseUrl}/api/auth/login`, {
             username: this.username,
             password: this.password,
           });
@@ -58,7 +61,7 @@ export default {
           localStorage.setItem('username', response.data.username);
           this.$router.push('/friends');
         } else {
-          response = await axios.post('https://kafka-project-1x9o.onrender.com/api/auth/register', {
+          response = await axios.post(`${baseUrl}/api/auth/register`, {
             username: this.username,
             email: `${this.username}-${Date.now()}@example.com`, // Generate a more unique email
             password: this.password,
@@ -72,7 +75,10 @@ export default {
       }
     },
     oauth2Login(provider) {
-      window.location.href = `https://kafka-project-1x9o.onrender.com/oauth2/authorization/${provider}`;
+      const baseUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:8080' 
+        : 'https://kafka-project-1x9o.onrender.com';
+      window.location.href = `${baseUrl}/oauth2/authorization/${provider}`;
     },
     toggleForm() {
       this.isLogin = !this.isLogin;
