@@ -51,17 +51,3 @@ tasks.named('test') {
 springBoot {
     mainClass = 'kafka.backend.KafkaProjectBeApplication'
 }
-
-// Add this block to load .env file for bootRun task
-tasks.named('bootRun') {
-    doFirst {
-        if (project.file('.env').exists()) {
-            project.file('.env').readLines().each { line ->
-                if (line.contains('=') && !line.startsWith('#')) {
-                    def parts = line.split('=', 2)
-                    systemProperty parts[0], parts[1]
-                }
-            }
-        }
-    }
-}
