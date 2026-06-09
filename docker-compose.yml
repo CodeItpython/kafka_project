@@ -45,6 +45,18 @@ services:
     ports:
       - "8880:8880"
 
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: kafka-jenkins:local
+    container_name: kafka-jenkins
+    ports:
+      - "18081:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+
   kafka:
     image: apache/kafka:3.9.0
     container_name: kafka-local
@@ -100,3 +112,4 @@ volumes:
   postgres-data:
   mongodb-data:
   elasticsearch-data:
+  jenkins-data:

@@ -1,33 +1,36 @@
-# Kafka Auth Project
+# Kafka Chat Project
 
-Spring Boot + Spring Security + Spring Cloud Netflix Eureka backend and React frontend scaffold.
+Spring Boot + Spring Security + Spring Cloud Netflix Eureka backend, React frontend, Kafka messaging, MongoDB chat history, Elasticsearch search, Docker, Kubernetes, and Jenkins local CI/CD scaffold.
 
 ## Structure
 
-- `backend/auth-service`: JWT authentication API
+- `backend/auth-service`: JWT authentication and chat API
 - `backend/discovery-service`: Netflix Eureka discovery server
-- `frontend`: React login page
+- `frontend`: React login and chat page
+- `jenkins`: Jenkins image for local CI/CD
+- `k8s`: local Kubernetes manifests
 - `docs/logs`: daily implementation notes
 
 ## Quick Start
 
+Start infrastructure first:
+
 ```bash
-cd backend
-gradle :discovery-service:bootRun
+docker compose up -d postgres mongodb elasticsearch kafka
 ```
 
 ```bash
-cd backend
-gradle :auth-service:bootRun
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:bootRun --args='--eureka.client.enabled=false'
 ```
 
 ```bash
-cd frontend
+cd /Users/gunwoo/Documents/KAFKA/frontend
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
 
-Frontend runs on `http://localhost:8880`, auth API on `http://localhost:8890`, and Eureka on `http://localhost:8761`.
+Frontend runs on `http://127.0.0.1:8880` and auth/chat API runs on `http://localhost:8890`.
 
 ## Docker
 
@@ -41,6 +44,10 @@ This starts:
 - Auth service: `http://localhost:8890`
 - Eureka dashboard: `http://localhost:8761`
 - Kafka broker: `localhost:9092`
+- Kafka local development listener: `localhost:29092`
+- PostgreSQL: `localhost:5432`
+- MongoDB: `localhost:27017`
+- Elasticsearch: `localhost:9200`
 
 ## Kubernetes
 
@@ -55,6 +62,40 @@ Then open:
 
 - Frontend NodePort: `http://localhost:30880`
 - Auth NodePort: `http://localhost:30890`
+
+After source changes, use the one-shot local deployment script:
+
+```bash
+scripts/deploy-local-k8s.sh
+```
+
+## Jenkins
+
+Run Jenkins in safe CI mode:
+
+```bash
+docker compose up -d --build jenkins
+```
+
+Open:
+
+```text
+http://localhost:18081
+```
+
+Initial password:
+
+```bash
+docker exec kafka-jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+Use `Jenkinsfile` for backend/frontend verification. To allow Jenkins to build local Docker images and deploy to local Kubernetes, use the explicit deploy override and `Jenkinsfile.local-deploy`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d --build jenkins
+```
+
+This mode mounts Docker socket and kubeconfig, so use it only on a trusted local machine.
 
 ## Work Logging
 

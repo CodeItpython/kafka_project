@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+
+    environment {
+        K8S_NAMESPACE = 'kafka-project'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Verify Backend') {
+            steps {
+                dir('backend') {
+                    sh './gradlew test'
+                }
+            }
+        }
+
+        stage('Verify Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm ci'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                sh 'scripts/docker-build.sh'
+            }
+        }
+
+        stage('Deploy To Local Kubernetes') {
+            steps {
+                sh 'kubectl apply -k k8s'
+                sh 'kubectl -n "$K8S_NAMESPACE" rollout restart deployment/discovery-service'
+                sh 'kubectl -n "$K8S_NAMESPACE" rollout restart deployment/auth-service'
+                sh 'kubectl -n "$K8S_NAMESPACE" rollout restart deployment/frontend'
+                sh 'kubectl -n "$K8S_NAMESPACE" rollout status deployment/discovery-service'
+                sh 'kubectl -n "$K8S_NAMESPACE" rollout status deployment/auth-service'
+                sh 'kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend'
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'kubectl -n "$K8S_NAMESPACE" get pods || true'
+        }
+    }
+}

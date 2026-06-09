@@ -1,0 +1,8 @@
+services:
+  jenkins:
+    user: root
+    environment:
+      KUBECONFIG: /var/jenkins_home/.kube/config
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.kube:/var/jenkins_home/.kube:ro
