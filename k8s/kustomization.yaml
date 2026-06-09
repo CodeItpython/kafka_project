@@ -2,6 +2,9 @@ resources:
   - namespace.yaml
   - secrets.example.yaml
   - kafka.yaml
+  - postgres.yaml
+  - mongodb.yaml
+  - elasticsearch.yaml
   - discovery-service.yaml
   - auth-service.yaml
   - frontend.yaml
