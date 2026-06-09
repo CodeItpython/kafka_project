@@ -1,0 +1,233 @@
+:root {
+  color: #172026;
+  background: #eef2f3;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(320px, 480px) minmax(280px, 420px);
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background:
+    linear-gradient(135deg, rgba(69, 123, 157, 0.14), rgba(42, 157, 143, 0.08)),
+    #eef2f3;
+}
+
+.auth-panel,
+.session-panel {
+  background: #ffffff;
+  border: 1px solid #d9e2e5;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(23, 32, 38, 0.10);
+}
+
+.auth-panel {
+  padding: 32px;
+}
+
+.session-panel {
+  padding: 28px;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.brand-row svg {
+  color: #2a9d8f;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+}
+
+h2 {
+  margin: 24px 0 16px;
+  font-size: 22px;
+}
+
+.brand-row p,
+.hint,
+.message,
+dd {
+  color: #60717a;
+}
+
+.mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: #edf3f4;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.mode-tabs button {
+  border: 0;
+  border-radius: 6px;
+  padding: 10px;
+  color: #52656e;
+  background: transparent;
+}
+
+.mode-tabs button.active {
+  background: #ffffff;
+  color: #172026;
+  box-shadow: 0 2px 8px rgba(23, 32, 38, 0.10);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+  min-height: 236px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: #39474f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  border: 1px solid #c7d4d8;
+  border-radius: 8px;
+  padding: 12px;
+  color: #172026;
+  background: #fbfcfc;
+}
+
+input:focus {
+  outline: 3px solid rgba(42, 157, 143, 0.18);
+  border-color: #2a9d8f;
+}
+
+.code-row {
+  display: grid;
+  grid-template-columns: 1fr 48px;
+  gap: 10px;
+  align-items: end;
+}
+
+.primary-button,
+.kakao-button,
+.session-actions button,
+.icon-button {
+  border: 0;
+  border-radius: 8px;
+  min-height: 44px;
+  font-weight: 800;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ffffff;
+  background: #1d6f72;
+}
+
+.primary-button:disabled,
+.session-actions button:disabled,
+.icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: #457b9d;
+}
+
+.kakao-button {
+  width: 100%;
+  margin-top: 12px;
+  background: #fee500;
+  color: #191600;
+}
+
+.message {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #d9e2e5;
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.hint {
+  font-size: 13px;
+}
+
+dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+dt {
+  font-size: 13px;
+  font-weight: 800;
+  color: #39474f;
+}
+
+dd {
+  overflow-wrap: anywhere;
+  margin: 0 0 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.session-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.session-actions button {
+  color: #172026;
+  background: #dfe9eb;
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    padding: 20px;
+  }
+}
