@@ -32,6 +32,16 @@ npm run dev -- --host 127.0.0.1
 
 Frontend runs on `http://127.0.0.1:8880` and auth/chat API runs on `http://localhost:8890`.
 
+Development test users are seeded automatically when `app.dev.seed-users=true`.
+
+| Email | Password |
+| --- | --- |
+| `user@example.com` | `password123` |
+| `minji@example.com` | `password123` |
+| `junho@example.com` | `password123` |
+| `seoyeon@example.com` | `password123` |
+| `hyejin@example.com` | `password123` |
+
 ## Docker
 
 ```bash
@@ -96,6 +106,23 @@ docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d 
 ```
 
 This mode mounts Docker socket and kubeconfig, so use it only on a trusted local machine.
+
+## Elasticsearch
+
+Elasticsearch is available locally at:
+
+```text
+http://localhost:9200
+```
+
+The chat message source of truth is MongoDB. When a user sends a message, the backend publishes a Kafka event. The backend Kafka consumer saves the message to MongoDB and then indexes the same message into the `chat-messages` Elasticsearch index. That means new messages are indexed automatically after the consumer processes the event. Existing MongoDB messages need a reindex job if the Elasticsearch index is deleted or rebuilt.
+
+Useful local checks:
+
+```bash
+curl http://localhost:9200/_cat/indices?v
+curl "http://localhost:9200/chat-messages/_search?q=content:검색어&pretty"
+```
 
 ## Work Logging
 

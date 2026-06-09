@@ -18,12 +18,26 @@ public final class ChatDtos {
     ) {
     }
 
+    public record CreateDirectRoomRequest(
+            @NotBlank String partnerEmail
+    ) {
+    }
+
     public record ChatRoomResponse(
             String id,
             String name,
             String description,
             String createdBy,
+            String type,
             Instant createdAt
+    ) {
+    }
+
+    public record ContactResponse(
+            Long id,
+            String email,
+            String name,
+            String provider
     ) {
     }
 

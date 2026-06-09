@@ -2,6 +2,8 @@ package com.example.kafka.auth.chat.controller;
 
 import com.example.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.example.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
+import com.example.kafka.auth.chat.dto.ChatDtos.ContactResponse;
+import com.example.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.example.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.example.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.example.kafka.auth.chat.dto.ChatMessageEvent;
@@ -29,8 +31,11 @@ public class ChatController {
     }
 
     @GetMapping("/rooms")
-    public ResponseEntity<List<ChatRoomResponse>> rooms(@RequestParam(required = false) String query) {
-        return ResponseEntity.ok(chatService.rooms(query));
+    public ResponseEntity<List<ChatRoomResponse>> rooms(
+            @RequestParam(required = false) String query,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.rooms(query, user));
     }
 
     @PostMapping("/rooms")
@@ -41,9 +46,28 @@ public class ChatController {
         return ResponseEntity.ok(chatService.createRoom(request, user));
     }
 
+    @PostMapping("/direct-rooms")
+    public ResponseEntity<ChatRoomResponse> directRoom(
+            @Valid @RequestBody CreateDirectRoomRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.findOrCreateDirectRoom(request, user));
+    }
+
+    @GetMapping("/contacts")
+    public ResponseEntity<List<ContactResponse>> contacts(
+            @RequestParam(required = false) String query,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.contacts(query, user));
+    }
+
     @GetMapping("/rooms/{roomId}/messages")
-    public ResponseEntity<List<ChatMessageResponse>> messages(@PathVariable String roomId) {
-        return ResponseEntity.ok(chatService.messages(roomId));
+    public ResponseEntity<List<ChatMessageResponse>> messages(
+            @PathVariable String roomId,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.messages(roomId, user));
     }
 
     @PostMapping("/rooms/{roomId}/messages")
@@ -56,7 +80,10 @@ public class ChatController {
     }
 
     @GetMapping("/messages/search")
-    public ResponseEntity<List<ChatMessageResponse>> searchMessages(@RequestParam String query) {
-        return ResponseEntity.ok(chatService.searchMessages(query));
+    public ResponseEntity<List<ChatMessageResponse>> searchMessages(
+            @RequestParam String query,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.searchMessages(query, user));
     }
 }

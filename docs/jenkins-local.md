@@ -37,11 +37,21 @@ docker exec kafka-jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
 ## Jenkins Pipeline 생성
 
-1. Jenkins에 접속한다.
-2. `New Item`을 누른다.
-3. `Pipeline` 또는 `Multibranch Pipeline`을 선택한다.
-4. GitHub repository를 연결한다.
-5. 기본 검증용 Pipeline script path는 `Jenkinsfile`을 사용한다.
+Suggested plugins 설치가 끝난 뒤에는 다음 순서로 진행한다.
+
+1. `Create First Admin User` 화면에서 관리자 계정을 만든다.
+2. `Instance Configuration` 화면의 Jenkins URL은 `http://localhost:18081/` 그대로 둔다.
+3. `Start using Jenkins`를 누른다.
+4. 왼쪽 메뉴에서 `New Item`을 누른다.
+5. 이름은 `kafka-chat-ci`로 입력하고 `Pipeline`을 선택한다.
+6. Pipeline 설정에서 `Definition`을 `Pipeline script from SCM`으로 바꾼다.
+7. `SCM`은 `Git`을 선택한다.
+8. Repository URL에는 GitHub 저장소 주소를 넣는다.
+9. Branch Specifier에는 현재 작업 브랜치인 `*/codex/gradle-k8s-setup`를 넣는다.
+10. Script Path는 기본 검증용이면 `Jenkinsfile`, 로컬 Kubernetes 배포용이면 `Jenkinsfile.local-deploy`를 넣는다.
+11. 저장 후 `Build Now`를 눌러 실행한다.
+
+기본 `Jenkinsfile`은 안전하게 테스트와 빌드만 수행한다. Docker 이미지 빌드와 Kubernetes 반영까지 하려면 아래의 로컬 배포 모드로 Jenkins를 다시 실행해야 한다.
 
 ## 로컬 Kubernetes 배포까지 Jenkins에서 실행하기
 
