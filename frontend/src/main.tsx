@@ -10,11 +10,13 @@ import {
   KeyRound,
   LogOut,
   Mail,
-  MessageCircle,
+  Paperclip,
   Plus,
   Search,
   Send,
   ShieldCheck,
+  Trash2,
+  X,
   UserRound
 } from 'lucide-react';
 import './styles.css';
@@ -50,6 +52,11 @@ type ChatMessage = {
   senderEmail: string;
   senderName: string;
   content: string;
+  attachmentUrl: string | null;
+  attachmentType: string | null;
+  attachmentName: string | null;
+  attachmentSize: number | null;
+  deletedForEveryone: boolean;
   createdAt: string;
 };
 
@@ -58,6 +65,13 @@ type Contact = {
   email: string;
   name: string;
   provider: string;
+};
+
+type AttachmentResponse = {
+  url: string;
+  type: string;
+  name: string;
+  size: number;
 };
 
 const API_ROOT = '/api';
@@ -90,6 +104,8 @@ function App() {
   const [contactQuery, setContactQuery] = useState('');
   const [messageQuery, setMessageQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
 
@@ -104,17 +120,18 @@ function App() {
   }, [mode]);
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    const isFormData = init?.body instanceof FormData;
     const response = await fetch(`${API_ROOT}${path}`, {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init?.headers
       }
     });
-    const data = await response.json();
+    const data = response.status === 204 ? null : await response.json();
     if (!response.ok) {
-      throw new Error(data.message ?? '요청을 처리하지 못했습니다.');
+      throw new Error(data?.message ?? '요청을 처리하지 못했습니다.');
     }
     return data as T;
   }
@@ -240,6 +257,22 @@ function App() {
     }
   }
 
+  async function deleteRoom() {
+    if (!selectedRoomId || !selectedRoom) return;
+    setLoading(true);
+    try {
+      await request<void>(`/chat/rooms/${selectedRoomId}`, { method: 'DELETE' });
+      setRooms((current) => current.filter((room) => room.id !== selectedRoomId));
+      setSelectedRoomId('');
+      setMessages([]);
+      setStatus(`${selectedRoom.name} 채팅방을 내 목록에서 삭제했습니다.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '채팅방 삭제에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function openDirectRoom(contact: Contact) {
     setLoading(true);
     try {
@@ -259,19 +292,80 @@ function App() {
 
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
-    if (!selectedRoomId || !draft.trim()) return;
+    if (!selectedRoomId || (!draft.trim() && !attachment)) return;
     const content = draft.trim();
     setDraft('');
     try {
+      let uploaded: AttachmentResponse | null = null;
+      if (attachment) {
+        const formData = new FormData();
+        formData.append('file', attachment);
+        uploaded = await request<AttachmentResponse>('/chat/attachments', {
+          method: 'POST',
+          body: formData
+        });
+      }
       await request(`/chat/rooms/${selectedRoomId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content, attachment: uploaded })
       });
+      clearAttachment();
       setTimeout(() => loadMessages(selectedRoomId), 350);
     } catch (error) {
       setDraft(content);
       setStatus(error instanceof Error ? error.message : '메시지 전송에 실패했습니다.');
     }
+  }
+
+  async function hideMessageForMe(message: ChatMessage) {
+    try {
+      await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/me`, { method: 'DELETE' });
+      setMessages((current) => current.filter((item) => item.id !== message.id));
+      setSearchResults((current) => current.filter((item) => item.id !== message.id));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '메시지를 삭제하지 못했습니다.');
+    }
+  }
+
+  async function clearRoomMessagesForMe() {
+    if (!selectedRoomId) return;
+    try {
+      await request<void>(`/chat/rooms/${selectedRoomId}/messages/me`, { method: 'DELETE' });
+      setMessages([]);
+      setSearchResults((current) => current.filter((message) => message.roomId !== selectedRoomId));
+      setStatus('이 채팅방의 대화내용을 내 화면에서 삭제했습니다.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '대화내용을 삭제하지 못했습니다.');
+    }
+  }
+
+  async function deleteMessageForEveryone(message: ChatMessage) {
+    try {
+      const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/everyone`, { method: 'DELETE' });
+      setMessages((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setSearchResults((current) => current.filter((item) => item.id !== updated.id));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '모두에게 삭제하지 못했습니다.');
+    }
+  }
+
+  function selectAttachment(file: File | null) {
+    clearAttachment();
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setStatus('이미지와 GIF 파일만 첨부할 수 있습니다.');
+      return;
+    }
+    setAttachment(file);
+    setAttachmentPreview(URL.createObjectURL(file));
+  }
+
+  function clearAttachment() {
+    if (attachmentPreview) {
+      URL.revokeObjectURL(attachmentPreview);
+    }
+    setAttachment(null);
+    setAttachmentPreview('');
   }
 
   async function searchMessages(event: FormEvent) {
@@ -292,6 +386,7 @@ function App() {
     setMessages([]);
     setSearchResults([]);
     setSelectedRoomId('');
+    clearAttachment();
     setStatus('로그아웃되었습니다.');
   }
 
@@ -323,7 +418,9 @@ function App() {
         setConnected(true);
         client.subscribe(`/topic/rooms/${selectedRoomId}`, (frame: IMessage) => {
           const message = JSON.parse(frame.body) as ChatMessage;
-          setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+          setMessages((current) => current.some((item) => item.id === message.id)
+            ? current.map((item) => item.id === message.id ? message : item)
+            : [...current, message]);
         });
       },
       onDisconnect: () => setConnected(false),
@@ -450,10 +547,14 @@ function App() {
             <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
             <p>{selectedRoom?.description ?? '친구를 선택하면 1:1 채팅방이 열립니다.'}</p>
           </div>
-          <span className={connected ? 'status-pill online' : 'status-pill'}>
-            <CheckCircle2 size={15} aria-hidden />
-            {connected ? '실시간 연결' : '연결 대기'}
-          </span>
+          <div className="header-actions">
+            <span className={connected ? 'status-pill online' : 'status-pill'}>
+              <CheckCircle2 size={15} aria-hidden />
+              {connected ? '실시간 연결' : '연결 대기'}
+            </span>
+            <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
+            <button className="ghost-icon-button" onClick={deleteRoom} disabled={!selectedRoomId || loading} title="채팅방 삭제"><Trash2 size={17} aria-hidden /></button>
+          </div>
         </header>
 
         <div className="message-list">
@@ -469,14 +570,40 @@ function App() {
                 <strong>{message.senderName}</strong>
                 <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
               </div>
-              <p>{message.content}</p>
+              {message.deletedForEveryone ? (
+                <p className="deleted-message">삭제된 메시지입니다.</p>
+              ) : (
+                <>
+                  {message.attachmentUrl && (
+                    <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
+                      <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
+                    </a>
+                  )}
+                  {message.content && <p>{message.content}</p>}
+                  <div className="message-actions">
+                    <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
+                    {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
+                  </div>
+                </>
+              )}
             </motion.article>
           ))}
         </div>
 
         <form className="composer" onSubmit={sendMessage}>
+          {attachmentPreview && (
+            <div className="attachment-preview">
+              <img src={attachmentPreview} alt={attachment?.name ?? '첨부 미리보기'} />
+              <span>{attachment?.name}</span>
+              <button type="button" onClick={clearAttachment} title="첨부 제거"><X size={16} aria-hidden /></button>
+            </div>
+          )}
+          <label className="attach-button" title="이미지 또는 GIF 첨부">
+            <Paperclip size={18} aria-hidden />
+            <input type="file" accept="image/*,.gif" onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)} disabled={!selectedRoomId} />
+          </label>
           <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="메시지를 입력하세요" disabled={!selectedRoomId} />
-          <button disabled={!selectedRoomId || !draft.trim()} title="메시지 보내기"><Send size={18} aria-hidden /></button>
+          <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
         </form>
       </section>
 
@@ -511,7 +638,7 @@ function App() {
             {searchResults.map((message) => (
               <button key={message.id} onClick={() => setSelectedRoomId(message.roomId)}>
                 <span>{message.roomName}</span>
-                <strong>{message.content}</strong>
+                <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
                 <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
               </button>
             ))}

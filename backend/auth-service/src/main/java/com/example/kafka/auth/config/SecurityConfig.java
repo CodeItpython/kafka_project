@@ -38,6 +38,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/chat/attachments/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/email/code", "/api/auth/email/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/oauth/kakao/guide").permitAll()
                         .anyRequest().authenticated()

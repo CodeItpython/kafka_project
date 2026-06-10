@@ -1,5 +1,7 @@
 package com.example.kafka.auth.chat.service;
 
+import com.example.kafka.auth.chat.dto.ChatDtos.AttachmentRequest;
+import com.example.kafka.auth.chat.dto.ChatDtos.AttachmentResponse;
 import com.example.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.example.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.example.kafka.auth.chat.dto.ChatDtos.ContactResponse;
@@ -16,6 +18,12 @@ import com.example.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.example.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.example.kafka.auth.model.UserAccount;
 import com.example.kafka.auth.repository.UserAccountRepository;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Comparator;
@@ -30,13 +38,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChatService {
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+    private static final long MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -45,6 +57,7 @@ public class ChatService {
     private final KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private final String chatTopic;
+    private final Path attachmentRoot;
 
     public ChatService(
             ChatRoomRepository chatRoomRepository,
@@ -53,7 +66,8 @@ public class ChatService {
             UserAccountRepository userAccountRepository,
             KafkaTemplate<String, ChatMessageEvent> kafkaTemplate,
             SimpMessagingTemplate messagingTemplate,
-            @Value("${app.chat.topic}") String chatTopic
+            @Value("${app.chat.topic}") String chatTopic,
+            @Value("${app.chat.attachments.path:uploads/chat}") String attachmentPath
     ) {
         this.chatRoomRepository = chatRoomRepository;
         this.chatMessageRepository = chatMessageRepository;
@@ -62,6 +76,7 @@ public class ChatService {
         this.kafkaTemplate = kafkaTemplate;
         this.messagingTemplate = messagingTemplate;
         this.chatTopic = chatTopic;
+        this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
     }
 
     @Transactional
@@ -94,7 +109,10 @@ public class ChatService {
         List<ChatRoom> rooms = query == null || query.isBlank()
                 ? chatRoomRepository.findVisibleRooms(user.getEmail(), ChatRoomType.GROUP, PageRequest.of(0, 30))
                 : chatRoomRepository.searchVisibleRooms(user.getEmail(), ChatRoomType.GROUP, query, PageRequest.of(0, 30));
-        return rooms.stream().map(this::toRoomResponse).toList();
+        return rooms.stream()
+                .filter(room -> room.isVisibleTo(user.getEmail()))
+                .map(this::toRoomResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -102,7 +120,10 @@ public class ChatService {
         ensureRoomAccess(roomId, user);
         List<ChatMessageDocument> messages = chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 50));
         Collections.reverse(messages);
-        return messages.stream().map(this::toMessageResponse).toList();
+        return messages.stream()
+                .filter(message -> message.isVisibleTo(user.getEmail()))
+                .map(this::toMessageResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -114,14 +135,14 @@ public class ChatService {
             return chatMessageSearchRepository
                     .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(query, query)
                     .stream()
-                    .filter(message -> canReadRoom(message.getRoomId(), user))
+                    .filter(message -> canReadMessage(message.getId(), user))
                     .map(this::toMessageResponse)
                     .toList();
         } catch (RuntimeException exception) {
             log.warn("Elasticsearch search failed. Falling back to MongoDB search.", exception);
             return chatMessageRepository.findTop20ByContentContainingIgnoreCaseOrderByCreatedAtDesc(query)
                     .stream()
-                    .filter(message -> canReadRoom(message.getRoomId(), user))
+                    .filter(message -> canReadMessage(message, user))
                     .map(this::toMessageResponse)
                     .toList();
         }
@@ -147,17 +168,109 @@ public class ChatService {
     @Transactional(readOnly = true)
     public ChatMessageEvent publishMessage(String roomId, SendMessageRequest request, UserAccount user) {
         ChatRoom room = ensureRoomAccess(roomId, user);
+        AttachmentRequest attachment = request.attachment();
+        if ((request.content() == null || request.content().isBlank()) && attachment == null) {
+            throw new IllegalArgumentException("메시지 내용이나 첨부 파일이 필요합니다.");
+        }
         ChatMessageEvent event = new ChatMessageEvent(
                 UUID.randomUUID().toString(),
                 room.getId(),
                 room.getName(),
                 user.getEmail(),
                 user.getName(),
-                request.content(),
+                request.content() == null ? "" : request.content().trim(),
+                attachment == null ? null : attachment.url(),
+                attachment == null ? null : attachment.type(),
+                attachment == null ? null : attachment.name(),
+                attachment == null ? null : attachment.size(),
                 Instant.now()
         );
         kafkaTemplate.send(chatTopic, roomId, event);
         return event;
+    }
+
+    @Transactional
+    public void hideRoom(String roomId, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        room.hideFor(user.getEmail());
+    }
+
+    @Transactional
+    public ChatMessageResponse hideMessageForMe(String roomId, String messageId, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
+        message.hideFor(user.getEmail());
+        return toMessageResponse(chatMessageRepository.save(message));
+    }
+
+    @Transactional
+    public void hideRoomMessagesForMe(String roomId, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        List<ChatMessageDocument> messages = chatMessageRepository.findByRoomId(roomId);
+        messages.forEach(message -> message.hideFor(user.getEmail()));
+        chatMessageRepository.saveAll(messages);
+    }
+
+    @Transactional
+    public ChatMessageResponse deleteMessageForEveryone(String roomId, String messageId, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
+        if (!message.getSenderEmail().equalsIgnoreCase(user.getEmail())) {
+            throw new IllegalArgumentException("내가 보낸 메시지만 모두에게 삭제할 수 있습니다.");
+        }
+        message.deleteForEveryone();
+        ChatMessageDocument saved = chatMessageRepository.save(message);
+        try {
+            chatMessageSearchRepository.deleteById(messageId);
+        } catch (RuntimeException exception) {
+            log.warn("Unable to delete chat message from Elasticsearch index.", exception);
+        }
+        ChatMessageResponse response = toMessageResponse(saved);
+        messagingTemplate.convertAndSend("/topic/rooms/" + roomId, response);
+        return response;
+    }
+
+    public AttachmentResponse storeAttachment(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("첨부할 파일이 비어 있습니다.");
+        }
+        if (file.getSize() > MAX_ATTACHMENT_BYTES) {
+            throw new IllegalArgumentException("첨부 파일은 10MB 이하만 가능합니다.");
+        }
+        String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
+        if (!contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("이미지와 GIF 파일만 첨부할 수 있습니다.");
+        }
+
+        String extension = extension(file.getOriginalFilename(), contentType);
+        String storedName = UUID.randomUUID() + extension;
+        try {
+            Files.createDirectories(attachmentRoot);
+            Path target = attachmentRoot.resolve(storedName).normalize();
+            if (!target.startsWith(attachmentRoot)) {
+                throw new IllegalArgumentException("잘못된 첨부 파일 경로입니다.");
+            }
+            file.transferTo(target);
+            return new AttachmentResponse("/api/chat/attachments/" + storedName, contentType, cleanName(file.getOriginalFilename()), file.getSize());
+        } catch (IOException exception) {
+            throw new UncheckedIOException("첨부 파일 저장에 실패했습니다.", exception);
+        }
+    }
+
+    public Resource loadAttachment(String fileName) {
+        try {
+            Path target = attachmentRoot.resolve(fileName).normalize();
+            if (!target.startsWith(attachmentRoot) || !Files.exists(target)) {
+                throw new IllegalArgumentException("첨부 파일을 찾을 수 없습니다.");
+            }
+            Resource resource = new UrlResource(target.toUri());
+            if (!resource.isReadable()) {
+                throw new IllegalArgumentException("첨부 파일을 읽을 수 없습니다.");
+            }
+            return resource;
+        } catch (MalformedURLException exception) {
+            throw new IllegalArgumentException("첨부 파일 경로가 올바르지 않습니다.", exception);
+        }
     }
 
     @KafkaListener(topics = "${app.chat.topic}", groupId = "${spring.kafka.consumer.group-id}")
@@ -169,6 +282,10 @@ public class ChatService {
                 event.senderEmail(),
                 event.senderName(),
                 event.content(),
+                event.attachmentUrl(),
+                event.attachmentType(),
+                event.attachmentName(),
+                event.attachmentSize(),
                 event.createdAt()
         ));
         try {
@@ -206,6 +323,27 @@ public class ChatService {
                 .orElse(false);
     }
 
+    private boolean canReadMessage(String messageId, UserAccount user) {
+        return chatMessageRepository.findById(messageId)
+                .map(message -> canReadMessage(message, user))
+                .orElse(false);
+    }
+
+    private boolean canReadMessage(ChatMessageDocument message, UserAccount user) {
+        return !message.isDeletedForEveryone()
+                && message.isVisibleTo(user.getEmail())
+                && canReadRoom(message.getRoomId(), user);
+    }
+
+    private ChatMessageDocument ensureMessageInRoom(String roomId, String messageId) {
+        ChatMessageDocument message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new IllegalArgumentException("메시지를 찾을 수 없습니다."));
+        if (!message.getRoomId().equals(roomId)) {
+            throw new IllegalArgumentException("채팅방의 메시지가 아닙니다.");
+        }
+        return message;
+    }
+
     private ChatRoomResponse toRoomResponse(ChatRoom room) {
         return new ChatRoomResponse(
                 room.getId(),
@@ -229,6 +367,27 @@ public class ChatService {
         return user.getName() + ", " + partner.getName();
     }
 
+    private String extension(String fileName, String contentType) {
+        String cleaned = cleanName(fileName);
+        int dotIndex = cleaned.lastIndexOf('.');
+        if (dotIndex >= 0 && dotIndex < cleaned.length() - 1) {
+            return cleaned.substring(dotIndex).toLowerCase(Locale.ROOT);
+        }
+        return switch (contentType) {
+            case "image/gif" -> ".gif";
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            default -> ".jpg";
+        };
+    }
+
+    private String cleanName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "image";
+        }
+        return Paths.get(fileName).getFileName().toString().replaceAll("[^a-zA-Z0-9._가-힣-]", "_");
+    }
+
     private ChatMessageResponse toMessageResponse(ChatMessageDocument message) {
         return new ChatMessageResponse(
                 message.getId(),
@@ -237,6 +396,11 @@ public class ChatService {
                 message.getSenderEmail(),
                 message.getSenderName(),
                 message.getContent(),
+                message.getAttachmentUrl(),
+                message.getAttachmentType(),
+                message.getAttachmentName(),
+                message.getAttachmentSize(),
+                message.isDeletedForEveryone(),
                 message.getCreatedAt()
         );
     }
@@ -249,6 +413,11 @@ public class ChatService {
                 message.getSenderEmail(),
                 message.getSenderName(),
                 message.getContent(),
+                null,
+                null,
+                null,
+                null,
+                false,
                 message.getCreatedAt()
         );
     }

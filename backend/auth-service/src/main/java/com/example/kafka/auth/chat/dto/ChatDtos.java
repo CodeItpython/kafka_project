@@ -14,7 +14,24 @@ public final class ChatDtos {
     }
 
     public record SendMessageRequest(
-            @NotBlank String content
+            String content,
+            AttachmentRequest attachment
+    ) {
+    }
+
+    public record AttachmentRequest(
+            @NotBlank String url,
+            @NotBlank String type,
+            @NotBlank String name,
+            Long size
+    ) {
+    }
+
+    public record AttachmentResponse(
+            String url,
+            String type,
+            String name,
+            long size
     ) {
     }
 
@@ -48,6 +65,11 @@ public final class ChatDtos {
             String senderEmail,
             String senderName,
             String content,
+            String attachmentUrl,
+            String attachmentType,
+            String attachmentName,
+            Long attachmentSize,
+            boolean deletedForEveryone,
             Instant createdAt
     ) {
     }

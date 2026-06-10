@@ -41,6 +41,11 @@ public class ChatRoom {
     @Column(name = "email", nullable = false)
     private Set<String> participantEmails = new LinkedHashSet<>();
 
+    @ElementCollection
+    @CollectionTable(name = "chat_room_hidden_users", joinColumns = @JoinColumn(name = "room_id"))
+    @Column(name = "email", nullable = false)
+    private Set<String> hiddenForEmails = new LinkedHashSet<>();
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -97,8 +102,20 @@ public class ChatRoom {
         return participantEmails;
     }
 
+    public Set<String> getHiddenForEmails() {
+        return hiddenForEmails;
+    }
+
     public boolean isVisibleTo(String email) {
-        return getType() == ChatRoomType.GROUP || participantEmails.contains(email);
+        return !hiddenForEmails.contains(email) && (getType() == ChatRoomType.GROUP || participantEmails.contains(email));
+    }
+
+    public void hideFor(String email) {
+        hiddenForEmails.add(email);
+    }
+
+    public boolean isCreatedBy(String email) {
+        return createdBy.equalsIgnoreCase(email);
     }
 
     public Instant getCreatedAt() {

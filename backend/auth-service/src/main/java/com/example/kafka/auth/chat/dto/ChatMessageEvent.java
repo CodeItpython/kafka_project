@@ -9,6 +9,10 @@ public record ChatMessageEvent(
         String senderEmail,
         String senderName,
         String content,
+        String attachmentUrl,
+        String attachmentType,
+        String attachmentName,
+        Long attachmentSize,
         Instant createdAt
 ) {
 }

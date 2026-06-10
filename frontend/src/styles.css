@@ -430,6 +430,14 @@ input:focus {
   background: #ffffff;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .conversation-header h2 {
   margin: 5px 0;
   font-size: 27px;
@@ -449,6 +457,28 @@ input:focus {
 .status-pill.online {
   color: #067647;
   background: #e7f8ef;
+}
+
+.ghost-icon-button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: #6b7684;
+  background: #f2f4f6;
+}
+
+.soft-action-button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 11px;
+  color: #4e5968;
+  background: #f2f4f6;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .message-list {
@@ -491,9 +521,53 @@ input:focus {
   word-break: break-word;
 }
 
+.deleted-message {
+  color: #8b95a1;
+  font-style: italic;
+}
+
+.message-media {
+  display: block;
+  overflow: hidden;
+  width: min(320px, 100%);
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: #f2f4f6;
+}
+
+.message-media img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.message-actions button {
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #6b7684;
+  background: #f2f4f6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-bubble.mine .message-actions button {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .composer {
   display: grid;
-  grid-template-columns: 1fr 48px;
+  grid-template-columns: 42px 1fr 48px;
   gap: 10px;
   padding: 12px;
   border: 1px solid #e5e8eb;
@@ -503,6 +577,57 @@ input:focus {
 
 .composer input {
   background: #f2f4f6;
+}
+
+.attach-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-height: 48px;
+  border-radius: 8px;
+  color: #4e5968;
+  background: #f2f4f6;
+}
+
+.attach-button input {
+  display: none;
+}
+
+.attachment-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 54px 1fr 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.attachment-preview img {
+  width: 54px;
+  height: 42px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.attachment-preview span {
+  overflow: hidden;
+  color: #4e5968;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.attachment-preview button {
+  display: grid;
+  place-items: center;
+  min-height: 32px;
+  border: 0;
+  border-radius: 7px;
+  color: #6b7684;
+  background: #eef1f4;
 }
 
 .composer button {
