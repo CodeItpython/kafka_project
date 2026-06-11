@@ -125,3 +125,15 @@ npm run dev -- --host 0.0.0.0 --port 8880
 ```
 
 5. 브라우저에서 `http://localhost:8880` 접속 후 `카카오로 로그인`을 누른다.
+
+## 문제 해결
+
+- 카카오 동의 후 빈 페이지처럼 보이면 먼저 auth-service 로그를 확인한다.
+- `users_provider_check` 또는 `violates check constraint` 오류가 보이면 Kakao Developers 설정 문제가 아니라 DB 제약조건이 `KAKAO` provider 값을 허용하지 않는 문제다.
+- 현재 로컬 개발 환경에서는 `LocalSchemaConstraintUpdater`가 시작 시 `users_provider_check`를 `LOCAL`, `EMAIL`, `KAKAO`로 보정한다.
+- 운영 환경에서는 같은 변경을 애플리케이션 시작 코드가 아니라 Flyway 또는 Liquibase migration으로 관리하는 것이 좋다.
+- Kakao Developers 쪽에서는 최소한 다음 값이 맞아야 한다.
+  - Kakao Login 활성화: ON
+  - Web 플랫폼 Site domain: `http://localhost:8880`
+  - Redirect URI: `http://localhost:8890/oauth2/callback/kakao`
+  - Client Secret을 `.env`에 넣었다면 Kakao Developers에서도 Client Secret 활성화 및 동일 값 등록
