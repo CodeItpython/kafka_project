@@ -1,4 +1,4 @@
-package com.example.kafka.auth.chat.config;
+package com.kafka.auth.chat.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.beans.factory.annotation.Value;

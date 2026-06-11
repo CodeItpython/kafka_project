@@ -1,4 +1,4 @@
-package com.example.kafka.auth.model;
+package com.kafka.auth.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -28,6 +28,8 @@ public class UserAccount {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AuthProvider provider = AuthProvider.LOCAL;
+
+    private String providerId;
 
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
@@ -62,6 +64,10 @@ public class UserAccount {
         return provider;
     }
 
+    public String getProviderId() {
+        return providerId;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -70,7 +76,15 @@ public class UserAccount {
         this.passwordHash = passwordHash;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public void setProvider(AuthProvider provider) {
         this.provider = provider;
+    }
+
+    public void setProviderId(String providerId) {
+        this.providerId = providerId;
     }
 }

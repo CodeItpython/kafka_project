@@ -1,15 +1,15 @@
-package com.example.kafka.auth.controller;
+package com.kafka.auth.controller;
 
-import com.example.kafka.auth.dto.AuthDtos.AuthResponse;
-import com.example.kafka.auth.dto.AuthDtos.EmailCodeRequest;
-import com.example.kafka.auth.dto.AuthDtos.EmailCodeResponse;
-import com.example.kafka.auth.dto.AuthDtos.EmailLoginRequest;
-import com.example.kafka.auth.dto.AuthDtos.KakaoGuideResponse;
-import com.example.kafka.auth.dto.AuthDtos.LoginRequest;
-import com.example.kafka.auth.dto.AuthDtos.RegisterRequest;
-import com.example.kafka.auth.dto.AuthDtos.UserResponse;
-import com.example.kafka.auth.model.UserAccount;
-import com.example.kafka.auth.service.AuthService;
+import com.kafka.auth.dto.AuthDtos.AuthResponse;
+import com.kafka.auth.dto.AuthDtos.EmailCodeRequest;
+import com.kafka.auth.dto.AuthDtos.EmailCodeResponse;
+import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
+import com.kafka.auth.dto.AuthDtos.KakaoGuideResponse;
+import com.kafka.auth.dto.AuthDtos.LoginRequest;
+import com.kafka.auth.dto.AuthDtos.RegisterRequest;
+import com.kafka.auth.dto.AuthDtos.UserResponse;
+import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;

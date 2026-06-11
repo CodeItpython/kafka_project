@@ -1,6 +1,6 @@
-package com.example.kafka.auth.chat.repository;
+package com.kafka.auth.chat.repository;
 
-import com.example.kafka.auth.chat.model.ChatMessageDocument;
+import com.kafka.auth.chat.model.ChatMessageDocument;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;

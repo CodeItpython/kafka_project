@@ -1,4 +1,4 @@
-package com.example.kafka.auth.chat.search;
+package com.kafka.auth.chat.search;
 
 import java.time.Instant;
 import org.springframework.data.annotation.Id;

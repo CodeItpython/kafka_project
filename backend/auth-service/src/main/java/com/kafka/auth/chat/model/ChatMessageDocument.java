@@ -1,4 +1,4 @@
-package com.example.kafka.auth.chat.model;
+package com.kafka.auth.chat.model;
 
 import java.time.Instant;
 import java.util.LinkedHashSet;

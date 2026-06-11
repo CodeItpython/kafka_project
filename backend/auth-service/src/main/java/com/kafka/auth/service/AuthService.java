@@ -1,17 +1,17 @@
-package com.example.kafka.auth.service;
+package com.kafka.auth.service;
 
-import com.example.kafka.auth.dto.AuthDtos.AuthResponse;
-import com.example.kafka.auth.dto.AuthDtos.EmailCodeResponse;
-import com.example.kafka.auth.dto.AuthDtos.EmailLoginRequest;
-import com.example.kafka.auth.dto.AuthDtos.LoginRequest;
-import com.example.kafka.auth.dto.AuthDtos.RegisterRequest;
-import com.example.kafka.auth.dto.AuthDtos.UserResponse;
-import com.example.kafka.auth.model.AuthProvider;
-import com.example.kafka.auth.model.EmailVerificationCode;
-import com.example.kafka.auth.model.UserAccount;
-import com.example.kafka.auth.repository.EmailVerificationCodeRepository;
-import com.example.kafka.auth.repository.UserAccountRepository;
-import com.example.kafka.auth.security.JwtService;
+import com.kafka.auth.dto.AuthDtos.AuthResponse;
+import com.kafka.auth.dto.AuthDtos.EmailCodeResponse;
+import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
+import com.kafka.auth.dto.AuthDtos.LoginRequest;
+import com.kafka.auth.dto.AuthDtos.RegisterRequest;
+import com.kafka.auth.dto.AuthDtos.UserResponse;
+import com.kafka.auth.model.AuthProvider;
+import com.kafka.auth.model.EmailVerificationCode;
+import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.repository.EmailVerificationCodeRepository;
+import com.kafka.auth.repository.UserAccountRepository;
+import com.kafka.auth.security.JwtService;
 import java.security.SecureRandom;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -92,6 +92,27 @@ public class AuthService {
                         null,
                         AuthProvider.EMAIL
                 )));
+        return issueToken(user);
+    }
+
+    @Transactional
+    public AuthResponse loginWithKakao(String kakaoId, String email, String name) {
+        String fallbackEmail = "kakao-" + kakaoId + "@kakao.local";
+        String resolvedEmail = email == null || email.isBlank() ? fallbackEmail : email;
+        String resolvedName = name == null || name.isBlank() ? resolvedEmail : name;
+
+        UserAccount user = userAccountRepository.findByProviderAndProviderId(AuthProvider.KAKAO, kakaoId)
+                .or(() -> userAccountRepository.findByEmail(resolvedEmail))
+                .orElseGet(() -> userAccountRepository.save(new UserAccount(
+                        resolvedEmail,
+                        resolvedName,
+                        null,
+                        AuthProvider.KAKAO
+                )));
+        user.setName(resolvedName);
+        user.setProvider(AuthProvider.KAKAO);
+        user.setProviderId(kakaoId);
+        user.setPasswordHash(null);
         return issueToken(user);
     }
 

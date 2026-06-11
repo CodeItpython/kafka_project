@@ -1,4 +1,4 @@
-package com.example.kafka.auth.controller;
+package com.kafka.auth.controller;
 
 import java.time.Instant;
 import java.util.Map;

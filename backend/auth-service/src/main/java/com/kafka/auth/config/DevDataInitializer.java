@@ -1,8 +1,8 @@
-package com.example.kafka.auth.config;
+package com.kafka.auth.config;
 
-import com.example.kafka.auth.model.AuthProvider;
-import com.example.kafka.auth.model.UserAccount;
-import com.example.kafka.auth.repository.UserAccountRepository;
+import com.kafka.auth.model.AuthProvider;
+import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.repository.UserAccountRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

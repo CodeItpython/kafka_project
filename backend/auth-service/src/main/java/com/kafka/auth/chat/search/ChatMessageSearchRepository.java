@@ -1,4 +1,4 @@
-package com.example.kafka.auth.chat.search;
+package com.kafka.auth.chat.search;
 
 import java.util.List;
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;

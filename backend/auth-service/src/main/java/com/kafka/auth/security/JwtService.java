@@ -1,6 +1,6 @@
-package com.example.kafka.auth.security;
+package com.kafka.auth.security;
 
-import com.example.kafka.auth.model.UserAccount;
+import com.kafka.auth.model.UserAccount;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;

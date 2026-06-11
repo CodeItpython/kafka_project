@@ -1,4 +1,4 @@
-package com.example.kafka.auth.chat.dto;
+package com.kafka.auth.chat.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;

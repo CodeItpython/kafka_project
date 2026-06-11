@@ -1,4 +1,4 @@
-package com.example.kafka.auth.model;
+package com.kafka.auth.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

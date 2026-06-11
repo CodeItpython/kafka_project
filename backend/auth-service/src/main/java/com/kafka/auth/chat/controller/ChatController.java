@@ -1,15 +1,15 @@
-package com.example.kafka.auth.chat.controller;
+package com.kafka.auth.chat.controller;
 
-import com.example.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
-import com.example.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
-import com.example.kafka.auth.chat.dto.ChatDtos.ContactResponse;
-import com.example.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
-import com.example.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
-import com.example.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
-import com.example.kafka.auth.chat.dto.ChatDtos.AttachmentResponse;
-import com.example.kafka.auth.chat.dto.ChatMessageEvent;
-import com.example.kafka.auth.chat.service.ChatService;
-import com.example.kafka.auth.model.UserAccount;
+import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
+import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
+import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
+import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
+import com.kafka.auth.chat.dto.ChatDtos.AttachmentResponse;
+import com.kafka.auth.chat.dto.ChatMessageEvent;
+import com.kafka.auth.chat.service.ChatService;
+import com.kafka.auth.model.UserAccount;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;

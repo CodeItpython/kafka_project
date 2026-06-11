@@ -1,6 +1,6 @@
-package com.example.kafka.auth.security;
+package com.kafka.auth.security;
 
-import com.example.kafka.auth.repository.UserAccountRepository;
+import com.kafka.auth.repository.UserAccountRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -1,4 +1,4 @@
-package com.example.kafka.auth.security;
+package com.kafka.auth.security;
 
 import java.security.MessageDigest;
 

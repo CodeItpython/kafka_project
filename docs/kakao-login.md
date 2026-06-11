@@ -84,3 +84,44 @@ openssl enc -d -aes-256-cbc -pbkdf2 -in .env.enc -out .env
 - 백엔드는 Kakao user info API로 사용자 식별자와 이메일/닉네임을 가져온다.
 - 내부 `UserAccount`를 찾거나 생성한 뒤 이 프로젝트의 JWT를 발급한다.
 - 이후 프론트는 기존 일반 로그인과 똑같이 JWT로 API를 호출한다.
+
+## 현재 프로젝트 엔드포인트
+
+- OAuth 시작: `GET /api/auth/oauth/kakao/authorize`
+- Kakao Redirect URI: `GET /oauth2/callback/kakao`
+- 프론트 복귀 주소: `http://localhost:8880#access_token=...`
+
+프론트는 URL fragment의 `access_token`을 읽어 자기 origin의 `localStorage`에 저장한다. 백엔드 callback origin은 `localhost:8890`이고 프론트 origin은 `localhost:8880`이므로, 백엔드 callback HTML에서 바로 `localStorage`를 저장하면 프론트에서 읽을 수 없다.
+
+## 로컬 테스트
+
+1. Docker 의존 서비스가 떠 있어야 한다.
+
+```bash
+docker compose up -d postgres mongodb elasticsearch kafka
+```
+
+2. 루트 `.env`에 Kakao 키를 넣는다.
+
+```bash
+KAKAO_CLIENT_ID=...
+KAKAO_CLIENT_SECRET=...
+KAKAO_REDIRECT_URI=http://localhost:8890/oauth2/callback/kakao
+```
+
+3. 백엔드를 실행한다.
+
+```bash
+cd backend
+set -a; source ../.env; set +a
+./gradlew :auth-service:bootRun --args='--eureka.client.enabled=false'
+```
+
+4. 프론트를 실행한다.
+
+```bash
+cd frontend
+npm run dev -- --host 0.0.0.0 --port 8880
+```
+
+5. 브라우저에서 `http://localhost:8880` 접속 후 `카카오로 로그인`을 누른다.

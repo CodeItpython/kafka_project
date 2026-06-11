@@ -1,4 +1,4 @@
-package com.example.kafka.auth.dto;
+package com.kafka.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

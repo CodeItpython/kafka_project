@@ -399,6 +399,16 @@ function App() {
   }
 
   useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const kakaoToken = hashParams.get('access_token');
+    if (kakaoToken) {
+      localStorage.setItem('accessToken', kakaoToken);
+      setToken(kakaoToken);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     loadMe();
   }, [token]);
 
@@ -495,7 +505,7 @@ function App() {
             )}
           </AnimatePresence>
 
-          <button className="kakao-button" type="button" onClick={() => setStatus('Kakao Developers 등록 후 OAuth callback 구현 단계로 연결합니다.')}>카카오 로그인 준비</button>
+          <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
           {status && <p className="notice">{status}</p>}
         </motion.section>
       </main>

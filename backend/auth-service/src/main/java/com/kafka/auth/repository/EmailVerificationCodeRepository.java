@@ -1,6 +1,6 @@
-package com.example.kafka.auth.repository;
+package com.kafka.auth.repository;
 
-import com.example.kafka.auth.model.EmailVerificationCode;
+import com.kafka.auth.model.EmailVerificationCode;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

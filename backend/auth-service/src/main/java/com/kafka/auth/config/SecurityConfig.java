@@ -1,6 +1,6 @@
-package com.example.kafka.auth.config;
+package com.kafka.auth.config;
 
-import com.example.kafka.auth.security.JwtAuthenticationFilter;
+import com.kafka.auth.security.JwtAuthenticationFilter;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -40,7 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/chat/attachments/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/email/code", "/api/auth/email/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/auth/oauth/kakao/guide").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/oauth/kakao/guide", "/api/auth/oauth/kakao/authorize", "/oauth2/callback/kakao").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
