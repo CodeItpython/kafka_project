@@ -11,6 +11,7 @@ import {
   KeyRound,
   LogOut,
   Mail,
+  Menu,
   Paperclip,
   Plus,
   Search,
@@ -119,6 +120,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [isConversationOpen, setIsConversationOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
@@ -576,8 +578,9 @@ function App() {
   }
 
   return (
-    <main className={isConversationOpen ? 'chat-shell chat-open' : 'chat-shell'}>
-      <aside className="sidebar">
+    <main className={['chat-shell', isConversationOpen && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}>
+      <aside className="menu-pane">
+        <section className="sidebar">
         <div className="profile-card">
           <div className="avatar">{user.name.slice(0, 1)}</div>
           <div>
@@ -619,10 +622,58 @@ function App() {
         </section>
 
         <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+      </section>
+
+      <section className="right-panel">
+        <section className="create-card">
+          <div className="section-title">
+            <span>그룹 채팅</span>
+            <small>{groupRooms.length}</small>
+          </div>
+          <form className="room-create" onSubmit={createRoom}>
+            <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
+            <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
+            <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
+          </form>
+          <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
+            <Search size={17} aria-hidden />
+            <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
+          </form>
+          <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
+          <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+        </section>
+
+        <section className="search-panel">
+          <div className="section-title">
+            <span>메시지 검색</span>
+            <small>Elastic</small>
+          </div>
+          <form className="search-row compact" onSubmit={searchMessages}>
+            <Search size={17} aria-hidden />
+            <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
+          </form>
+          <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
+          <div className="search-results">
+            {searchResults.map((message) => (
+              <button key={message.id} onClick={() => openRoom(message.roomId)}>
+                <span>{message.roomName}</span>
+                <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
+                <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
+              </button>
+            ))}
+            {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
+          </div>
+        </section>
+
+        {status && <p className="notice">{status}</p>}
+      </section>
       </aside>
 
       <section className="conversation">
         <header className="conversation-header">
+          <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}>
+            {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+          </button>
           <button className="back-button" type="button" onClick={() => setIsConversationOpen(false)} title="대화 목록으로 돌아가기">
             <ArrowLeft size={19} aria-hidden />
             <span>대화 목록</span>
@@ -691,50 +742,6 @@ function App() {
           <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
         </form>
       </section>
-
-      <aside className="right-panel">
-        <section className="create-card">
-          <div className="section-title">
-            <span>그룹 채팅</span>
-            <small>{groupRooms.length}</small>
-          </div>
-          <form className="room-create" onSubmit={createRoom}>
-            <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
-            <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
-            <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
-          </form>
-          <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
-            <Search size={17} aria-hidden />
-            <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
-          </form>
-          <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
-          <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-        </section>
-
-        <section className="search-panel">
-          <div className="section-title">
-            <span>메시지 검색</span>
-            <small>Elastic</small>
-          </div>
-          <form className="search-row compact" onSubmit={searchMessages}>
-            <Search size={17} aria-hidden />
-            <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
-          </form>
-          <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
-          <div className="search-results">
-            {searchResults.map((message) => (
-              <button key={message.id} onClick={() => openRoom(message.roomId)}>
-                <span>{message.roomName}</span>
-                <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
-                <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
-              </button>
-            ))}
-            {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
-          </div>
-        </section>
-
-        {status && <p className="notice">{status}</p>}
-      </aside>
     </main>
   );
 }
