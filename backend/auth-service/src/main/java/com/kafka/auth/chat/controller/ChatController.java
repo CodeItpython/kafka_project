@@ -5,6 +5,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.AttachmentResponse;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
@@ -76,6 +77,15 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.contacts(query, user));
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<List<SearchSuggestionResponse>> suggestions(
+            @RequestParam String query,
+            @RequestParam(defaultValue = "all") String scope,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.searchSuggestions(query, scope, user));
     }
 
     @GetMapping("/rooms/{roomId}/messages")

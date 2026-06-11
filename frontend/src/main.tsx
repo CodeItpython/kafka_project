@@ -75,6 +75,13 @@ type AttachmentResponse = {
   size: number;
 };
 
+type SearchSuggestion = {
+  text: string;
+  type: 'ROOM' | 'MESSAGE';
+  roomId: string | null;
+  roomName: string | null;
+};
+
 const API_ROOT = '/api';
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
@@ -105,6 +112,8 @@ function App() {
   const [contactQuery, setContactQuery] = useState('');
   const [messageQuery, setMessageQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
+  const [roomSuggestions, setRoomSuggestions] = useState<SearchSuggestion[]>([]);
+  const [messageSuggestions, setMessageSuggestions] = useState<SearchSuggestion[]>([]);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
@@ -236,6 +245,11 @@ function App() {
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
     const data = await request<Contact[]>(`/chat/contacts${suffix}`);
     setContacts(data);
+  }
+
+  async function loadSuggestions(scope: 'rooms' | 'messages', query: string) {
+    if (!token || query.trim().length < 1) return [];
+    return request<SearchSuggestion[]>(`/chat/suggestions?scope=${scope}&query=${encodeURIComponent(query.trim())}`);
   }
 
   async function loadMessages(roomId: string) {
@@ -376,14 +390,35 @@ function App() {
     setAttachmentPreview('');
   }
 
-  async function searchMessages(event: FormEvent) {
-    event.preventDefault();
-    if (!messageQuery.trim()) {
+  async function runMessageSearch(query: string) {
+    if (!query.trim()) {
       setSearchResults([]);
       return;
     }
-    const data = await request<ChatMessage[]>(`/chat/messages/search?query=${encodeURIComponent(messageQuery.trim())}`);
+    const data = await request<ChatMessage[]>(`/chat/messages/search?query=${encodeURIComponent(query.trim())}`);
     setSearchResults(data);
+  }
+
+  async function searchMessages(event: FormEvent) {
+    event.preventDefault();
+    setMessageSuggestions([]);
+    await runMessageSearch(messageQuery);
+  }
+
+  function chooseRoomSuggestion(suggestion: SearchSuggestion) {
+    setRoomQuery(suggestion.text);
+    setRoomSuggestions([]);
+    if (suggestion.roomId) {
+      openRoom(suggestion.roomId);
+      return;
+    }
+    loadRooms(suggestion.text);
+  }
+
+  function chooseMessageSuggestion(suggestion: SearchSuggestion) {
+    setMessageQuery(suggestion.text);
+    setMessageSuggestions([]);
+    runMessageSearch(suggestion.text);
   }
 
   function logout() {
@@ -393,6 +428,8 @@ function App() {
     setRooms([]);
     setMessages([]);
     setSearchResults([]);
+    setRoomSuggestions([]);
+    setMessageSuggestions([]);
     setSelectedRoomId('');
     clearAttachment();
     setStatus('로그아웃되었습니다.');
@@ -424,6 +461,32 @@ function App() {
       loadMessages(selectedRoomId);
     }
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (!token || !roomQuery.trim()) {
+      setRoomSuggestions([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      loadSuggestions('rooms', roomQuery)
+        .then(setRoomSuggestions)
+        .catch(() => setRoomSuggestions([]));
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [roomQuery, token]);
+
+  useEffect(() => {
+    if (!token || !messageQuery.trim()) {
+      setMessageSuggestions([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      loadSuggestions('messages', messageQuery)
+        .then(setMessageSuggestions)
+        .catch(() => setMessageSuggestions([]));
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [messageQuery, token]);
 
   useEffect(() => {
     if (!selectedRoomId) return;
@@ -644,6 +707,7 @@ function App() {
             <Search size={17} aria-hidden />
             <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
           </form>
+          <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
           <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
         </section>
 
@@ -656,6 +720,7 @@ function App() {
             <Search size={17} aria-hidden />
             <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
           </form>
+          <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
           <div className="search-results">
             {searchResults.map((message) => (
               <button key={message.id} onClick={() => openRoom(message.roomId)}>
@@ -671,6 +736,29 @@ function App() {
         {status && <p className="notice">{status}</p>}
       </aside>
     </main>
+  );
+}
+
+function SuggestionList({
+  suggestions,
+  onSelect
+}: {
+  suggestions: SearchSuggestion[];
+  onSelect: (suggestion: SearchSuggestion) => void;
+}) {
+  if (suggestions.length === 0) {
+    return null;
+  }
+  return (
+    <div className="suggestion-list">
+      {suggestions.map((suggestion) => (
+        <button key={`${suggestion.type}-${suggestion.roomId ?? suggestion.text}-${suggestion.text}`} type="button" onClick={() => onSelect(suggestion)}>
+          <Search size={14} aria-hidden />
+          <span>{suggestion.text}</span>
+          <small>{suggestion.type === 'ROOM' ? '방' : suggestion.roomName ?? '메시지'}</small>
+        </button>
+      ))}
+    </div>
   );
 }
 

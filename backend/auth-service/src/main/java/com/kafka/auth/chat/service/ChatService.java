@@ -7,6 +7,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.model.ChatMessageDocument;
@@ -25,11 +26,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -146,6 +150,60 @@ public class ChatService {
                     .map(this::toMessageResponse)
                     .toList();
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<SearchSuggestionResponse> searchSuggestions(String query, String scope, UserAccount user) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        String normalizedQuery = query.trim();
+        boolean includeRooms = scope == null || scope.isBlank() || "all".equalsIgnoreCase(scope) || "rooms".equalsIgnoreCase(scope);
+        boolean includeMessages = scope == null || scope.isBlank() || "all".equalsIgnoreCase(scope) || "messages".equalsIgnoreCase(scope);
+        Map<String, SearchSuggestionResponse> suggestions = new LinkedHashMap<>();
+
+        if (includeRooms) {
+            chatRoomRepository.searchVisibleRooms(user.getEmail(), ChatRoomType.GROUP, normalizedQuery, PageRequest.of(0, 8))
+                    .stream()
+                    .filter(room -> room.isVisibleTo(user.getEmail()))
+                    .forEach(room -> addSuggestion(suggestions, new SearchSuggestionResponse(
+                            room.getName(),
+                            "ROOM",
+                            room.getId(),
+                            room.getName()
+                    )));
+        }
+
+        try {
+            chatMessageSearchRepository
+                    .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(normalizedQuery, normalizedQuery)
+                    .stream()
+                    .filter(message -> canReadMessage(message.getId(), user))
+                    .forEach(message -> {
+                        if (includeRooms && containsIgnoreCase(message.getRoomName(), normalizedQuery)) {
+                            addSuggestion(suggestions, new SearchSuggestionResponse(
+                                    message.getRoomName(),
+                                    "ROOM",
+                                    message.getRoomId(),
+                                    message.getRoomName()
+                            ));
+                        }
+                        if (includeMessages) {
+                            extractMessageSuggestions(message.getContent(), normalizedQuery)
+                                    .forEach(text -> addSuggestion(suggestions, new SearchSuggestionResponse(
+                                            text,
+                                            "MESSAGE",
+                                            message.getRoomId(),
+                                            message.getRoomName()
+                                    )));
+                        }
+                    });
+        } catch (RuntimeException exception) {
+            log.warn("Elasticsearch suggestion lookup failed.", exception);
+        }
+
+        return suggestions.values().stream().limit(8).toList();
     }
 
     @Transactional(readOnly = true)
@@ -333,6 +391,47 @@ public class ChatService {
         return !message.isDeletedForEveryone()
                 && message.isVisibleTo(user.getEmail())
                 && canReadRoom(message.getRoomId(), user);
+    }
+
+    private void addSuggestion(Map<String, SearchSuggestionResponse> suggestions, SearchSuggestionResponse suggestion) {
+        if (suggestion.text() == null || suggestion.text().isBlank()) {
+            return;
+        }
+        String key = suggestion.type() + "::" + suggestion.text().toLowerCase(Locale.ROOT);
+        suggestions.putIfAbsent(key, suggestion);
+    }
+
+    private List<String> extractMessageSuggestions(String content, String query) {
+        if (content == null || content.isBlank() || !containsIgnoreCase(content, query)) {
+            return List.of();
+        }
+        String normalizedQuery = query.toLowerCase(Locale.ROOT);
+        List<String> tokenMatches = Arrays.stream(content.split("[\\s,.;:!?()\\[\\]{}\"']+"))
+                .map(String::trim)
+                .filter(token -> token.length() >= normalizedQuery.length())
+                .filter(token -> token.toLowerCase(Locale.ROOT).startsWith(normalizedQuery))
+                .limit(3)
+                .toList();
+        if (!tokenMatches.isEmpty()) {
+            return tokenMatches;
+        }
+
+        String lowerContent = content.toLowerCase(Locale.ROOT);
+        int matchIndex = lowerContent.indexOf(normalizedQuery);
+        int start = Math.max(0, matchIndex - 10);
+        int end = Math.min(content.length(), matchIndex + query.length() + 24);
+        String snippet = content.substring(start, end).trim();
+        if (start > 0) {
+            snippet = "..." + snippet;
+        }
+        if (end < content.length()) {
+            snippet = snippet + "...";
+        }
+        return List.of(snippet);
+    }
+
+    private boolean containsIgnoreCase(String value, String query) {
+        return value != null && query != null && value.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT));
     }
 
     private ChatMessageDocument ensureMessageInRoom(String roomId, String messageId) {

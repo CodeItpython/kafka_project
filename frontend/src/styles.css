@@ -317,6 +317,49 @@ input:focus {
   margin-top: 12px;
 }
 
+.suggestion-list {
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid #e5e8eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(25 31 40 / 7%);
+}
+
+.suggestion-list button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: #333d4b;
+  text-align: left;
+  background: transparent;
+}
+
+.suggestion-list button:hover {
+  background: #f2f6ff;
+}
+
+.suggestion-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.suggestion-list small {
+  color: #8b95a1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .panel-section,
 .create-card,
 .search-panel {

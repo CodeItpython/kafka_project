@@ -58,6 +58,14 @@ public final class ChatDtos {
     ) {
     }
 
+    public record SearchSuggestionResponse(
+            String text,
+            String type,
+            String roomId,
+            String roomName
+    ) {
+    }
+
     public record ChatMessageResponse(
             String id,
             String roomId,
