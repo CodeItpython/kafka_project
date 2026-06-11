@@ -250,6 +250,7 @@ input:focus {
   gap: 18px;
   padding: 24px;
   background: #f2f4f6;
+  transition: grid-template-columns 240ms ease, gap 240ms ease;
 }
 
 .chat-shell.menu-open {
@@ -257,7 +258,7 @@ input:focus {
 }
 
 .menu-pane {
-  display: none;
+  display: grid;
   align-content: start;
   gap: 0;
   min-height: calc(100vh - 48px);
@@ -266,10 +267,6 @@ input:focus {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 18px 50px rgb(25 31 40 / 8%);
-}
-
-.chat-shell.menu-open .menu-pane {
-  display: grid;
 }
 
 .sidebar,
@@ -477,23 +474,51 @@ input:focus {
   background: #f2f4f6;
 }
 
-.conversation {
+.conversation,
+.room-directory {
   display: grid;
-  grid-template-rows: auto 1fr auto;
   min-height: calc(100vh - 48px);
   min-width: 0;
   padding: 0;
 }
 
-.conversation-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+.conversation {
+  grid-template-rows: auto 1fr auto;
+}
+
+.room-directory {
+  align-content: start;
   gap: 18px;
-  padding: 22px;
+}
+
+.conversation-header,
+.directory-header,
+.directory-section {
   border: 1px solid #e5e8eb;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.conversation-header,
+.directory-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px;
+}
+
+.conversation-header {
+  justify-content: space-between;
+}
+
+.directory-header {
+  justify-content: flex-start;
+}
+
+.directory-section {
+  display: grid;
+  gap: 12px;
+  padding: 22px;
 }
 
 .back-button,
@@ -512,10 +537,6 @@ input:focus {
   font-weight: 900;
 }
 
-.back-button {
-  display: none;
-}
-
 .menu-toggle-button {
   flex: 0 0 auto;
   width: 38px;
@@ -530,7 +551,8 @@ input:focus {
   justify-content: flex-end;
 }
 
-.conversation-header h2 {
+.conversation-header h2,
+.directory-header h2 {
   margin: 5px 0;
   font-size: 27px;
 }
@@ -797,7 +819,8 @@ input:focus {
 
   .sidebar,
   .conversation,
-  .right-panel {
+  .right-panel,
+  .room-directory {
     min-height: auto;
   }
 
@@ -806,7 +829,8 @@ input:focus {
     padding: 18px;
   }
 
-  .chat-shell.menu-open .conversation {
+  .chat-shell.menu-open .conversation,
+  .chat-shell.menu-open .room-directory {
     display: none;
   }
 
@@ -814,28 +838,30 @@ input:focus {
     border-bottom: 1px solid #e5e8eb;
   }
 
-  .conversation {
+  .conversation,
+  .room-directory {
     min-height: 100vh;
     padding: 12px;
   }
 
-  .conversation-header {
+  .conversation-header,
+  .directory-header {
     display: grid;
     gap: 13px;
     padding: 16px;
-  }
-
-  .back-button {
-    display: inline-flex;
-    width: fit-content;
   }
 
   .header-actions {
     justify-content: flex-start;
   }
 
-  .conversation-header h2 {
+  .conversation-header h2,
+  .directory-header h2 {
     font-size: 22px;
+  }
+
+  .directory-section {
+    padding: 16px;
   }
 
   .message-list {

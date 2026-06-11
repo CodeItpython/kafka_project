@@ -119,7 +119,6 @@ function App() {
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [isConversationOpen, setIsConversationOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
@@ -232,14 +231,11 @@ function App() {
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
     const data = await request<ChatRoom[]>(`/chat/rooms${suffix}`);
     setRooms(data);
-    if (!selectedRoomId && data.length > 0) {
-      setSelectedRoomId(data[0].id);
-    }
   }
 
   function openRoom(roomId: string) {
     setSelectedRoomId(roomId);
-    setIsConversationOpen(true);
+    setIsMenuOpen(false);
   }
 
   async function loadContacts(query = contactQuery) {
@@ -287,7 +283,6 @@ function App() {
       await request<void>(`/chat/rooms/${selectedRoomId}`, { method: 'DELETE' });
       setRooms((current) => current.filter((room) => room.id !== selectedRoomId));
       setSelectedRoomId('');
-      setIsConversationOpen(false);
       setMessages([]);
       setStatus(`${selectedRoom.name} 채팅방을 내 목록에서 삭제했습니다.`);
     } catch (error) {
@@ -433,6 +428,7 @@ function App() {
     setRoomSuggestions([]);
     setMessageSuggestions([]);
     setSelectedRoomId('');
+    setIsMenuOpen(false);
     clearAttachment();
     setStatus('로그아웃되었습니다.');
   }
@@ -578,171 +574,220 @@ function App() {
   }
 
   return (
-    <main className={['chat-shell', isConversationOpen && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}>
-      <aside className="menu-pane">
-        <section className="sidebar">
-        <div className="profile-card">
-          <div className="avatar">{user.name.slice(0, 1)}</div>
-          <div>
-            <h1>Kafka Talk</h1>
-            <p>{user.name} · {user.provider}</p>
-          </div>
-        </div>
-
-        <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
-          <Search size={17} aria-hidden />
-          <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
-        </form>
-
-        <section className="panel-section">
-          <div className="section-title">
-            <span>친구</span>
-            <small>{contacts.length}</small>
-          </div>
-          <div className="contact-list">
-            {contacts.map((contact) => (
-              <button key={contact.email} onClick={() => openDirectRoom(contact)} disabled={loading}>
-                <div className="mini-avatar">{contact.name.slice(0, 1)}</div>
-                <span>
-                  <strong>{contact.name}</strong>
-                  <small>{contact.email}</small>
-                </span>
-                <ChevronRight size={16} aria-hidden />
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel-section">
-          <div className="section-title">
-            <span>1:1 대화</span>
-            <small>{directRooms.length}</small>
-          </div>
-          <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-        </section>
-
-        <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
-      </section>
-
-      <section className="right-panel">
-        <section className="create-card">
-          <div className="section-title">
-            <span>그룹 채팅</span>
-            <small>{groupRooms.length}</small>
-          </div>
-          <form className="room-create" onSubmit={createRoom}>
-            <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
-            <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
-            <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
-          </form>
-          <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
-            <Search size={17} aria-hidden />
-            <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
-          </form>
-          <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
-          <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-        </section>
-
-        <section className="search-panel">
-          <div className="section-title">
-            <span>메시지 검색</span>
-            <small>Elastic</small>
-          </div>
-          <form className="search-row compact" onSubmit={searchMessages}>
-            <Search size={17} aria-hidden />
-            <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
-          </form>
-          <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
-          <div className="search-results">
-            {searchResults.map((message) => (
-              <button key={message.id} onClick={() => openRoom(message.roomId)}>
-                <span>{message.roomName}</span>
-                <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
-                <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
-              </button>
-            ))}
-            {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
-          </div>
-        </section>
-
-        {status && <p className="notice">{status}</p>}
-      </section>
-      </aside>
-
-      <section className="conversation">
-        <header className="conversation-header">
-          <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}>
-            {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-          </button>
-          <button className="back-button" type="button" onClick={() => setIsConversationOpen(false)} title="대화 목록으로 돌아가기">
-            <ArrowLeft size={19} aria-hidden />
-            <span>대화 목록</span>
-          </button>
-          <div>
-            <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
-            <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
-            <p>{selectedRoom?.description ?? '친구를 선택하면 1:1 채팅방이 열립니다.'}</p>
-          </div>
-          <div className="header-actions">
-            <span className={connected ? 'status-pill online' : 'status-pill'}>
-              <CheckCircle2 size={15} aria-hidden />
-              {connected ? '실시간 연결' : '연결 대기'}
-            </span>
-            <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
-            <button className="ghost-icon-button" onClick={deleteRoom} disabled={!selectedRoomId || loading} title="채팅방 삭제"><Trash2 size={17} aria-hidden /></button>
-          </div>
-        </header>
-
-        <div className="message-list">
-          {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
-          {messages.map((message) => (
-            <motion.article
-              key={message.id}
-              className={message.senderEmail === user.email ? 'chat-bubble mine' : 'chat-bubble'}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div className="bubble-meta">
-                <strong>{message.senderName}</strong>
-                <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+    <motion.main layout className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}>
+      <AnimatePresence initial={false}>
+        {isMenuOpen && (
+          <motion.aside
+            className="menu-pane"
+            initial={{ opacity: 0, x: -26, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -26, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+          >
+            <section className="sidebar">
+              <div className="profile-card">
+                <div className="avatar">{user.name.slice(0, 1)}</div>
+                <div>
+                  <h1>Kafka Talk</h1>
+                  <p>{user.name} · {user.provider}</p>
+                </div>
               </div>
-              {message.deletedForEveryone ? (
-                <p className="deleted-message">삭제된 메시지입니다.</p>
-              ) : (
-                <>
-                  {message.attachmentUrl && (
-                    <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
-                      <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
-                    </a>
-                  )}
-                  {message.content && <p>{message.content}</p>}
-                  <div className="message-actions">
-                    <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
-                    {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
-                  </div>
-                </>
-              )}
-            </motion.article>
-          ))}
-        </div>
 
-        <form className="composer" onSubmit={sendMessage}>
-          {attachmentPreview && (
-            <div className="attachment-preview">
-              <img src={attachmentPreview} alt={attachment?.name ?? '첨부 미리보기'} />
-              <span>{attachment?.name}</span>
-              <button type="button" onClick={clearAttachment} title="첨부 제거"><X size={16} aria-hidden /></button>
+              <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
+                <Search size={17} aria-hidden />
+                <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
+              </form>
+
+              <section className="panel-section">
+                <div className="section-title">
+                  <span>친구</span>
+                  <small>{contacts.length}</small>
+                </div>
+                <div className="contact-list">
+                  {contacts.map((contact) => (
+                    <button key={contact.email} onClick={() => openDirectRoom(contact)} disabled={loading}>
+                      <div className="mini-avatar">{contact.name.slice(0, 1)}</div>
+                      <span>
+                        <strong>{contact.name}</strong>
+                        <small>{contact.email}</small>
+                      </span>
+                      <ChevronRight size={16} aria-hidden />
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="panel-section">
+                <div className="section-title">
+                  <span>1:1 대화</span>
+                  <small>{directRooms.length}</small>
+                </div>
+                <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+              </section>
+
+              <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+            </section>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        {selectedRoomId ? (
+          <motion.section
+            key="conversation"
+            className="conversation"
+            layout
+            initial={{ opacity: 0, x: 18 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -18 }}
+            transition={{ type: 'spring', stiffness: 230, damping: 28 }}
+          >
+            <header className="conversation-header">
+              <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
+                {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+              </button>
+              <button className="back-button" type="button" onClick={() => setSelectedRoomId('')} title="채팅방 목록으로 돌아가기">
+                <ArrowLeft size={19} aria-hidden />
+                <span>채팅방 목록</span>
+              </button>
+              <div>
+                <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
+                <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
+                <p>{selectedRoom?.description ?? '친구를 선택하면 1:1 채팅방이 열립니다.'}</p>
+              </div>
+              <div className="header-actions">
+                <span className={connected ? 'status-pill online' : 'status-pill'}>
+                  <CheckCircle2 size={15} aria-hidden />
+                  {connected ? '실시간 연결' : '연결 대기'}
+                </span>
+                <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
+                <button className="ghost-icon-button" onClick={deleteRoom} disabled={!selectedRoomId || loading} title="채팅방 삭제"><Trash2 size={17} aria-hidden /></button>
+              </div>
+            </header>
+
+            <div className="message-list">
+              {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
+              {messages.map((message) => (
+                <motion.article
+                  key={message.id}
+                  className={message.senderEmail === user.email ? 'chat-bubble mine' : 'chat-bubble'}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <div className="bubble-meta">
+                    <strong>{message.senderName}</strong>
+                    <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
+                  </div>
+                  {message.deletedForEveryone ? (
+                    <p className="deleted-message">삭제된 메시지입니다.</p>
+                  ) : (
+                    <>
+                      {message.attachmentUrl && (
+                        <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
+                          <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
+                        </a>
+                      )}
+                      {message.content && <p>{message.content}</p>}
+                      <div className="message-actions">
+                        <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
+                        {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
+                      </div>
+                    </>
+                  )}
+                </motion.article>
+              ))}
             </div>
-          )}
-          <label className="attach-button" title="이미지 또는 GIF 첨부">
-            <Paperclip size={18} aria-hidden />
-            <input type="file" accept="image/*,.gif" onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)} disabled={!selectedRoomId} />
-          </label>
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="메시지를 입력하세요" disabled={!selectedRoomId} />
-          <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
-        </form>
-      </section>
-    </main>
+
+            <form className="composer" onSubmit={sendMessage}>
+              {attachmentPreview && (
+                <div className="attachment-preview">
+                  <img src={attachmentPreview} alt={attachment?.name ?? '첨부 미리보기'} />
+                  <span>{attachment?.name}</span>
+                  <button type="button" onClick={clearAttachment} title="첨부 제거"><X size={16} aria-hidden /></button>
+                </div>
+              )}
+              <label className="attach-button" title="이미지 또는 GIF 첨부">
+                <Paperclip size={18} aria-hidden />
+                <input type="file" accept="image/*,.gif" onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)} disabled={!selectedRoomId} />
+              </label>
+              <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="메시지를 입력하세요" disabled={!selectedRoomId} />
+              <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
+            </form>
+          </motion.section>
+        ) : (
+          <motion.section
+            key="rooms"
+            className="room-directory"
+            layout
+            initial={{ opacity: 0, x: 18 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -18 }}
+            transition={{ type: 'spring', stiffness: 230, damping: 28 }}
+          >
+            <header className="directory-header">
+              <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
+                {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+              </button>
+              <div>
+                <p className="eyebrow">Kafka Talk</p>
+                <h2>채팅방</h2>
+                <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
+              </div>
+            </header>
+
+            <section className="directory-section">
+              <div className="section-title">
+                <span>그룹 채팅</span>
+                <small>{groupRooms.length}</small>
+              </div>
+              <form className="room-create" onSubmit={createRoom}>
+                <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
+                <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
+                <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
+              </form>
+              <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
+                <Search size={17} aria-hidden />
+                <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
+              </form>
+              <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
+              <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+            </section>
+
+            <section className="directory-section">
+              <div className="section-title">
+                <span>최근 1:1 대화</span>
+                <small>{directRooms.length}</small>
+              </div>
+              <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+            </section>
+
+            <section className="directory-section">
+              <div className="section-title">
+                <span>메시지 검색</span>
+                <small>Elastic</small>
+              </div>
+              <form className="search-row compact" onSubmit={searchMessages}>
+                <Search size={17} aria-hidden />
+                <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
+              </form>
+              <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
+              <div className="search-results">
+                {searchResults.map((message) => (
+                  <button key={message.id} onClick={() => openRoom(message.roomId)}>
+                    <span>{message.roomName}</span>
+                    <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
+                    <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
+                  </button>
+                ))}
+                {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
+              </div>
+            </section>
+
+            {status && <p className="notice">{status}</p>}
+          </motion.section>
+        )}
+      </AnimatePresence>
+    </motion.main>
   );
 }
 
