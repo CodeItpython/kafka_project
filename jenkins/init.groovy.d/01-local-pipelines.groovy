@@ -10,7 +10,7 @@ import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
 def jenkins = Jenkins.get()
 def repoUrl = System.getenv('KAFKA_PROJECT_GIT_URL') ?: 'https://github.com/CodeItpython/kafka_project'
 def branchSpec = System.getenv('KAFKA_PROJECT_GIT_BRANCH') ?: '*/codex/gradle-k8s-setup'
-def pollSpec = System.getenv('KAFKA_PROJECT_POLL_SCM') ?: 'H/1 * * * *'
+def pollSpec = System.getenv('KAFKA_PROJECT_POLL_SCM') ?: '* * * * *'
 
 def configurePipeline = { String jobName, String scriptPath ->
     def job = jenkins.getItemByFullName(jobName)

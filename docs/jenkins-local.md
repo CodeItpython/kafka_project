@@ -16,7 +16,7 @@ GitHub push
 -> frontend npm ci && npm run build
 ```
 
-현재 `Jenkinsfile`과 `Jenkinsfile.local-deploy`에는 `pollSCM('H/1 * * * *')`가 들어 있다.
+현재 `Jenkinsfile`과 `Jenkinsfile.local-deploy`에는 `pollSCM('* * * * *')`가 들어 있다.
 로컬 Jenkins가 GitHub에서 직접 webhook을 받을 수 없는 환경이어도 Jenkins가 약 1분마다 GitHub 브랜치를 확인하고 새 commit이 있으면 자동으로 pipeline을 실행한다.
 
 ## 기본 Jenkins 실행
