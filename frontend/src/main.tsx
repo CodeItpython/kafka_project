@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  ArrowLeft,
   AtSign,
   CheckCircle2,
   ChevronRight,
@@ -108,6 +109,7 @@ function App() {
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [isConversationOpen, setIsConversationOpen] = useState(false);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
@@ -224,6 +226,11 @@ function App() {
     }
   }
 
+  function openRoom(roomId: string) {
+    setSelectedRoomId(roomId);
+    setIsConversationOpen(true);
+  }
+
   async function loadContacts(query = contactQuery) {
     if (!token) return;
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
@@ -246,7 +253,7 @@ function App() {
         body: JSON.stringify({ name: roomName, description: roomDescription })
       });
       setRooms((current) => [room, ...current.filter((item) => item.id !== room.id)]);
-      setSelectedRoomId(room.id);
+      openRoom(room.id);
       setRoomName('');
       setRoomDescription('');
       setStatus(`${room.name} 채팅방을 만들었습니다.`);
@@ -264,6 +271,7 @@ function App() {
       await request<void>(`/chat/rooms/${selectedRoomId}`, { method: 'DELETE' });
       setRooms((current) => current.filter((room) => room.id !== selectedRoomId));
       setSelectedRoomId('');
+      setIsConversationOpen(false);
       setMessages([]);
       setStatus(`${selectedRoom.name} 채팅방을 내 목록에서 삭제했습니다.`);
     } catch (error) {
@@ -281,7 +289,7 @@ function App() {
         body: JSON.stringify({ partnerEmail: contact.email })
       });
       setRooms((current) => [room, ...current.filter((item) => item.id !== room.id)]);
-      setSelectedRoomId(room.id);
+      openRoom(room.id);
       setStatus(`${contact.name}님과 1:1 대화를 시작합니다.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '1:1 채팅방을 열지 못했습니다.');
@@ -495,7 +503,7 @@ function App() {
   }
 
   return (
-    <main className="chat-shell">
+    <main className={isConversationOpen ? 'chat-shell chat-open' : 'chat-shell'}>
       <aside className="sidebar">
         <div className="profile-card">
           <div className="avatar">{user.name.slice(0, 1)}</div>
@@ -534,7 +542,7 @@ function App() {
             <span>1:1 대화</span>
             <small>{directRooms.length}</small>
           </div>
-          <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={setSelectedRoomId} />
+          <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
         </section>
 
         <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
@@ -542,6 +550,10 @@ function App() {
 
       <section className="conversation">
         <header className="conversation-header">
+          <button className="back-button" type="button" onClick={() => setIsConversationOpen(false)} title="대화 목록으로 돌아가기">
+            <ArrowLeft size={19} aria-hidden />
+            <span>대화 목록</span>
+          </button>
           <div>
             <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
             <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
@@ -622,7 +634,7 @@ function App() {
             <Search size={17} aria-hidden />
             <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
           </form>
-          <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={setSelectedRoomId} />
+          <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
         </section>
 
         <section className="search-panel">
@@ -636,7 +648,7 @@ function App() {
           </form>
           <div className="search-results">
             {searchResults.map((message) => (
-              <button key={message.id} onClick={() => setSelectedRoomId(message.roomId)}>
+              <button key={message.id} onClick={() => openRoom(message.roomId)}>
                 <span>{message.roomName}</span>
                 <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
                 <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
