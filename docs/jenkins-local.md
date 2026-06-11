@@ -14,10 +14,14 @@ GitHub push
 -> Jenkins pipeline
 -> backend ./gradlew test
 -> frontend npm ci && npm run build
+-> CI 성공 시 kafka-chat-local-deploy pipeline
+-> Docker image build
+-> kubectl apply -k k8s
 ```
 
 현재 `Jenkinsfile`과 `Jenkinsfile.local-deploy`에는 `pollSCM('* * * * *')`가 들어 있다.
 로컬 Jenkins가 GitHub에서 직접 webhook을 받을 수 없는 환경이어도 Jenkins가 약 1분마다 GitHub 브랜치를 확인하고 새 commit이 있으면 자동으로 pipeline을 실행한다.
+또한 `kafka-chat-local-deploy`는 `kafka-chat-ci`가 성공하면 이어서 실행되도록 upstream trigger를 함께 둔다.
 
 ## 기본 Jenkins 실행
 
@@ -73,7 +77,7 @@ docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d 
 - Docker 이미지는 `kafka-auth-service:local`, `kafka-discovery-service:local`, `kafka-frontend:local` 태그로 빌드된다.
 - Kubernetes manifest는 이 로컬 이미지 태그를 사용한다.
 
-이 모드로 실행한 뒤 `kafka-chat-local-deploy` job을 한 번 수동으로 `Build Now` 하면, 이후 push부터는 pollSCM 트리거가 새 commit을 감지해 자동으로 테스트, 빌드, Docker 이미지 생성, Kubernetes 반영을 실행한다.
+이 모드에서는 push 후 `kafka-chat-ci`가 먼저 실행되고, 성공하면 `kafka-chat-local-deploy`가 이어서 Docker 이미지 생성과 Kubernetes 반영을 실행한다.
 
 배포 job이 성공하려면 Docker Desktop Kubernetes가 켜져 있고 `kubectl config current-context`가 유효한 context를 반환해야 한다. context 목록이 비어 있으면 Jenkins는 Docker 이미지는 빌드할 수 있어도 `kubectl apply -k k8s` 단계에서 실패한다.
 

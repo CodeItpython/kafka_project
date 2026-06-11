@@ -1,8 +1,13 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+    }
+
     triggers {
         pollSCM('* * * * *')
+        upstream(upstreamProjects: 'kafka-chat-ci', threshold: hudson.model.Result.SUCCESS)
     }
 
     environment {
@@ -12,6 +17,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
+                deleteDir()
                 checkout scm
             }
         }

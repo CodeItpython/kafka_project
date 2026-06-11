@@ -1,8 +1,10 @@
 import hudson.plugins.git.BranchSpec
 import hudson.plugins.git.GitSCM
 import hudson.plugins.git.UserRemoteConfig
+import hudson.model.Result
 import hudson.triggers.SCMTrigger
 import jenkins.model.Jenkins
+import jenkins.triggers.ReverseBuildTrigger
 import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition
 import org.jenkinsci.plugins.workflow.job.WorkflowJob
 import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
@@ -12,7 +14,7 @@ def repoUrl = System.getenv('KAFKA_PROJECT_GIT_URL') ?: 'https://github.com/Code
 def branchSpec = System.getenv('KAFKA_PROJECT_GIT_BRANCH') ?: '*/codex/gradle-k8s-setup'
 def pollSpec = System.getenv('KAFKA_PROJECT_POLL_SCM') ?: '* * * * *'
 
-def configurePipeline = { String jobName, String scriptPath ->
+def configurePipeline = { String jobName, String scriptPath, String upstreamJobName = null ->
     def job = jenkins.getItemByFullName(jobName)
     if (job == null) {
         job = jenkins.createProject(WorkflowJob, jobName)
@@ -33,7 +35,12 @@ def configurePipeline = { String jobName, String scriptPath ->
     job.setDefinition(definition)
 
     job.removeProperty(PipelineTriggersJobProperty)
-    def triggerProperty = new PipelineTriggersJobProperty([new SCMTrigger(pollSpec)])
+    def triggers = [new SCMTrigger(pollSpec)]
+    if (upstreamJobName != null) {
+        triggers.add(new ReverseBuildTrigger(upstreamJobName, Result.SUCCESS))
+    }
+
+    def triggerProperty = new PipelineTriggersJobProperty(triggers)
     job.addProperty(triggerProperty)
     if (triggerProperty.metaClass.respondsTo(triggerProperty, 'startTriggers', Boolean.TYPE)) {
         triggerProperty.startTriggers(true)
@@ -44,5 +51,5 @@ def configurePipeline = { String jobName, String scriptPath ->
 }
 
 configurePipeline('kafka-chat-ci', 'Jenkinsfile')
-configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy')
+configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', 'kafka-chat-ci')
 jenkins.save()
