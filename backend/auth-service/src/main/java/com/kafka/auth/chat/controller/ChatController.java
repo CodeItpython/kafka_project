@@ -5,9 +5,11 @@ import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.AttachmentResponse;
+import com.kafka.auth.chat.dto.ChatDtos.TypingRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.service.ChatService;
 import com.kafka.auth.model.UserAccount;
@@ -77,6 +79,30 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.contacts(query, user));
+    }
+
+    @PostMapping("/presence/heartbeat")
+    public ResponseEntity<Void> heartbeat(@AuthenticationPrincipal UserAccount user) {
+        chatService.heartbeat(user);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/rooms/{roomId}/presence")
+    public ResponseEntity<RoomPresenceResponse> roomPresence(
+            @PathVariable String roomId,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.roomPresence(roomId, user));
+    }
+
+    @PostMapping("/rooms/{roomId}/typing")
+    public ResponseEntity<Void> typing(
+            @PathVariable String roomId,
+            @RequestBody TypingRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        chatService.setTyping(roomId, request.typing(), user);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/suggestions")

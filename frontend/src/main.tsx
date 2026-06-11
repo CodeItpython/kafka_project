@@ -67,6 +67,7 @@ type Contact = {
   email: string;
   name: string;
   provider: string;
+  online: boolean;
 };
 
 type AttachmentResponse = {
@@ -81,6 +82,11 @@ type SearchSuggestion = {
   type: 'ROOM' | 'MESSAGE';
   roomId: string | null;
   roomName: string | null;
+};
+
+type RoomPresence = {
+  onlineUsers: string[];
+  typingUsers: string[];
 };
 
 const API_ROOT = '/api';
@@ -115,6 +121,7 @@ function App() {
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
   const [roomSuggestions, setRoomSuggestions] = useState<SearchSuggestion[]>([]);
   const [messageSuggestions, setMessageSuggestions] = useState<SearchSuggestion[]>([]);
+  const [presence, setPresence] = useState<RoomPresence>({ onlineUsers: [], typingUsers: [] });
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
@@ -254,6 +261,25 @@ function App() {
     if (!roomId) return;
     const data = await request<ChatMessage[]>(`/chat/rooms/${roomId}/messages`);
     setMessages(data);
+  }
+
+  async function heartbeat() {
+    if (!token) return;
+    await request<void>('/chat/presence/heartbeat', { method: 'POST' });
+  }
+
+  async function loadPresence(roomId: string) {
+    if (!roomId) return;
+    const data = await request<RoomPresence>(`/chat/rooms/${roomId}/presence`);
+    setPresence(data);
+  }
+
+  function pushTyping(typing: boolean) {
+    if (!selectedRoomId || !token) return;
+    request<void>(`/chat/rooms/${selectedRoomId}/typing`, {
+      method: 'POST',
+      body: JSON.stringify({ typing })
+    }).catch(() => undefined);
   }
 
   async function createRoom(event: FormEvent) {
@@ -427,6 +453,7 @@ function App() {
     setSearchResults([]);
     setRoomSuggestions([]);
     setMessageSuggestions([]);
+    setPresence({ onlineUsers: [], typingUsers: [] });
     setSelectedRoomId('');
     setIsMenuOpen(false);
     clearAttachment();
@@ -451,14 +478,48 @@ function App() {
     if (user) {
       loadRooms('');
       loadContacts('');
+      heartbeat().catch(() => undefined);
     }
   }, [user?.email]);
 
   useEffect(() => {
+    if (!token || !user) return;
+    const timer = window.setInterval(() => {
+      heartbeat()
+        .then(() => loadContacts(contactQuery))
+        .catch(() => undefined);
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [token, user?.email, contactQuery]);
+
+  useEffect(() => {
     if (selectedRoomId) {
       loadMessages(selectedRoomId);
+      loadPresence(selectedRoomId);
     }
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (!selectedRoomId || !token) {
+      setPresence({ onlineUsers: [], typingUsers: [] });
+      return;
+    }
+    const timer = window.setInterval(() => {
+      loadPresence(selectedRoomId).catch(() => undefined);
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [selectedRoomId, token]);
+
+  useEffect(() => {
+    if (!selectedRoomId || !token) return;
+    if (!draft.trim()) {
+      pushTyping(false);
+      return;
+    }
+    pushTyping(true);
+    const timer = window.setTimeout(() => pushTyping(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [draft, selectedRoomId, token]);
 
   useEffect(() => {
     if (!token || !roomQuery.trim()) {
@@ -606,10 +667,13 @@ function App() {
                 <div className="contact-list">
                   {contacts.map((contact) => (
                     <button key={contact.email} onClick={() => openDirectRoom(contact)} disabled={loading}>
-                      <div className="mini-avatar">{contact.name.slice(0, 1)}</div>
+                      <div className="mini-avatar presence-avatar">
+                        {contact.name.slice(0, 1)}
+                        <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
+                      </div>
                       <span>
                         <strong>{contact.name}</strong>
-                        <small>{contact.email}</small>
+                        <small>{contact.online ? '온라인' : contact.email}</small>
                       </span>
                       <ChevronRight size={16} aria-hidden />
                     </button>
@@ -651,10 +715,14 @@ function App() {
                 <span>채팅방 목록</span>
               </button>
               <div>
-                <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
-                <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
-                <p>{selectedRoom?.description ?? '친구를 선택하면 1:1 채팅방이 열립니다.'}</p>
-              </div>
+                  <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
+                  <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
+                  <p>{selectedRoom?.description ?? '친구를 선택하면 1:1 채팅방이 열립니다.'}</p>
+                  <div className="presence-line">
+                    {presence.onlineUsers.length > 0 && <span>{presence.onlineUsers.length}명 온라인</span>}
+                    {presence.typingUsers.length > 0 && <strong>{presence.typingUsers.join(', ')} 입력 중</strong>}
+                  </div>
+                </div>
               <div className="header-actions">
                 <span className={connected ? 'status-pill online' : 'status-pill'}>
                   <CheckCircle2 size={15} aria-hidden />
@@ -710,7 +778,7 @@ function App() {
                 <Paperclip size={18} aria-hidden />
                 <input type="file" accept="image/*,.gif" onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)} disabled={!selectedRoomId} />
               </label>
-              <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="메시지를 입력하세요" disabled={!selectedRoomId} />
+              <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={presence.typingUsers.length > 0 ? `${presence.typingUsers[0]}님이 입력 중` : '메시지를 입력하세요'} disabled={!selectedRoomId} />
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
           </motion.section>

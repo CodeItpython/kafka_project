@@ -1,6 +1,6 @@
 # Kafka Chat Project
 
-Spring Boot + Spring Security + Spring Cloud Netflix Eureka backend, React frontend, Kafka messaging, MongoDB chat history, Elasticsearch search, Docker, Kubernetes, and Jenkins local CI/CD scaffold.
+Spring Boot + Spring Security + Spring Cloud Netflix Eureka backend, React frontend, Kafka messaging, Redis cache/presence state, MongoDB chat history, Elasticsearch search, Logstash/Kibana observability, Docker, Kubernetes, and Jenkins local CI/CD scaffold.
 
 ## Structure
 
@@ -16,7 +16,7 @@ Spring Boot + Spring Security + Spring Cloud Netflix Eureka backend, React front
 Start infrastructure first:
 
 ```bash
-docker compose up -d postgres mongodb elasticsearch kafka
+docker compose up -d postgres mongodb redis elasticsearch logstash kibana kafka
 ```
 
 ```bash
@@ -57,7 +57,10 @@ This starts:
 - Kafka local development listener: `localhost:29092`
 - PostgreSQL: `localhost:5432`
 - MongoDB: `localhost:27017`
+- Redis: `localhost:6379`
 - Elasticsearch: `localhost:9200`
+- Logstash TCP JSON input: `localhost:5000`
+- Kibana: `http://localhost:5601`
 
 ## Kubernetes
 
@@ -72,6 +75,7 @@ Then open:
 
 - Frontend NodePort: `http://localhost:30880`
 - Auth NodePort: `http://localhost:30890`
+- Kibana NodePort: `http://localhost:30601`
 
 After source changes, use the one-shot local deployment script:
 
@@ -122,6 +126,36 @@ Useful local checks:
 ```bash
 curl http://localhost:9200/_cat/indices?v
 curl "http://localhost:9200/chat-messages/_search?q=content:검색어&pretty"
+```
+
+## Redis Cache And Presence
+
+Redis is used for short-lived state that should be fast and disposable:
+
+- chat room list cache: `cache:rooms:{email}:{query}`, TTL 30 seconds
+- online user state: `state:online:{email}`, TTL 75 seconds
+- typing state: `state:typing:{roomId}:{email}`, TTL 5 seconds
+
+Useful local checks:
+
+```bash
+redis-cli keys 'cache:*'
+redis-cli keys 'state:*'
+```
+
+## ELK Logs
+
+The backend sends structured JSON logs to Logstash over TCP. Logstash writes those events into Elasticsearch indices named `kafka-talk-logs-YYYY.MM.dd`. Kibana can inspect those logs at:
+
+```text
+http://localhost:5601
+```
+
+Useful local checks:
+
+```bash
+curl http://localhost:9200/_cat/indices?v
+curl "http://localhost:9200/kafka-talk-logs-*/_search?pretty"
 ```
 
 ## Work Logging

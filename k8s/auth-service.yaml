@@ -39,8 +39,16 @@ spec:
               value: mongodb://mongodb:27017/kafka_chat
             - name: SPRING_ELASTICSEARCH_URIS
               value: http://elasticsearch:9200
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: kafka:9092
+            - name: LOGSTASH_HOST
+              value: logstash
+            - name: LOGSTASH_PORT
+              value: "5000"
           readinessProbe:
             httpGet:
               path: /api/auth/oauth/kakao/guide
