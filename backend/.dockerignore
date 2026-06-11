@@ -1,0 +1,6 @@
+.gradle
+build
+**/build
+**/target
+*.log
+.DS_Store

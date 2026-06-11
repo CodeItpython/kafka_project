@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+TODAY="$(date +%Y-%m-%d)"
+LOG_FILE="docs/logs/${TODAY}.md"
+
+if ! git diff --cached --name-only | grep -q "^docs/logs/"; then
+  echo "작업 로그가 이번 커밋에 포함되지 않았습니다."
+  echo "다음 명령으로 오늘 로그를 남긴 뒤 다시 커밋하세요:"
+  echo "  scripts/worklog.sh \"작업 요약\" && git add ${LOG_FILE}"
+  exit 1
+fi

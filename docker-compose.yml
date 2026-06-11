@@ -1,73 +1,119 @@
-version: '3'
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.0.1
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+  discovery-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: discovery-service
+    image: kafka-discovery-service:local
     ports:
-      - "2181:2181"
+      - "8761:8761"
+
+  auth-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-service
+    image: kafka-auth-service:local
+    depends_on:
+      - discovery-service
+      - kafka
+      - postgres
+      - mongodb
+      - elasticsearch
+    ports:
+      - "8890:8890"
+    environment:
+      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
+      JWT_SECRET: local-compose-secret-change-me-local-compose-secret
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost:8890/oauth2/callback/kakao}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kafka_project
+      SPRING_DATASOURCE_USERNAME: kafka
+      SPRING_DATASOURCE_PASSWORD: kafka
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/kafka_chat
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: kafka-frontend:local
+    depends_on:
+      - auth-service
+    ports:
+      - "8880:8880"
+
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: kafka-jenkins:local
+    container_name: kafka-jenkins
+    ports:
+      - "18081:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - ./jenkins/init.groovy.d:/var/jenkins_home/init.groovy.d:ro
 
   kafka:
-    image: confluentinc/cp-kafka:7.0.1
-    depends_on:
-      - zookeeper
+    image: apache/kafka:3.9.0
+    container_name: kafka-local
     ports:
       - "9092:9092"
+      - "29092:29092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
-  mysql:
-    image: mysql:8.0
+  postgres:
+    image: postgres:16-alpine
+    container_name: kafka-postgres
     ports:
-      - "3306:3306"
+      - "5432:5432"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: chat
-    command: --default-authentication-plugin=mysql_native_password
+      POSTGRES_DB: kafka_project
+      POSTGRES_USER: kafka
+      POSTGRES_PASSWORD: kafka
     volumes:
-      - ./mysql_init:/docker-entrypoint-initdb.d
-      - mysql-data:/var/lib/mysql # Explicitly define named volume for data
+      - postgres-data:/var/lib/postgresql/data
+
+  mongodb:
+    image: mongo:7
+    container_name: kafka-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.2
-    environment:
-      - xpack.security.enabled=false
-      - discovery.type=single-node
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
+    container_name: kafka-elasticsearch
     ports:
       - "9200:9200"
-      - "9300:9300"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
-    depends_on:
-      - kafka
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.14.2
-    ports:
-      - "5601:5601"
-    environment:
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-    depends_on:
-      - elasticsearch
-
-  minio:
-    image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-data:/data
 
 volumes:
+  postgres-data:
+  mongodb-data:
   elasticsearch-data:
-  minio-data:
-  mysql-data:
+  jenkins-data:
