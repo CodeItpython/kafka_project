@@ -25,3 +25,5 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 USER jenkins
+
+COPY --chown=jenkins:jenkins init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
