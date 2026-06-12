@@ -81,13 +81,23 @@ docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d 
 
 현재 로컬 Jenkins는 다음 브랜치 전략으로 구성한다.
 
-- `kafka-chat-ci`: `KAFKA_PROJECT_CI_BRANCH`를 감시한다. 기본값은 `*/codex/merge-redis-elk-lombok-to-main`이다.
-- `kafka-chat-local-deploy`: `kafka-chat-ci` 성공 후 같은 브랜치를 Docker 이미지로 빌드하고 로컬 Kubernetes에 반영한다.
+- `kafka-chat-ci`: `KAFKA_PROJECT_CI_BRANCH`를 감시한다. 기본값은 `*/main`이다.
+- `kafka-chat-local-deploy`: `kafka-chat-ci` 성공 후 `KAFKA_PROJECT_DEPLOY_BRANCH`를 Docker 이미지로 빌드하고 로컬 Kubernetes에 반영한다. 기본값은 `*/main`이다.
 - `kafka-chat-main-ci`: `KAFKA_PROJECT_MAIN_BRANCH`를 감시한다. 기본값은 `*/main`이며 배포 없이 검증만 수행한다.
 
 기능 브랜치를 전부 자동 배포하지 않는 이유는, 미완성 브랜치가 로컬 Kubernetes를 계속 덮어쓰면 현재 테스트 중인 앱 상태가 흔들리기 때문이다. 기능 브랜치는 로컬/PR에서 검증하고, 통합 테스트 브랜치 또는 main으로 모았을 때 Jenkins 배포를 태우는 방식이 안정적이다.
 
 배포 job이 성공하려면 Docker Desktop Kubernetes가 켜져 있고 `kubectl config current-context`가 유효한 context를 반환해야 한다. context 목록이 비어 있으면 Jenkins는 Docker 이미지는 빌드할 수 있어도 `kubectl apply -k k8s` 단계에서 실패한다.
+
+Jenkins 컨테이너 안에서는 Docker Desktop Kubernetes의 `localhost` API 주소가 컨테이너 자기 자신을 가리킨다. 그래서 `Jenkinsfile.local-deploy`는 배포 전 `scripts/prepare-jenkins-kubeconfig.sh`를 실행해 임시 kubeconfig를 만들고, `docker-desktop` cluster server의 host만 `host.docker.internal`로 바꾼다. Docker Desktop이 동적 port를 쓰는 경우가 있으므로 port는 기존 kubeconfig 값을 유지한다.
+
+기능 브랜치를 임시로 CI/CD 대상에 올리고 싶으면 Jenkins 컨테이너를 다시 만들 때 아래처럼 지정한다.
+
+```bash
+KAFKA_PROJECT_CI_BRANCH='*/codex/redis-state-jenkins-cd' \
+KAFKA_PROJECT_DEPLOY_BRANCH='*/codex/redis-state-jenkins-cd' \
+docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d --build jenkins
+```
 
 ## 수동 배포
 

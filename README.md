@@ -125,14 +125,20 @@ curl 'http://localhost:9200/chat-messages/_search?q=content:검색어&pretty'
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 
 - 채팅방 목록 캐시: `cache:rooms:{email}:{query}`, TTL 30초
+- 유저 프로필 목록 캐시: `cache:profiles:{query}`, TTL 5분
 - 온라인 상태: `state:online:{email}`, TTL 75초
 - 입력 중 상태: `state:typing:{roomId}:{email}`, TTL 5초
+- 안 읽은 메시지 수: `state:unread:{email}:{roomId}`
+
+메시지가 Kafka consumer를 통해 MongoDB에 저장되면, 백엔드는 수신자별 unread 카운터를 Redis에서 증가시킵니다.
+사용자가 채팅방을 열어 메시지 목록을 조회하면 해당 방의 unread 카운터를 삭제해서 읽음 처리합니다.
 
 확인 명령:
 
 ```bash
 redis-cli keys 'cache:*'
 redis-cli keys 'state:*'
+redis-cli get 'state:unread:user@example.com:ROOM_ID'
 ```
 
 ## 카카오 로그인 설정
@@ -234,6 +240,13 @@ docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d 
 ```
 
 이 모드는 Jenkins 컨테이너에 Docker socket과 kubeconfig를 마운트합니다. 신뢰할 수 있는 로컬 PC에서만 사용해야 합니다.
+Jenkins 컨테이너 안에서는 Docker Desktop Kubernetes의 `localhost` API 주소를 직접 사용할 수 없기 때문에, CD 파이프라인은 `scripts/prepare-jenkins-kubeconfig.sh`로 임시 kubeconfig를 만들고 `host.docker.internal` 주소로 보정합니다.
+
+현재 기본 브랜치 전략:
+
+- `kafka-chat-ci`: `main` 브랜치 push를 감시하고 백엔드/프론트 검증을 수행합니다.
+- `kafka-chat-local-deploy`: `kafka-chat-ci` 성공 후 Docker 이미지 빌드와 로컬 Kubernetes 배포를 수행합니다.
+- 기능 브랜치 배포가 필요하면 Jenkins 컨테이너 실행 전 `KAFKA_PROJECT_CI_BRANCH`와 `KAFKA_PROJECT_DEPLOY_BRANCH`를 원하는 브랜치로 지정합니다.
 
 CD가 실패할 때 가장 먼저 확인할 것:
 

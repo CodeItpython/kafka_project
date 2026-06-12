@@ -46,7 +46,8 @@ public final class ChatDtos {
             String description,
             String createdBy,
             String type,
-            Instant createdAt
+            Instant createdAt,
+            long unreadCount
     ) {
     }
 

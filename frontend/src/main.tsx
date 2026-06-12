@@ -63,6 +63,7 @@ type ChatRoom = {
   createdBy: string;
   type: 'GROUP' | 'DIRECT';
   createdAt: string;
+  unreadCount: number;
 };
 
 type ChatMessage = {
@@ -279,6 +280,7 @@ function App() {
 
   function openRoom(roomId: string) {
     setSelectedRoomId(roomId);
+    setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     setIsMenuOpen(false);
   }
 
@@ -298,6 +300,7 @@ function App() {
     if (!roomId) return;
     const data = await request<ChatMessage[]>(`/chat/rooms/${roomId}/messages`);
     setMessages(data);
+    setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
   }
 
   async function heartbeat() {
@@ -944,6 +947,7 @@ function RoomList({
             <strong>{room.name}</strong>
             <small>{room.type === 'DIRECT' ? '개인 메시지' : room.description}</small>
           </span>
+          {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
         </button>
       ))}
     </div>

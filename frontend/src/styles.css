@@ -493,11 +493,26 @@ input:focus {
 
 .room-item {
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 11px;
   color: #4e5968;
+}
+
+.unread-badge {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  place-items: center;
+  color: #ffffff;
+  background: #f04452;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .logout-button {
