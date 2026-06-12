@@ -53,6 +53,6 @@ def configurePipeline = { String jobName, String scriptPath, String branchSpec, 
 }
 
 configurePipeline('kafka-chat-ci', 'Jenkinsfile', ciBranchSpec)
-configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', deployBranchSpec, 'kafka-chat-ci')
 configurePipeline('kafka-chat-main-ci', 'Jenkinsfile', mainBranchSpec)
+configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', deployBranchSpec, 'kafka-chat-main-ci')
 jenkins.save()

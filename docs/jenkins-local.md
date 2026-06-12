@@ -82,7 +82,7 @@ docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d 
 현재 로컬 Jenkins는 다음 브랜치 전략으로 구성한다.
 
 - `kafka-chat-ci`: `KAFKA_PROJECT_CI_BRANCH`를 감시한다. 기본값은 `*/main`이다.
-- `kafka-chat-local-deploy`: `kafka-chat-ci` 성공 후 `KAFKA_PROJECT_DEPLOY_BRANCH`를 Docker 이미지로 빌드하고 로컬 Kubernetes에 반영한다. 기본값은 `*/main`이다.
+- `kafka-chat-local-deploy`: `kafka-chat-main-ci` 성공 후 `KAFKA_PROJECT_DEPLOY_BRANCH`를 Docker 이미지로 빌드하고 로컬 Kubernetes에 반영한다. 기본값은 `*/main`이다.
 - `kafka-chat-main-ci`: `KAFKA_PROJECT_MAIN_BRANCH`를 감시한다. 기본값은 `*/main`이며 배포 없이 검증만 수행한다.
 
 기능 브랜치를 전부 자동 배포하지 않는 이유는, 미완성 브랜치가 로컬 Kubernetes를 계속 덮어쓰면 현재 테스트 중인 앱 상태가 흔들리기 때문이다. 기능 브랜치는 로컬/PR에서 검증하고, 통합 테스트 브랜치 또는 main으로 모았을 때 Jenkins 배포를 태우는 방식이 안정적이다.

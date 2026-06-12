@@ -10,3 +10,5 @@ dist/
 .idea/
 .vscode/
 *.log
+lib/
+backend/auth-service/uploads/
