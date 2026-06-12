@@ -1,8 +1,8 @@
 package com.kafka.auth.config;
 
 import java.sql.Connection;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
@@ -12,14 +12,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
+@RequiredArgsConstructor
 public class LocalSchemaConstraintUpdater implements ApplicationRunner {
-    private static final Logger log = LoggerFactory.getLogger(LocalSchemaConstraintUpdater.class);
-
     private final JdbcTemplate jdbcTemplate;
-
-    public LocalSchemaConstraintUpdater(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
-    }
 
     @Override
     public void run(ApplicationArguments args) {

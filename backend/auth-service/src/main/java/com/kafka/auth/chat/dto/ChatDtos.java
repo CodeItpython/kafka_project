@@ -54,7 +54,19 @@ public final class ChatDtos {
             Long id,
             String email,
             String name,
-            String provider
+            String provider,
+            boolean online
+    ) {
+    }
+
+    public record TypingRequest(
+            boolean typing
+    ) {
+    }
+
+    public record RoomPresenceResponse(
+            java.util.List<String> onlineUsers,
+            java.util.List<String> typingUsers
     ) {
     }
 

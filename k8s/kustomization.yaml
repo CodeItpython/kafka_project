@@ -4,7 +4,10 @@ resources:
   - kafka.yaml
   - postgres.yaml
   - mongodb.yaml
+  - redis.yaml
   - elasticsearch.yaml
+  - logstash.yaml
+  - kibana.yaml
   - discovery-service.yaml
   - auth-service.yaml
   - frontend.yaml

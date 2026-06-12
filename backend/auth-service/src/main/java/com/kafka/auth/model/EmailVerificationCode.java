@@ -7,8 +7,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "email_codes")
 public class EmailVerificationCode {
     @Id
@@ -27,29 +32,10 @@ public class EmailVerificationCode {
     @Column(nullable = false)
     private boolean used;
 
-    protected EmailVerificationCode() {
-    }
-
     public EmailVerificationCode(String email, String code, Instant expiresAt) {
         this.email = email;
         this.code = code;
         this.expiresAt = expiresAt;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public Instant getExpiresAt() {
-        return expiresAt;
-    }
-
-    public boolean isUsed() {
-        return used;
     }
 
     public void markUsed() {

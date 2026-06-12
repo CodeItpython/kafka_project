@@ -7,6 +7,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
@@ -36,8 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -50,8 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@Slf4j
 public class ChatService {
-    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     private static final long MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
     private final ChatRoomRepository chatRoomRepository;
@@ -60,6 +60,7 @@ public class ChatService {
     private final UserAccountRepository userAccountRepository;
     private final KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
     private final SimpMessagingTemplate messagingTemplate;
+    private final ChatStateService chatStateService;
     private final String chatTopic;
     private final Path attachmentRoot;
 
@@ -70,6 +71,7 @@ public class ChatService {
             UserAccountRepository userAccountRepository,
             KafkaTemplate<String, ChatMessageEvent> kafkaTemplate,
             SimpMessagingTemplate messagingTemplate,
+            ChatStateService chatStateService,
             @Value("${app.chat.topic}") String chatTopic,
             @Value("${app.chat.attachments.path:uploads/chat}") String attachmentPath
     ) {
@@ -79,6 +81,7 @@ public class ChatService {
         this.userAccountRepository = userAccountRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.messagingTemplate = messagingTemplate;
+        this.chatStateService = chatStateService;
         this.chatTopic = chatTopic;
         this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
     }
@@ -86,6 +89,7 @@ public class ChatService {
     @Transactional
     public ChatRoomResponse createRoom(CreateRoomRequest request, UserAccount user) {
         ChatRoom room = chatRoomRepository.save(new ChatRoom(request.name(), request.description(), user.getEmail()));
+        chatStateService.evictRoomCaches(user.getEmail());
         return toRoomResponse(room);
     }
 
@@ -105,18 +109,23 @@ public class ChatService {
                         user.getEmail(),
                         new LinkedHashSet<>(List.of(user.getEmail(), partner.getEmail()))
                 )));
+        chatStateService.evictRoomCaches(user.getEmail());
+        chatStateService.evictRoomCaches(partner.getEmail());
         return toRoomResponse(room);
     }
 
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> rooms(String query, UserAccount user) {
-        List<ChatRoom> rooms = query == null || query.isBlank()
-                ? chatRoomRepository.findVisibleRooms(user.getEmail(), ChatRoomType.GROUP, PageRequest.of(0, 30))
-                : chatRoomRepository.searchVisibleRooms(user.getEmail(), ChatRoomType.GROUP, query, PageRequest.of(0, 30));
-        return rooms.stream()
-                .filter(room -> room.isVisibleTo(user.getEmail()))
-                .map(this::toRoomResponse)
-                .toList();
+        chatStateService.markOnline(user);
+        return chatStateService.cachedRooms(user.getEmail(), query, () -> {
+            List<ChatRoom> rooms = query == null || query.isBlank()
+                    ? chatRoomRepository.findVisibleRooms(user.getEmail(), ChatRoomType.GROUP, PageRequest.of(0, 30))
+                    : chatRoomRepository.searchVisibleRooms(user.getEmail(), ChatRoomType.GROUP, query, PageRequest.of(0, 30));
+            return rooms.stream()
+                    .filter(room -> room.isVisibleTo(user.getEmail()))
+                    .map(this::toRoomResponse)
+                    .toList();
+        });
     }
 
     @Transactional(readOnly = true)
@@ -208,6 +217,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public List<ContactResponse> contacts(String query, UserAccount currentUser) {
+        chatStateService.markOnline(currentUser);
         List<UserAccount> users = query == null || query.isBlank()
                 ? userAccountRepository.findTop30ByOrderByNameAsc()
                 : userAccountRepository.findTop30ByEmailContainingIgnoreCaseOrNameContainingIgnoreCaseOrderByNameAsc(query, query);
@@ -218,9 +228,33 @@ public class ChatService {
                         user.getId(),
                         user.getEmail(),
                         user.getName(),
-                        user.getProvider().name()
+                        user.getProvider().name(),
+                        chatStateService.isOnline(user.getEmail())
                 ))
                 .toList();
+    }
+
+    public void heartbeat(UserAccount user) {
+        chatStateService.markOnline(user);
+    }
+
+    public void setTyping(String roomId, boolean typing, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        chatStateService.markOnline(user);
+        chatStateService.setTyping(roomId, user, typing);
+    }
+
+    @Transactional(readOnly = true)
+    public RoomPresenceResponse roomPresence(String roomId, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        chatStateService.markOnline(user);
+        Set<String> participants = room.getType() == ChatRoomType.DIRECT
+                ? room.getParticipantEmails()
+                : userAccountRepository.findTop30ByOrderByNameAsc()
+                .stream()
+                .map(UserAccount::getEmail)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        return chatStateService.roomPresence(roomId, participants, user.getEmail());
     }
 
     @Transactional(readOnly = true)
@@ -251,6 +285,7 @@ public class ChatService {
     public void hideRoom(String roomId, UserAccount user) {
         ChatRoom room = ensureRoomAccess(roomId, user);
         room.hideFor(user.getEmail());
+        chatStateService.evictRoomCaches(user.getEmail());
     }
 
     @Transactional
