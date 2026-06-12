@@ -672,65 +672,69 @@ function App() {
   }
 
   return (
-    <motion.main layout className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}>
-      <AnimatePresence initial={false}>
-        {isMenuOpen && (
-          <motion.aside
-            className="menu-pane"
-            initial={{ opacity: 0, x: -26, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -26, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 30 }}
-          >
-            <section className="sidebar">
-              <div className="profile-card">
-                <div className="avatar">{user.name.slice(0, 1)}</div>
-                <div>
-                  <h1>Kafka Talk</h1>
-                  <p>{user.name} · {user.provider}</p>
-                </div>
-              </div>
+    <motion.main
+      layout
+      transition={{ layout: { type: 'spring', stiffness: 240, damping: 32 } }}
+      className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}
+    >
+      <motion.aside
+        className="menu-pane"
+        aria-hidden={!isMenuOpen}
+        animate={{
+          opacity: isMenuOpen ? 1 : 0,
+          x: isMenuOpen ? 0 : -34,
+          scale: isMenuOpen ? 1 : 0.985
+        }}
+        transition={{ type: 'spring', stiffness: 260, damping: 34, mass: 0.85 }}
+        style={{ pointerEvents: isMenuOpen ? 'auto' : 'none' }}
+      >
+        <section className="sidebar">
+          <div className="profile-card">
+            <div className="avatar">{user.name.slice(0, 1)}</div>
+            <div>
+              <h1>Kafka Talk</h1>
+              <p>{user.name} · {user.provider}</p>
+            </div>
+          </div>
 
-              <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
-                <Search size={17} aria-hidden />
-                <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
-              </form>
+          <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
+            <Search size={17} aria-hidden />
+            <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
+          </form>
 
-              <section className="panel-section">
-                <div className="section-title">
-                  <span>친구</span>
-                  <small>{contacts.length}</small>
-                </div>
-                <div className="contact-list">
-                  {contacts.map((contact) => (
-                    <button key={contact.email} onClick={() => openDirectRoom(contact)} disabled={loading}>
-                      <div className="mini-avatar presence-avatar">
-                        {contact.name.slice(0, 1)}
-                        <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
-                      </div>
-                      <span>
-                        <strong>{contact.name}</strong>
-                        <small>{contact.online ? '온라인' : contact.email}</small>
-                      </span>
-                      <ChevronRight size={16} aria-hidden />
-                    </button>
-                  ))}
-                </div>
-              </section>
+          <section className="panel-section">
+            <div className="section-title">
+              <span>친구</span>
+              <small>{contacts.length}</small>
+            </div>
+            <div className="contact-list">
+              {contacts.map((contact) => (
+                <button key={contact.email} onClick={() => openDirectRoom(contact)} disabled={loading}>
+                  <div className="mini-avatar presence-avatar">
+                    {contact.name.slice(0, 1)}
+                    <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
+                  </div>
+                  <span>
+                    <strong>{contact.name}</strong>
+                    <small>{contact.online ? '온라인' : contact.email}</small>
+                  </span>
+                  <ChevronRight size={16} aria-hidden />
+                </button>
+              ))}
+            </div>
+          </section>
 
-              <section className="panel-section">
-                <div className="section-title">
-                  <span>1:1 대화</span>
-                  <small>{directRooms.length}</small>
-                </div>
-                <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-              </section>
+          <section className="panel-section">
+            <div className="section-title">
+              <span>1:1 대화</span>
+              <small>{directRooms.length}</small>
+            </div>
+            <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+          </section>
 
-              <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
-            </section>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+          <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+        </section>
+      </motion.aside>
 
       <AnimatePresence mode="wait">
         {selectedRoomId ? (

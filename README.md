@@ -1,30 +1,37 @@
-# Kafka Chat Project
+# Kafka Talk
 
-Spring Boot + Spring Security + Spring Cloud Netflix Eureka backend, React frontend, Kafka messaging, Redis cache/presence state, MongoDB chat history, Elasticsearch search, Logstash/Kibana observability, Docker, Kubernetes, and Jenkins local CI/CD scaffold.
+Spring Boot, React, Kafka, MongoDB, Elasticsearch, Redis, ELK, Docker, Kubernetes, Jenkins를 이용한 로컬 채팅 프로젝트입니다.
 
-## Structure
+카카오톡처럼 로그인 후 친구 목록, 개인 채팅방, 그룹 채팅방, 메시지 검색, 자동완성, 첨부파일, 삭제 기능을 실험하는 구조입니다.
 
-- `backend/auth-service`: JWT authentication and chat API
+## 프로젝트 구조
+
+- `backend/auth-service`: 로그인, JWT, 카카오 OAuth, 채팅 API, WebSocket, Kafka consumer/producer
 - `backend/discovery-service`: Netflix Eureka discovery server
-- `frontend`: React login and chat page
-- `jenkins`: Jenkins image for local CI/CD
-- `k8s`: local Kubernetes manifests
-- `docs/logs`: daily implementation notes
+- `frontend`: React 기반 로그인/채팅 화면
+- `k8s`: Docker Desktop Kubernetes에 올릴 매니페스트
+- `jenkins`: 로컬 Jenkins CI/CD 이미지와 초기 Job 구성
+- `logstash/pipeline`: Logstash 수집 파이프라인
+- `docs/logs`: 날짜별 작업 기록
 
-## Quick Start
+## 로컬 개발 실행
 
-Start infrastructure first:
+먼저 인프라 컨테이너를 실행합니다.
 
 ```bash
 docker compose up -d postgres mongodb redis elasticsearch logstash kibana kafka
 ```
+
+백엔드는 IntelliJ에서 `AuthServiceApplication`을 실행하면 됩니다. 명령어로 실행하려면 아래처럼 실행합니다.
 
 ```bash
 cd /Users/gunwoo/Documents/KAFKA/backend
 ./gradlew :auth-service:bootRun
 ```
 
-In IntelliJ, running `AuthServiceApplication` directly is enough for local backend development. The local default keeps Eureka registration disabled. Docker Compose and Kubernetes explicitly set `EUREKA_CLIENT_ENABLED=true` when the discovery service is running.
+로컬 기본 설정은 Eureka 등록을 끕니다. Docker Compose나 Kubernetes 배포에서는 discovery-service가 같이 뜨므로 `EUREKA_CLIENT_ENABLED=true`를 명시합니다.
+
+프론트엔드는 아래처럼 실행합니다.
 
 ```bash
 cd /Users/gunwoo/Documents/KAFKA/frontend
@@ -32,11 +39,17 @@ npm install
 npm run dev -- --host 127.0.0.1
 ```
 
-Frontend runs on `http://127.0.0.1:8880` and auth/chat API runs on `http://localhost:8890`.
+접속 주소는 다음과 같습니다.
 
-Development test users are seeded automatically when `app.dev.seed-users=true`.
+- 프론트엔드: `http://127.0.0.1:8880`
+- 백엔드 API: `http://localhost:8890`
+- Vite 프록시: 프론트의 `/api`, `/ws` 요청을 백엔드 `8890`으로 전달
 
-| Email | Password |
+## 테스트 계정
+
+개발 환경에서는 `app.dev.seed-users=true`일 때 테스트 계정이 자동 생성됩니다.
+
+| 이메일 | 비밀번호 |
 | --- | --- |
 | `user@example.com` | `password123` |
 | `minji@example.com` | `password123` |
@@ -44,147 +57,200 @@ Development test users are seeded automatically when `app.dev.seed-users=true`.
 | `seoyeon@example.com` | `password123` |
 | `hyejin@example.com` | `password123` |
 
-## Docker
+## Docker Compose
+
+전체 서비스를 Docker Compose로 실행하려면 아래 명령을 사용합니다.
 
 ```bash
 docker compose up --build
 ```
 
-This starts:
+주요 포트는 다음과 같습니다.
 
-- React frontend: `http://localhost:8880`
+- React/Nginx 프론트엔드: `http://localhost:8880`
 - Auth service: `http://localhost:8890`
 - Eureka dashboard: `http://localhost:8761`
 - Kafka broker: `localhost:9092`
-- Kafka local development listener: `localhost:29092`
+- Kafka 로컬 개발 listener: `localhost:29092`
 - PostgreSQL: `localhost:5432`
 - MongoDB: `localhost:27017`
 - Redis: `localhost:6379`
-- Elasticsearch: `localhost:9200`
-- Logstash TCP JSON input: `localhost:5001` (container-to-container: `logstash:5000`)
+- Elasticsearch: `http://localhost:9200`
+- Logstash TCP JSON input: `localhost:5001`
+- Logstash 컨테이너 내부 주소: `logstash:5000`
 - Kibana: `http://localhost:5601`
 
-For local IntelliJ or Gradle execution with ELK log shipping enabled, use the `logstash` Spring profile. The local default Logstash destination is `localhost:5001`.
+macOS에서는 5000번 포트를 AirPlay Receiver가 잡는 경우가 많습니다. 그래서 로컬 PC에서 Logstash로 직접 보낼 때는 `localhost:5001`을 쓰고, Docker/Kubernetes 내부 통신에서는 `logstash:5000`을 씁니다.
+
+## ELK 로그 확인
+
+백엔드는 `logstash` Spring profile에서 구조화 JSON 로그를 Logstash로 보냅니다.
 
 ```bash
+cd /Users/gunwoo/Documents/KAFKA/backend
 ./gradlew :auth-service:bootRun --args='--spring.profiles.active=logstash --eureka.client.enabled=false'
 ```
 
-Every backend HTTP response includes `X-Request-Id`. The same value is stored in Logstash/Elasticsearch as the MDC field `requestId`, so Kibana can trace one failing browser request back to the exact backend log entries.
+모든 백엔드 HTTP 응답에는 `X-Request-Id`가 포함됩니다. 같은 값이 Logstash/Elasticsearch 로그의 `requestId` 필드로 저장되므로, 브라우저 요청 하나를 Kibana에서 그대로 추적할 수 있습니다.
 
-## Kubernetes
-
-Docker Desktop Kubernetes can run the local manifests:
+유용한 확인 명령은 다음과 같습니다.
 
 ```bash
-scripts/docker-build.sh
-scripts/k8s-apply.sh
+curl 'http://localhost:9200/_cat/indices?v'
+curl 'http://localhost:9200/kafka-talk-logs-*/_search?pretty'
+curl 'http://localhost:9600'
 ```
 
-Then open:
-
-- Frontend NodePort: `http://localhost:30880`
-- Auth NodePort: `http://localhost:30890`
-- Kibana NodePort: `http://localhost:30601`
-
-After source changes, use the one-shot local deployment script:
-
-```bash
-scripts/deploy-local-k8s.sh
-```
-
-## Jenkins
-
-Run Jenkins in safe CI mode:
-
-```bash
-docker compose up -d --build jenkins
-```
-
-Open:
+Kibana 접속 주소:
 
 ```text
-http://localhost:18081
+http://localhost:5601
 ```
 
-Initial password:
+## Elasticsearch 검색
+
+채팅 메시지의 원본 저장소는 MongoDB입니다. 메시지를 보내면 백엔드가 Kafka 이벤트를 발행하고, Kafka consumer가 메시지를 MongoDB에 저장한 뒤 `chat-messages` Elasticsearch 인덱스에도 색인합니다.
+
+즉 새 메시지는 consumer가 처리한 뒤 자동으로 검색 대상이 됩니다. 단, Elasticsearch 인덱스를 삭제하거나 새로 만들면 기존 MongoDB 메시지는 재색인 작업이 필요합니다.
+
+확인 명령:
 
 ```bash
-docker exec kafka-jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+curl 'http://localhost:9200/_cat/indices?v'
+curl 'http://localhost:9200/chat-messages/_search?q=content:검색어&pretty'
 ```
 
-Use `Jenkinsfile` for backend/frontend verification. To allow Jenkins to build local Docker images and deploy to local Kubernetes, use the explicit deploy override and `Jenkinsfile.local-deploy`:
+## Redis 캐시와 상태 관리
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d --build jenkins
-```
+Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 
-This mode mounts Docker socket and kubeconfig, so use it only on a trusted local machine.
+- 채팅방 목록 캐시: `cache:rooms:{email}:{query}`, TTL 30초
+- 온라인 상태: `state:online:{email}`, TTL 75초
+- 입력 중 상태: `state:typing:{roomId}:{email}`, TTL 5초
 
-## Elasticsearch
-
-Elasticsearch is available locally at:
-
-```text
-http://localhost:9200
-```
-
-The chat message source of truth is MongoDB. When a user sends a message, the backend publishes a Kafka event. The backend Kafka consumer saves the message to MongoDB and then indexes the same message into the `chat-messages` Elasticsearch index. That means new messages are indexed automatically after the consumer processes the event. Existing MongoDB messages need a reindex job if the Elasticsearch index is deleted or rebuilt.
-
-Useful local checks:
-
-```bash
-curl http://localhost:9200/_cat/indices?v
-curl "http://localhost:9200/chat-messages/_search?q=content:검색어&pretty"
-```
-
-## Redis Cache And Presence
-
-Redis is used for short-lived state that should be fast and disposable:
-
-- chat room list cache: `cache:rooms:{email}:{query}`, TTL 30 seconds
-- online user state: `state:online:{email}`, TTL 75 seconds
-- typing state: `state:typing:{roomId}:{email}`, TTL 5 seconds
-
-Useful local checks:
+확인 명령:
 
 ```bash
 redis-cli keys 'cache:*'
 redis-cli keys 'state:*'
 ```
 
-## ELK Logs
+## 카카오 로그인 설정
 
-The backend sends structured JSON logs to Logstash over TCP. Logstash writes those events into Elasticsearch indices named `kafka-talk-logs-YYYY.MM.dd`. Kibana can inspect those logs at:
-
-```text
-http://localhost:5601
-```
-
-Useful local checks:
+현재 카카오 로그인이 안 된다면 먼저 백엔드에서 아래 응답을 확인합니다.
 
 ```bash
-curl http://localhost:9200/_cat/indices?v
-curl "http://localhost:9200/kafka-talk-logs-*/_search?pretty"
+curl -i http://localhost:8890/api/auth/oauth/kakao/authorize
 ```
 
-## Work Logging
+`KAKAO_CLIENT_ID가 설정되어 있지 않습니다.`가 나오면 Kakao Developers 문제가 아니라 로컬 백엔드 실행 환경에 키가 들어가지 않은 상태입니다.
 
-Use this after each meaningful work step:
+Kakao Developers에서는 다음 값을 등록합니다.
+
+- Web 플랫폼 사이트 도메인: `http://localhost:8880`
+- Redirect URI: `http://localhost:8890/oauth2/callback/kakao`
+- REST API 키: 백엔드의 `KAKAO_CLIENT_ID`
+- Client Secret을 활성화했다면: 백엔드의 `KAKAO_CLIENT_SECRET`
+
+로컬에서 키를 Git에 올리지 않고 쓰려면 `.env.local` 같은 파일을 만들고 직접 source 한 뒤 실행합니다. `.env.local`은 Git에 커밋하지 않습니다.
+
+```bash
+export KAKAO_CLIENT_ID='REST_API_KEY'
+export KAKAO_CLIENT_SECRET='CLIENT_SECRET'
+export KAKAO_REDIRECT_URI='http://localhost:8890/oauth2/callback/kakao'
+
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:bootRun
+```
+
+Docker Compose로 auth-service까지 띄우는 경우에는 같은 환경변수를 shell에 export한 뒤 `docker compose up --build`를 실행하면 `docker-compose.yml`이 값을 넘겨줍니다.
+
+## Kubernetes
+
+Docker Desktop Kubernetes는 Docker Desktop 안에서 로컬 단일 노드 Kubernetes 클러스터를 켜는 기능입니다. Kafka 컨테이너 안에 Kubernetes나 ELK를 넣는다는 의미가 아닙니다.
+
+현재 구조는 다음처럼 역할별 컨테이너/Pod를 나눕니다.
+
+- Kafka: 메시지 브로커
+- PostgreSQL: 유저/인증 데이터
+- MongoDB: 채팅 원본 메시지
+- Elasticsearch: 채팅 검색/로그 검색 인덱스
+- Logstash: 로그 수집/가공
+- Kibana: Elasticsearch 시각화 UI
+- Spring Boot: API/WebSocket/Kafka 처리
+- React: 웹 UI
+
+Docker Desktop Kubernetes를 켠 뒤 context를 확인합니다.
+
+```bash
+kubectl config get-contexts
+kubectl config use-context docker-desktop
+kubectl cluster-info
+```
+
+이미지를 빌드하고 Kubernetes에 적용합니다.
+
+```bash
+scripts/docker-build.sh
+scripts/k8s-apply.sh
+```
+
+배포 후 접속 주소:
+
+- 프론트엔드 NodePort: `http://localhost:30880`
+- Auth service NodePort: `http://localhost:30890`
+- Kibana NodePort: `http://localhost:30601`
+
+소스 변경 후 한 번에 로컬 Kubernetes에 반영하려면 다음 스크립트를 사용합니다.
+
+```bash
+scripts/deploy-local-k8s.sh
+```
+
+## Jenkins CI/CD
+
+Jenkins는 로컬에서 다음 주소로 접속합니다.
+
+```text
+http://localhost:18081
+```
+
+초기 비밀번호 확인:
+
+```bash
+docker exec kafka-jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+CI만 사용할 때:
+
+```bash
+docker compose up -d --build jenkins
+```
+
+로컬 Docker 이미지 빌드와 Kubernetes 배포까지 Jenkins에서 실행하려면 배포 override를 같이 켭니다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.jenkins-deploy.yml up -d --build jenkins
+```
+
+이 모드는 Jenkins 컨테이너에 Docker socket과 kubeconfig를 마운트합니다. 신뢰할 수 있는 로컬 PC에서만 사용해야 합니다.
+
+CD가 실패할 때 가장 먼저 확인할 것:
+
+```bash
+kubectl config get-contexts
+kubectl config current-context
+docker exec kafka-jenkins kubectl config get-contexts
+```
+
+context가 비어 있으면 Jenkins 문제가 아니라 로컬 Kubernetes 클러스터가 아직 준비되지 않은 상태입니다. Docker Desktop 설정에서 Kubernetes를 켜고 `docker-desktop` context가 생긴 뒤 다시 CD를 실행해야 합니다.
+
+## 작업 기록
+
+의미 있는 작업을 한 뒤에는 날짜별 로그에 기록합니다.
 
 ```bash
 scripts/worklog.sh "작업 요약"
 ```
 
-The repository uses `.githooks/pre-commit` to block commits that do not include an entry under `docs/logs/`.
-
-## Kakao OAuth Setup
-
-1. Go to Kakao Developers and create an application.
-2. Add Web platform site domain: `http://localhost:8880`.
-3. Enable Kakao Login.
-4. Add redirect URI: `http://localhost:8890/oauth2/callback/kakao`.
-5. Copy REST API key into `KAKAO_CLIENT_ID`.
-6. Create and copy client secret into `KAKAO_CLIENT_SECRET` if client secret is enabled.
-
-The current API includes a guide endpoint at `GET /api/auth/oauth/kakao/guide`. Full OAuth callback handling can be enabled after the Kakao app keys are registered.
+이 저장소는 `.githooks/pre-commit`으로 `docs/logs/` 기록 없는 커밋을 막도록 구성되어 있습니다.

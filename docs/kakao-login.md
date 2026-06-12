@@ -128,6 +128,8 @@ npm run dev -- --host 0.0.0.0 --port 8880
 
 ## 문제 해결
 
+- `KAKAO_CLIENT_ID가 설정되어 있지 않습니다.`가 보이면 Kakao Developers 등록 문제가 아니라 실행 중인 백엔드 프로세스에 REST API 키 환경변수가 들어가지 않은 상태다.
+- IntelliJ에서 실행한다면 Run Configuration의 Environment variables에 `KAKAO_CLIENT_ID`, 필요 시 `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI`를 넣고 애플리케이션을 재시작한다.
 - 카카오 동의 후 빈 페이지처럼 보이면 먼저 auth-service 로그를 확인한다.
 - `users_provider_check` 또는 `violates check constraint` 오류가 보이면 Kakao Developers 설정 문제가 아니라 DB 제약조건이 `KAKAO` provider 값을 허용하지 않는 문제다.
 - 현재 로컬 개발 환경에서는 `LocalSchemaConstraintUpdater`가 시작 시 `users_provider_check`를 `LOCAL`, `EMAIL`, `KAKAO`로 보정한다.
