@@ -64,6 +64,14 @@ This starts:
 - Logstash TCP JSON input: `localhost:5001` (container-to-container: `logstash:5000`)
 - Kibana: `http://localhost:5601`
 
+For local IntelliJ or Gradle execution with ELK log shipping enabled, use the `logstash` Spring profile. The local default Logstash destination is `localhost:5001`.
+
+```bash
+./gradlew :auth-service:bootRun --args='--spring.profiles.active=logstash --eureka.client.enabled=false'
+```
+
+Every backend HTTP response includes `X-Request-Id`. The same value is stored in Logstash/Elasticsearch as the MDC field `requestId`, so Kibana can trace one failing browser request back to the exact backend log entries.
+
 ## Kubernetes
 
 Docker Desktop Kubernetes can run the local manifests:
