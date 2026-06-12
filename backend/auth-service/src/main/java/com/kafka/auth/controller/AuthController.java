@@ -27,10 +27,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final String kakaoRedirectUri;
+    private final String frontendRedirectUri;
 
-    public AuthController(AuthService authService, @Value("${app.kakao.redirect-uri}") String kakaoRedirectUri) {
+    public AuthController(
+            AuthService authService,
+            @Value("${app.kakao.redirect-uri}") String kakaoRedirectUri,
+            @Value("${app.frontend.redirect-uri}") String frontendRedirectUri
+    ) {
         this.authService = authService;
         this.kakaoRedirectUri = kakaoRedirectUri;
+        this.frontendRedirectUri = frontendRedirectUri;
     }
 
     @PostMapping("/register")
@@ -66,7 +72,7 @@ public class AuthController {
                 new String[]{
                         "Create Kakao Developers application",
                         "Enable Kakao Login",
-                        "Add http://localhost:5173 as Web platform domain",
+                        "Add " + frontendRedirectUri + " as Web platform domain",
                         "Add " + kakaoRedirectUri + " as redirect URI",
                         "Set KAKAO_CLIENT_ID and KAKAO_CLIENT_SECRET environment variables"
                 }

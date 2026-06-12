@@ -245,28 +245,41 @@ input:focus {
 
 .chat-shell {
   display: grid;
-  grid-template-columns: minmax(0, 760px);
+  grid-template-columns: 0 minmax(0, 760px);
   justify-content: center;
-  gap: 18px;
+  align-items: start;
+  gap: 0;
   padding: 24px;
   background: #f2f4f6;
-  transition: grid-template-columns 240ms ease, gap 240ms ease;
+  transition:
+    grid-template-columns 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 340ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .chat-shell.menu-open {
   grid-template-columns: minmax(300px, 360px) minmax(0, 760px);
+  gap: 18px;
 }
 
 .menu-pane {
   display: grid;
   align-content: start;
   gap: 0;
+  width: 100%;
+  min-width: 0;
   min-height: calc(100vh - 48px);
-  overflow: hidden auto;
+  overflow: clip auto;
   border: 1px solid #e5e8eb;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 18px 50px rgb(25 31 40 / 8%);
+  transform-origin: left center;
+  will-change: opacity, transform;
+}
+
+.chat-shell:not(.menu-open) .menu-pane {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .sidebar,
@@ -480,11 +493,26 @@ input:focus {
 
 .room-item {
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 11px;
   color: #4e5968;
+}
+
+.unread-badge {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  place-items: center;
+  color: #ffffff;
+  background: #f04452;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .logout-button {
@@ -821,6 +849,7 @@ input:focus {
 
   .chat-shell.menu-open {
     grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+    gap: 16px;
   }
 }
 
@@ -845,14 +874,14 @@ input:focus {
   }
 
   .menu-pane {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    width: 100%;
     min-height: 100vh;
     border: 0;
     border-radius: 0;
-    box-shadow: none;
-  }
-
-  .chat-shell.menu-open .menu-pane {
-    display: grid;
+    box-shadow: 0 24px 80px rgb(25 31 40 / 14%);
   }
 
   .sidebar,
@@ -869,7 +898,8 @@ input:focus {
 
   .chat-shell.menu-open .conversation,
   .chat-shell.menu-open .room-directory {
-    display: none;
+    pointer-events: none;
+    filter: blur(1px);
   }
 
   .sidebar {

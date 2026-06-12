@@ -18,6 +18,7 @@ import com.kafka.auth.chat.repository.ChatMessageRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
+import com.kafka.auth.chat.service.ChatStateService.UserProfileSnapshot;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.io.IOException;
@@ -90,7 +91,7 @@ public class ChatService {
     public ChatRoomResponse createRoom(CreateRoomRequest request, UserAccount user) {
         ChatRoom room = chatRoomRepository.save(new ChatRoom(request.name(), request.description(), user.getEmail()));
         chatStateService.evictRoomCaches(user.getEmail());
-        return toRoomResponse(room);
+        return toRoomResponse(room, user.getEmail());
     }
 
     @Transactional
@@ -111,7 +112,7 @@ public class ChatService {
                 )));
         chatStateService.evictRoomCaches(user.getEmail());
         chatStateService.evictRoomCaches(partner.getEmail());
-        return toRoomResponse(room);
+        return toRoomResponse(room, user.getEmail());
     }
 
     @Transactional(readOnly = true)
@@ -123,7 +124,7 @@ public class ChatService {
                     : chatRoomRepository.searchVisibleRooms(user.getEmail(), ChatRoomType.GROUP, query, PageRequest.of(0, 30));
             return rooms.stream()
                     .filter(room -> room.isVisibleTo(user.getEmail()))
-                    .map(this::toRoomResponse)
+                    .map(room -> toRoomResponse(room, user.getEmail()))
                     .toList();
         });
     }
@@ -133,6 +134,7 @@ public class ChatService {
         ensureRoomAccess(roomId, user);
         List<ChatMessageDocument> messages = chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 50));
         Collections.reverse(messages);
+        chatStateService.markRoomRead(roomId, user.getEmail());
         return messages.stream()
                 .filter(message -> message.isVisibleTo(user.getEmail()))
                 .map(this::toMessageResponse)
@@ -218,18 +220,21 @@ public class ChatService {
     @Transactional(readOnly = true)
     public List<ContactResponse> contacts(String query, UserAccount currentUser) {
         chatStateService.markOnline(currentUser);
-        List<UserAccount> users = query == null || query.isBlank()
-                ? userAccountRepository.findTop30ByOrderByNameAsc()
-                : userAccountRepository.findTop30ByEmailContainingIgnoreCaseOrNameContainingIgnoreCaseOrderByNameAsc(query, query);
-        return users.stream()
-                .filter(user -> !user.getEmail().equals(currentUser.getEmail()))
-                .sorted(Comparator.comparing(UserAccount::getName))
-                .map(user -> new ContactResponse(
-                        user.getId(),
-                        user.getEmail(),
-                        user.getName(),
-                        user.getProvider().name(),
-                        chatStateService.isOnline(user.getEmail())
+        List<UserProfileSnapshot> profiles = chatStateService.cachedUserProfiles(
+                query,
+                () -> query == null || query.isBlank()
+                        ? userAccountRepository.findTop30ByOrderByNameAsc()
+                        : userAccountRepository.findTop30ByEmailContainingIgnoreCaseOrNameContainingIgnoreCaseOrderByNameAsc(query, query)
+        );
+        return profiles.stream()
+                .filter(profile -> !profile.email().equals(currentUser.getEmail()))
+                .sorted(Comparator.comparing(UserProfileSnapshot::name))
+                .map(profile -> new ContactResponse(
+                        profile.id(),
+                        profile.email(),
+                        profile.name(),
+                        profile.provider(),
+                        chatStateService.isOnline(profile.email())
                 ))
                 .toList();
     }
@@ -382,6 +387,7 @@ public class ChatService {
                 event.attachmentSize(),
                 event.createdAt()
         ));
+        incrementUnreadForRecipients(event);
         try {
             chatMessageSearchRepository.save(new ChatMessageSearchDocument(
                     savedMessage.getId(),
@@ -396,6 +402,27 @@ public class ChatService {
             log.warn("Unable to index chat message into Elasticsearch. MongoDB history remains available.", exception);
         }
         messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage));
+    }
+
+    private void incrementUnreadForRecipients(ChatMessageEvent event) {
+        try {
+            ChatRoom room = ensureRoom(event.roomId());
+            Set<String> recipients = notificationRecipients(room, event.senderEmail());
+            chatStateService.incrementUnread(event.roomId(), recipients);
+        } catch (RuntimeException exception) {
+            log.debug("Unable to update Redis unread counts. roomId={}", event.roomId(), exception);
+        }
+    }
+
+    private Set<String> notificationRecipients(ChatRoom room, String senderEmail) {
+        Set<String> recipients = room.getType() == ChatRoomType.DIRECT
+                ? new LinkedHashSet<>(room.getParticipantEmails())
+                : userAccountRepository.findAll()
+                .stream()
+                .map(UserAccount::getEmail)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        recipients.removeIf(email -> email.equalsIgnoreCase(senderEmail));
+        return recipients;
     }
 
     private ChatRoom ensureRoom(String roomId) {
@@ -479,14 +506,15 @@ public class ChatService {
         return message;
     }
 
-    private ChatRoomResponse toRoomResponse(ChatRoom room) {
+    private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail) {
         return new ChatRoomResponse(
                 room.getId(),
                 room.getName(),
                 room.getDescription(),
                 room.getCreatedBy(),
                 room.getType().name(),
-                room.getCreatedAt()
+                room.getCreatedAt(),
+                chatStateService.unreadCount(room.getId(), currentUserEmail)
         );
     }
 

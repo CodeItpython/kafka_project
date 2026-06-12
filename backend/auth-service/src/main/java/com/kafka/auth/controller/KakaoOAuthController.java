@@ -30,9 +30,13 @@ public class KakaoOAuthController {
     }
 
     @GetMapping("/api/auth/oauth/kakao/authorize")
-    public ResponseEntity<Void> authorize() {
+    public ResponseEntity<?> authorize() {
         if (!kakaoOAuthService.isConfigured()) {
-            throw new IllegalStateException("KAKAO_CLIENT_ID가 설정되어 있지 않습니다.");
+            return errorPageTemplate.badRequest(
+                    "카카오 로그인 설정 필요",
+                    "KAKAO_CLIENT_ID가 설정되어 있지 않습니다. Kakao Developers의 REST API 키를 백엔드 실행 환경변수에 등록해주세요.",
+                    frontendRedirectUri
+            );
         }
 
         URI location = UriComponentsBuilder.fromUriString("https://kauth.kakao.com/oauth/authorize")

@@ -43,6 +43,7 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    . scripts/prepare-jenkins-kubeconfig.sh
                     if ! kubectl config current-context >/tmp/kafka-k8s-context.txt 2>/tmp/kafka-k8s-context.err; then
                         echo "Local Kubernetes context is not configured."
                         echo "Enable Docker Desktop Kubernetes, then run: kubectl config use-context docker-desktop"
@@ -64,13 +65,17 @@ pipeline {
 
         stage('Deploy To Local Kubernetes') {
             steps {
-                sh 'kubectl apply -k k8s'
-                sh 'kubectl -n "$K8S_NAMESPACE" rollout restart deployment/discovery-service'
-                sh 'kubectl -n "$K8S_NAMESPACE" rollout restart deployment/auth-service'
-                sh 'kubectl -n "$K8S_NAMESPACE" rollout restart deployment/frontend'
-                sh 'kubectl -n "$K8S_NAMESPACE" rollout status deployment/discovery-service'
-                sh 'kubectl -n "$K8S_NAMESPACE" rollout status deployment/auth-service'
-                sh 'kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend'
+                sh '''
+                    set -eu
+                    . scripts/prepare-jenkins-kubeconfig.sh
+                    kubectl apply -k k8s
+                    kubectl -n "$K8S_NAMESPACE" rollout restart deployment/discovery-service
+                    kubectl -n "$K8S_NAMESPACE" rollout restart deployment/auth-service
+                    kubectl -n "$K8S_NAMESPACE" rollout restart deployment/frontend
+                    kubectl -n "$K8S_NAMESPACE" rollout status deployment/discovery-service
+                    kubectl -n "$K8S_NAMESPACE" rollout status deployment/auth-service
+                    kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend
+                '''
             }
         }
     }
@@ -79,6 +84,7 @@ pipeline {
         always {
             sh '''
                 if kubectl config current-context >/dev/null 2>&1; then
+                    . scripts/prepare-jenkins-kubeconfig.sh
                     kubectl -n "$K8S_NAMESPACE" get pods || true
                 else
                     echo "Skipping pod listing because no Kubernetes context is configured."

@@ -11,7 +11,8 @@ import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
 
 def jenkins = Jenkins.get()
 def repoUrl = System.getenv('KAFKA_PROJECT_GIT_URL') ?: 'https://github.com/CodeItpython/kafka_project'
-def ciBranchSpec = System.getenv('KAFKA_PROJECT_CI_BRANCH') ?: '*/codex/merge-redis-elk-lombok-to-main'
+def ciBranchSpec = System.getenv('KAFKA_PROJECT_CI_BRANCH') ?: '*/main'
+def deployBranchSpec = System.getenv('KAFKA_PROJECT_DEPLOY_BRANCH') ?: '*/main'
 def mainBranchSpec = System.getenv('KAFKA_PROJECT_MAIN_BRANCH') ?: '*/main'
 def pollSpec = System.getenv('KAFKA_PROJECT_POLL_SCM') ?: '* * * * *'
 
@@ -52,6 +53,6 @@ def configurePipeline = { String jobName, String scriptPath, String branchSpec, 
 }
 
 configurePipeline('kafka-chat-ci', 'Jenkinsfile', ciBranchSpec)
-configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', ciBranchSpec, 'kafka-chat-ci')
+configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', deployBranchSpec, 'kafka-chat-ci')
 configurePipeline('kafka-chat-main-ci', 'Jenkinsfile', mainBranchSpec)
 jenkins.save()
