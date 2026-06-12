@@ -22,10 +22,14 @@ services:
       - postgres
       - mongodb
       - elasticsearch
+      - redis
+      - logstash
     ports:
       - "8890:8890"
     environment:
       EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      EUREKA_CLIENT_ENABLED: "true"
+      SPRING_PROFILES_ACTIVE: logstash
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
@@ -36,7 +40,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: kafka
       SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/kafka_chat
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
 
   frontend:
     build:
@@ -100,6 +108,15 @@ services:
     volumes:
       - mongodb-data:/data/db
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: kafka-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
     container_name: kafka-elasticsearch
@@ -112,8 +129,32 @@ services:
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
 
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.5
+    container_name: kafka-logstash
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5000:5000"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.5
+    container_name: kafka-kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+
 volumes:
   postgres-data:
   mongodb-data:
+  redis-data:
   elasticsearch-data:
   jenkins-data:

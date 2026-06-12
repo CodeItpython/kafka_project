@@ -9,8 +9,14 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "users")
 public class UserAccount {
     @Id
@@ -23,19 +29,19 @@ public class UserAccount {
     @Column(nullable = false)
     private String name;
 
+    @Setter
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Setter
     private AuthProvider provider = AuthProvider.LOCAL;
 
+    @Setter
     private String providerId;
 
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
-
-    protected UserAccount() {
-    }
 
     public UserAccount(String email, String name, String passwordHash, AuthProvider provider) {
         this.email = email;
@@ -44,47 +50,7 @@ public class UserAccount {
         this.provider = provider;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public AuthProvider getProvider() {
-        return provider;
-    }
-
-    public String getProviderId() {
-        return providerId;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
-
     public void setName(String name) {
         this.name = name;
-    }
-
-    public void setProvider(AuthProvider provider) {
-        this.provider = provider;
-    }
-
-    public void setProviderId(String providerId) {
-        this.providerId = providerId;
     }
 }

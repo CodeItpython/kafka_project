@@ -3,11 +3,16 @@ package com.kafka.auth.chat.model;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "chat_messages")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageDocument {
     @Id
     private String id;
@@ -28,9 +33,6 @@ public class ChatMessageDocument {
 
     @Indexed
     private Instant createdAt;
-
-    protected ChatMessageDocument() {
-    }
 
     public ChatMessageDocument(
             String id,
@@ -58,54 +60,6 @@ public class ChatMessageDocument {
         this.createdAt = createdAt;
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public String getRoomId() {
-        return roomId;
-    }
-
-    public String getRoomName() {
-        return roomName;
-    }
-
-    public String getSenderEmail() {
-        return senderEmail;
-    }
-
-    public String getSenderName() {
-        return senderName;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public String getAttachmentUrl() {
-        return attachmentUrl;
-    }
-
-    public String getAttachmentType() {
-        return attachmentType;
-    }
-
-    public String getAttachmentName() {
-        return attachmentName;
-    }
-
-    public Long getAttachmentSize() {
-        return attachmentSize;
-    }
-
-    public boolean isDeletedForEveryone() {
-        return deletedForEveryone;
-    }
-
-    public Set<String> getDeletedForEmails() {
-        return deletedForEmails;
-    }
-
     public boolean isVisibleTo(String email) {
         return !deletedForEmails.contains(email);
     }
@@ -123,7 +77,4 @@ public class ChatMessageDocument {
         attachmentSize = null;
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 }
