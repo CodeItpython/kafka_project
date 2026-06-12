@@ -12,25 +12,21 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class ChatStateService {
-    private static final Logger log = LoggerFactory.getLogger(ChatStateService.class);
     private static final Duration ROOM_CACHE_TTL = Duration.ofSeconds(30);
     private static final Duration ONLINE_TTL = Duration.ofSeconds(75);
     private static final Duration TYPING_TTL = Duration.ofSeconds(5);
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-
-    public ChatStateService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
-        this.redisTemplate = redisTemplate;
-        this.objectMapper = objectMapper;
-    }
 
     public List<ChatRoomResponse> cachedRooms(String email, String query, Supplier<List<ChatRoomResponse>> loader) {
         String key = "cache:rooms:" + normalize(email) + ":" + normalize(query);

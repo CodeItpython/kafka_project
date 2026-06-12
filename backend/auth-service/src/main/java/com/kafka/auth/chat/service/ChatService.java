@@ -37,8 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -51,8 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@Slf4j
 public class ChatService {
-    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     private static final long MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
     private final ChatRoomRepository chatRoomRepository;

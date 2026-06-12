@@ -38,6 +38,24 @@ type AuthResponse = {
   user: User;
 };
 
+type ApiErrorResponse = {
+  code?: string;
+  message?: string;
+  details?: string[];
+};
+
+class ApiClientError extends Error {
+  code?: string;
+  details: string[];
+
+  constructor(payload: ApiErrorResponse, fallback: string) {
+    super(payload.message || fallback);
+    this.name = 'ApiClientError';
+    this.code = payload.code;
+    this.details = payload.details ?? [];
+  }
+}
+
 type ChatRoom = {
   id: string;
   name: string;
@@ -150,9 +168,28 @@ function App() {
     });
     const data = response.status === 204 ? null : await response.json();
     if (!response.ok) {
-      throw new Error(data?.message ?? '요청을 처리하지 못했습니다.');
+      throw new ApiClientError(data ?? {}, '요청을 처리하지 못했습니다.');
     }
     return data as T;
+  }
+
+  function readableError(error: unknown, fallback = '잠시 후 다시 시도해주세요.') {
+    if (error instanceof ApiClientError) {
+      if (error.code === 'VALIDATION_FAILED') {
+        return error.details[0] ?? '입력한 정보를 다시 확인해주세요.';
+      }
+      if (error.message.includes('이메일 또는 비밀번호')) {
+        return '이메일 또는 비밀번호를 다시 확인해주세요.';
+      }
+      if (error.message.includes('인증코드')) {
+        return error.message;
+      }
+      return error.message || fallback;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return fallback;
   }
 
   function chooseSample(sample: { email: string; name: string }) {
@@ -180,7 +217,7 @@ function App() {
       });
       saveSession(data);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '오류가 발생했습니다.');
+      setStatus(readableError(error, mode === 'register' ? '가입에 실패했습니다.' : '로그인에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -198,7 +235,7 @@ function App() {
       setCode(data.debugCode);
       setStatus(`인증코드를 생성했습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '오류가 발생했습니다.');
+      setStatus(readableError(error, '인증코드를 만들지 못했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -215,7 +252,7 @@ function App() {
       });
       saveSession(data);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '오류가 발생했습니다.');
+      setStatus(readableError(error, '이메일 로그인에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -296,7 +333,7 @@ function App() {
       setRoomDescription('');
       setStatus(`${room.name} 채팅방을 만들었습니다.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '채팅방 생성에 실패했습니다.');
+      setStatus(readableError(error, '채팅방 생성에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -312,7 +349,7 @@ function App() {
       setMessages([]);
       setStatus(`${selectedRoom.name} 채팅방을 내 목록에서 삭제했습니다.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '채팅방 삭제에 실패했습니다.');
+      setStatus(readableError(error, '채팅방 삭제에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -329,7 +366,7 @@ function App() {
       openRoom(room.id);
       setStatus(`${contact.name}님과 1:1 대화를 시작합니다.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '1:1 채팅방을 열지 못했습니다.');
+      setStatus(readableError(error, '1:1 채팅방을 열지 못했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -358,7 +395,7 @@ function App() {
       setTimeout(() => loadMessages(selectedRoomId), 350);
     } catch (error) {
       setDraft(content);
-      setStatus(error instanceof Error ? error.message : '메시지 전송에 실패했습니다.');
+      setStatus(readableError(error, '메시지 전송에 실패했습니다.'));
     }
   }
 
@@ -368,7 +405,7 @@ function App() {
       setMessages((current) => current.filter((item) => item.id !== message.id));
       setSearchResults((current) => current.filter((item) => item.id !== message.id));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '메시지를 삭제하지 못했습니다.');
+      setStatus(readableError(error, '메시지를 삭제하지 못했습니다.'));
     }
   }
 
@@ -380,7 +417,7 @@ function App() {
       setSearchResults((current) => current.filter((message) => message.roomId !== selectedRoomId));
       setStatus('이 채팅방의 대화내용을 내 화면에서 삭제했습니다.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '대화내용을 삭제하지 못했습니다.');
+      setStatus(readableError(error, '대화내용을 삭제하지 못했습니다.'));
     }
   }
 
@@ -390,7 +427,7 @@ function App() {
       setMessages((current) => current.map((item) => item.id === updated.id ? updated : item));
       setSearchResults((current) => current.filter((item) => item.id !== updated.id));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : '모두에게 삭제하지 못했습니다.');
+      setStatus(readableError(error, '모두에게 삭제하지 못했습니다.'));
     }
   }
 
@@ -587,7 +624,7 @@ function App() {
             <div className="brand-mark"><ShieldCheck size={25} aria-hidden /></div>
             <p className="eyebrow">Kafka Talk</p>
             <h1>{title}</h1>
-            <p className="muted">JWT, 이메일 인증, Kafka 메시징을 한 화면에서 확인할 수 있어요.</p>
+            <p className="muted">친구와의 대화를 가볍게 이어가세요.</p>
           </div>
 
           <div className="sample-grid" aria-label="테스트 계정">
@@ -614,7 +651,7 @@ function App() {
                   <label>인증코드<input value={code} onChange={(event) => setCode(event.target.value)} required /></label>
                   <button type="button" className="icon-button" onClick={sendCode} disabled={loading} title="인증코드 발송"><Mail size={19} aria-hidden /></button>
                 </div>
-                {debugCode && <p className="hint">개발용 코드: {debugCode}</p>}
+                {debugCode && <p className="hint">인증코드: {debugCode}</p>}
                 <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />인증 로그인</button>
               </motion.form>
             ) : (

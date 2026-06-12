@@ -21,8 +21,10 @@ docker compose up -d postgres mongodb redis elasticsearch logstash kibana kafka
 
 ```bash
 cd /Users/gunwoo/Documents/KAFKA/backend
-./gradlew :auth-service:bootRun --args='--eureka.client.enabled=false'
+./gradlew :auth-service:bootRun
 ```
+
+In IntelliJ, running `AuthServiceApplication` directly is enough for local backend development. The local default keeps Eureka registration disabled. Docker Compose and Kubernetes explicitly set `EUREKA_CLIENT_ENABLED=true` when the discovery service is running.
 
 ```bash
 cd /Users/gunwoo/Documents/KAFKA/frontend

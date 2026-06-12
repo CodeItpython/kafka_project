@@ -1,6 +1,9 @@
 package com.kafka.auth.chat.search;
 
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.DateFormat;
 import org.springframework.data.elasticsearch.annotations.Document;
@@ -8,6 +11,8 @@ import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 
 @Document(indexName = "chat-messages")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatMessageSearchDocument {
     @Id
     private String id;
@@ -30,9 +35,6 @@ public class ChatMessageSearchDocument {
     @Field(type = FieldType.Date, format = DateFormat.date_time)
     private Instant createdAt;
 
-    protected ChatMessageSearchDocument() {
-    }
-
     public ChatMessageSearchDocument(
             String id,
             String roomId,
@@ -49,33 +51,5 @@ public class ChatMessageSearchDocument {
         this.senderName = senderName;
         this.content = content;
         this.createdAt = createdAt;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public String getRoomId() {
-        return roomId;
-    }
-
-    public String getRoomName() {
-        return roomName;
-    }
-
-    public String getSenderEmail() {
-        return senderEmail;
-    }
-
-    public String getSenderName() {
-        return senderName;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

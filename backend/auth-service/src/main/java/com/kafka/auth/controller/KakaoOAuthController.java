@@ -16,13 +16,16 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RestController
 public class KakaoOAuthController {
     private final KakaoOAuthService kakaoOAuthService;
+    private final ErrorPageTemplate errorPageTemplate;
     private final String frontendRedirectUri;
 
     public KakaoOAuthController(
             KakaoOAuthService kakaoOAuthService,
+            ErrorPageTemplate errorPageTemplate,
             @Value("${app.frontend.redirect-uri}") String frontendRedirectUri
     ) {
         this.kakaoOAuthService = kakaoOAuthService;
+        this.errorPageTemplate = errorPageTemplate;
         this.frontendRedirectUri = frontendRedirectUri;
     }
 
@@ -50,10 +53,10 @@ public class KakaoOAuthController {
             @RequestParam(required = false, name = "error_description") String errorDescription
     ) {
         if (error != null && !error.isBlank()) {
-            return html("카카오 로그인 실패", "카카오 인증이 취소되었거나 실패했습니다: " + errorDescription);
+            return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증이 취소되었거나 실패했습니다: " + errorDescription, frontendRedirectUri);
         }
         if (code == null || code.isBlank()) {
-            return html("카카오 로그인 실패", "authorization code가 없습니다.");
+            return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증 정보를 받지 못했습니다.", frontendRedirectUri);
         }
 
         AuthResponse authResponse = kakaoOAuthService.loginWithAuthorizationCode(code);
@@ -77,19 +80,6 @@ public class KakaoOAuthController {
                 .body(body);
     }
 
-    private ResponseEntity<String> html(String title, String message) {
-        String body = """
-                <!doctype html>
-                <html lang="ko">
-                <head><meta charset="UTF-8"><title>%s</title></head>
-                <body><h1>%s</h1><p>%s</p><p><a href="%s">돌아가기</a></p></body>
-                </html>
-                """.formatted(escapeHtml(title), escapeHtml(title), escapeHtml(message), escapeHtml(frontendRedirectUri));
-        return ResponseEntity.badRequest()
-                .contentType(MediaType.TEXT_HTML)
-                .body(body);
-    }
-
     private String jsString(String value) {
         return "\"" + value
                 .replace("\\", "\\\\")
@@ -101,14 +91,4 @@ public class KakaoOAuthController {
                 .replace("\r", "\\r") + "\"";
     }
 
-    private String escapeHtml(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
-    }
 }

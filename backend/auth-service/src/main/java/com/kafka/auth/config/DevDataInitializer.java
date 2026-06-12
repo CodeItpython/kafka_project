@@ -4,8 +4,7 @@ import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -14,8 +13,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@Slf4j
 public class DevDataInitializer implements ApplicationRunner {
-    private static final Logger log = LoggerFactory.getLogger(DevDataInitializer.class);
     private static final String DEFAULT_PASSWORD = "password123";
 
     private final UserAccountRepository userAccountRepository;

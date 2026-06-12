@@ -14,8 +14,13 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "chat_rooms")
 public class ChatRoom {
     @Id
@@ -49,9 +54,6 @@ public class ChatRoom {
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
-    protected ChatRoom() {
-    }
-
     public ChatRoom(String name, String description, String createdBy) {
         this.name = name;
         this.description = description;
@@ -74,36 +76,8 @@ public class ChatRoom {
         }
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
     public ChatRoomType getType() {
         return type == null ? ChatRoomType.GROUP : type;
-    }
-
-    public String getDirectKey() {
-        return directKey;
-    }
-
-    public Set<String> getParticipantEmails() {
-        return participantEmails;
-    }
-
-    public Set<String> getHiddenForEmails() {
-        return hiddenForEmails;
     }
 
     public boolean isVisibleTo(String email) {
@@ -118,7 +92,4 @@ public class ChatRoom {
         return createdBy.equalsIgnoreCase(email);
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 }
