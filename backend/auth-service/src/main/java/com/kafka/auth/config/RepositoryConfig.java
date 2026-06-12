@@ -1,0 +1,22 @@
+package com.kafka.auth.config;
+
+import com.kafka.auth.chat.repository.ChatMessageRepository;
+import com.kafka.auth.chat.repository.ChatRoomRepository;
+import com.kafka.auth.chat.search.ChatMessageSearchRepository;
+import com.kafka.auth.repository.EmailVerificationCodeRepository;
+import com.kafka.auth.repository.UserAccountRepository;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.elasticsearch.repository.config.EnableElasticsearchRepositories;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
+
+@Configuration
+@EnableJpaRepositories(basePackageClasses = {
+        UserAccountRepository.class,
+        EmailVerificationCodeRepository.class,
+        ChatRoomRepository.class
+})
+@EnableMongoRepositories(basePackageClasses = ChatMessageRepository.class)
+@EnableElasticsearchRepositories(basePackageClasses = ChatMessageSearchRepository.class)
+public class RepositoryConfig {
+}
