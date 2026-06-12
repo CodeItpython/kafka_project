@@ -61,7 +61,7 @@ This starts:
 - MongoDB: `localhost:27017`
 - Redis: `localhost:6379`
 - Elasticsearch: `localhost:9200`
-- Logstash TCP JSON input: `localhost:5000`
+- Logstash TCP JSON input: `localhost:5001` (container-to-container: `logstash:5000`)
 - Kibana: `http://localhost:5601`
 
 ## Kubernetes
