@@ -11,10 +11,11 @@ import org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty
 
 def jenkins = Jenkins.get()
 def repoUrl = System.getenv('KAFKA_PROJECT_GIT_URL') ?: 'https://github.com/CodeItpython/kafka_project'
-def branchSpec = System.getenv('KAFKA_PROJECT_GIT_BRANCH') ?: '*/codex/gradle-k8s-setup'
+def ciBranchSpec = System.getenv('KAFKA_PROJECT_CI_BRANCH') ?: '*/codex/merge-redis-elk-lombok-to-main'
+def mainBranchSpec = System.getenv('KAFKA_PROJECT_MAIN_BRANCH') ?: '*/main'
 def pollSpec = System.getenv('KAFKA_PROJECT_POLL_SCM') ?: '* * * * *'
 
-def configurePipeline = { String jobName, String scriptPath, String upstreamJobName = null ->
+def configurePipeline = { String jobName, String scriptPath, String branchSpec, String upstreamJobName = null ->
     def job = jenkins.getItemByFullName(jobName)
     if (job == null) {
         job = jenkins.createProject(WorkflowJob, jobName)
@@ -47,9 +48,10 @@ def configurePipeline = { String jobName, String scriptPath, String upstreamJobN
     }
 
     job.save()
-    println("Configured ${jobName} from ${scriptPath} with Poll SCM ${pollSpec}")
+    println("Configured ${jobName} from ${scriptPath}, branch ${branchSpec}, Poll SCM ${pollSpec}")
 }
 
-configurePipeline('kafka-chat-ci', 'Jenkinsfile')
-configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', 'kafka-chat-ci')
+configurePipeline('kafka-chat-ci', 'Jenkinsfile', ciBranchSpec)
+configurePipeline('kafka-chat-local-deploy', 'Jenkinsfile.local-deploy', ciBranchSpec, 'kafka-chat-ci')
+configurePipeline('kafka-chat-main-ci', 'Jenkinsfile', mainBranchSpec)
 jenkins.save()
