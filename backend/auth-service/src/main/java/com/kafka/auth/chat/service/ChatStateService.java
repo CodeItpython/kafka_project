@@ -44,7 +44,8 @@ public class ChatStateService {
             log.warn("Redis room cache serialization failed. Using source repository.", exception);
             return loader.get();
         } catch (RuntimeException exception) {
-            log.warn("Redis room cache unavailable. Using source repository.", exception);
+            log.warn("Redis room cache unavailable. Using source repository. reason={}", exception.getClass().getSimpleName());
+            log.debug("Redis room cache failure detail.", exception);
             return loader.get();
         }
     }

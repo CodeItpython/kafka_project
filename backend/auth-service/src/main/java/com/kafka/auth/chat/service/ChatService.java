@@ -238,6 +238,7 @@ public class ChatService {
         chatStateService.markOnline(user);
     }
 
+    @Transactional(readOnly = true)
     public void setTyping(String roomId, boolean typing, UserAccount user) {
         ensureRoomAccess(roomId, user);
         chatStateService.markOnline(user);
