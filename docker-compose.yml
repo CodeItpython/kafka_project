@@ -65,6 +65,11 @@ services:
     ports:
       - "18081:8080"
       - "50000:50000"
+    environment:
+      KAFKA_PROJECT_GIT_URL: ${KAFKA_PROJECT_GIT_URL:-https://github.com/CodeItpython/kafka_project}
+      KAFKA_PROJECT_CI_BRANCH: ${KAFKA_PROJECT_CI_BRANCH:-*/codex/merge-redis-elk-lombok-to-main}
+      KAFKA_PROJECT_MAIN_BRANCH: ${KAFKA_PROJECT_MAIN_BRANCH:-*/main}
+      KAFKA_PROJECT_POLL_SCM: ${KAFKA_PROJECT_POLL_SCM:-* * * * *}
     volumes:
       - jenkins-data:/var/jenkins_home
       - ./jenkins/init.groovy.d:/var/jenkins_home/init.groovy.d:ro
@@ -135,7 +140,7 @@ services:
     depends_on:
       - elasticsearch
     ports:
-      - "5000:5000"
+      - "5001:5000"
       - "9600:9600"
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m

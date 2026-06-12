@@ -39,6 +39,23 @@ pipeline {
             }
         }
 
+        stage('Validate Local Kubernetes') {
+            steps {
+                sh '''
+                    set -eu
+                    if ! kubectl config current-context >/tmp/kafka-k8s-context.txt 2>/tmp/kafka-k8s-context.err; then
+                        echo "Local Kubernetes context is not configured."
+                        echo "Enable Docker Desktop Kubernetes, then run: kubectl config use-context docker-desktop"
+                        exit 1
+                    fi
+
+                    context=$(cat /tmp/kafka-k8s-context.txt)
+                    echo "Using Kubernetes context: ${context}"
+                    kubectl cluster-info
+                '''
+            }
+        }
+
         stage('Build Docker Images') {
             steps {
                 sh 'scripts/docker-build.sh'
@@ -60,7 +77,13 @@ pipeline {
 
     post {
         always {
-            sh 'kubectl -n "$K8S_NAMESPACE" get pods || true'
+            sh '''
+                if kubectl config current-context >/dev/null 2>&1; then
+                    kubectl -n "$K8S_NAMESPACE" get pods || true
+                else
+                    echo "Skipping pod listing because no Kubernetes context is configured."
+                fi
+            '''
         }
     }
 }
