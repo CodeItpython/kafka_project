@@ -36,14 +36,18 @@ public class ChatStateService {
             Long id,
             String email,
             String name,
-            String provider
+            String provider,
+            String statusMessage,
+            String profileImageUrl
     ) {
         static UserProfileSnapshot from(UserAccount user) {
             return new UserProfileSnapshot(
                     user.getId(),
                     user.getEmail(),
                     user.getName(),
-                    user.getProvider().name()
+                    user.getProvider().name(),
+                    user.getStatusMessage(),
+                    user.getProfileImageUrl()
             );
         }
     }

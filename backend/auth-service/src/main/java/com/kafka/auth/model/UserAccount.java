@@ -40,8 +40,17 @@ public class UserAccount {
     @Setter
     private String providerId;
 
+    @Column(length = 500)
+    private String statusMessage = "";
+
+    @Column(length = 1000)
+    private String profileImageUrl;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
+
+    @Column
+    private Instant updatedAt = Instant.now();
 
     public UserAccount(String email, String name, String passwordHash, AuthProvider provider) {
         this.email = email;
@@ -52,5 +61,25 @@ public class UserAccount {
 
     public void setName(String name) {
         this.name = name;
+        this.updatedAt = Instant.now();
+    }
+
+    public void updateProfile(String name, String statusMessage) {
+        this.name = name;
+        this.statusMessage = statusMessage == null ? "" : statusMessage;
+        this.updatedAt = Instant.now();
+    }
+
+    public void updateProfileImage(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getStatusMessage() {
+        return statusMessage == null ? "" : statusMessage;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt == null ? createdAt : updatedAt;
     }
 }

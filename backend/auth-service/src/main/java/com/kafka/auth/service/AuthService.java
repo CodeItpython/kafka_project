@@ -106,7 +106,14 @@ public class AuthService {
     }
 
     public UserResponse toUserResponse(UserAccount user) {
-        return new UserResponse(user.getId(), user.getEmail(), user.getName(), user.getProvider().name());
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                user.getProvider().name(),
+                user.getStatusMessage(),
+                user.getProfileImageUrl()
+        );
     }
 
     private AuthResponse issueToken(UserAccount user) {

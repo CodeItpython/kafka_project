@@ -5,6 +5,7 @@ resources:
   - postgres.yaml
   - mongodb.yaml
   - redis.yaml
+  - minio.yaml
   - elasticsearch.yaml
   - logstash.yaml
   - kibana.yaml
