@@ -9,6 +9,9 @@ resources:
   - elasticsearch.yaml
   - logstash.yaml
   - kibana.yaml
+  - tempo.yaml
+  - prometheus.yaml
+  - grafana.yaml
   - discovery-service.yaml
   - auth-service.yaml
   - frontend.yaml

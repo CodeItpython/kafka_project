@@ -44,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.kafka.auth.storage.ObjectStorageService;
 import com.kafka.auth.storage.StoredObject;
+import io.micrometer.core.instrument.Timer;
 
 @Service
 @Slf4j
@@ -57,6 +58,7 @@ public class ChatService {
     private final KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatStateService chatStateService;
+    private final ChatMetricsService chatMetricsService;
     private final ObjectStorageService objectStorageService;
     private final String chatTopic;
 
@@ -68,6 +70,7 @@ public class ChatService {
             KafkaTemplate<String, ChatMessageEvent> kafkaTemplate,
             SimpMessagingTemplate messagingTemplate,
             ChatStateService chatStateService,
+            ChatMetricsService chatMetricsService,
             ObjectStorageService objectStorageService,
             @Value("${app.chat.topic}") String chatTopic
     ) {
@@ -78,6 +81,7 @@ public class ChatService {
         this.kafkaTemplate = kafkaTemplate;
         this.messagingTemplate = messagingTemplate;
         this.chatStateService = chatStateService;
+        this.chatMetricsService = chatMetricsService;
         this.objectStorageService = objectStorageService;
         this.chatTopic = chatTopic;
     }
@@ -142,19 +146,22 @@ public class ChatService {
             return List.of();
         }
         try {
-            return chatMessageSearchRepository
-                    .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(query, query)
-                    .stream()
-                    .filter(message -> canReadMessage(message.getId(), user))
-                    .map(this::toMessageResponse)
-                    .toList();
+            return chatMetricsService.recordSearch("elasticsearch", () -> chatMessageSearchRepository
+                            .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(query, query)
+                            .stream()
+                            .filter(message -> canReadMessage(message.getId(), user))
+                            .map(this::toMessageResponse)
+                            .toList()
+            );
         } catch (RuntimeException exception) {
             log.warn("Elasticsearch search failed. Falling back to MongoDB search.", exception);
-            return chatMessageRepository.findTop20ByContentContainingIgnoreCaseOrderByCreatedAtDesc(query)
-                    .stream()
-                    .filter(message -> canReadMessage(message, user))
-                    .map(this::toMessageResponse)
-                    .toList();
+            return chatMetricsService.recordSearch("mongodb_fallback", () -> chatMessageRepository
+                            .findTop20ByContentContainingIgnoreCaseOrderByCreatedAtDesc(query)
+                            .stream()
+                            .filter(message -> canReadMessage(message, user))
+                            .map(this::toMessageResponse)
+                            .toList()
+            );
         }
     }
 
@@ -182,29 +189,32 @@ public class ChatService {
         }
 
         try {
-            chatMessageSearchRepository
-                    .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(normalizedQuery, normalizedQuery)
-                    .stream()
-                    .filter(message -> canReadMessage(message.getId(), user))
-                    .forEach(message -> {
-                        if (includeRooms && containsIgnoreCase(message.getRoomName(), normalizedQuery)) {
-                            addSuggestion(suggestions, new SearchSuggestionResponse(
-                                    message.getRoomName(),
-                                    "ROOM",
-                                    message.getRoomId(),
-                                    message.getRoomName()
-                            ));
-                        }
-                        if (includeMessages) {
-                            extractMessageSuggestions(message.getContent(), normalizedQuery)
-                                    .forEach(text -> addSuggestion(suggestions, new SearchSuggestionResponse(
-                                            text,
-                                            "MESSAGE",
-                                            message.getRoomId(),
-                                            message.getRoomName()
-                                    )));
-                        }
-                    });
+            chatMetricsService.recordSearch("elasticsearch_suggestion", () -> {
+                chatMessageSearchRepository
+                        .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(normalizedQuery, normalizedQuery)
+                        .stream()
+                        .filter(message -> canReadMessage(message.getId(), user))
+                        .forEach(message -> {
+                            if (includeRooms && containsIgnoreCase(message.getRoomName(), normalizedQuery)) {
+                                addSuggestion(suggestions, new SearchSuggestionResponse(
+                                        message.getRoomName(),
+                                        "ROOM",
+                                        message.getRoomId(),
+                                        message.getRoomName()
+                                ));
+                            }
+                            if (includeMessages) {
+                                extractMessageSuggestions(message.getContent(), normalizedQuery)
+                                        .forEach(text -> addSuggestion(suggestions, new SearchSuggestionResponse(
+                                                text,
+                                                "MESSAGE",
+                                                message.getRoomId(),
+                                                message.getRoomName()
+                                        )));
+                            }
+                        });
+                return suggestions;
+            });
         } catch (RuntimeException exception) {
             log.warn("Elasticsearch suggestion lookup failed.", exception);
         }
@@ -280,7 +290,14 @@ public class ChatService {
                 attachment == null ? null : attachment.size(),
                 Instant.now()
         );
-        kafkaTemplate.send(chatTopic, roomId, event);
+        Timer.Sample sample = chatMetricsService.startTimer();
+        try {
+            kafkaTemplate.send(chatTopic, roomId, event);
+            chatMetricsService.recordKafkaPublishSuccess(sample, event);
+        } catch (RuntimeException exception) {
+            chatMetricsService.recordKafkaPublishFailure(sample, event);
+            throw exception;
+        }
         return event;
     }
 
@@ -350,34 +367,51 @@ public class ChatService {
 
     @KafkaListener(topics = "${app.chat.topic}", groupId = "${spring.kafka.consumer.group-id}")
     public void persistAndBroadcast(ChatMessageEvent event) {
-        ChatMessageDocument savedMessage = chatMessageRepository.save(new ChatMessageDocument(
-                event.messageId(),
-                event.roomId(),
-                event.roomName(),
-                event.senderEmail(),
-                event.senderName(),
-                event.content(),
-                event.attachmentUrl(),
-                event.attachmentType(),
-                event.attachmentName(),
-                event.attachmentSize(),
-                event.createdAt()
-        ));
-        incrementUnreadForRecipients(event);
+        Timer.Sample consumeSample = chatMetricsService.startTimer();
         try {
-            chatMessageSearchRepository.save(new ChatMessageSearchDocument(
-                    savedMessage.getId(),
-                    savedMessage.getRoomId(),
-                    savedMessage.getRoomName(),
-                    savedMessage.getSenderEmail(),
-                    savedMessage.getSenderName(),
-                    savedMessage.getContent(),
-                    savedMessage.getCreatedAt()
+            ChatMessageDocument savedMessage = chatMessageRepository.save(new ChatMessageDocument(
+                    event.messageId(),
+                    event.roomId(),
+                    event.roomName(),
+                    event.senderEmail(),
+                    event.senderName(),
+                    event.content(),
+                    event.attachmentUrl(),
+                    event.attachmentType(),
+                    event.attachmentName(),
+                    event.attachmentSize(),
+                    event.createdAt()
             ));
+            incrementUnreadForRecipients(event);
+            Timer.Sample indexSample = chatMetricsService.startTimer();
+            try {
+                chatMessageSearchRepository.save(new ChatMessageSearchDocument(
+                        savedMessage.getId(),
+                        savedMessage.getRoomId(),
+                        savedMessage.getRoomName(),
+                        savedMessage.getSenderEmail(),
+                        savedMessage.getSenderName(),
+                        savedMessage.getContent(),
+                        savedMessage.getCreatedAt()
+                ));
+                chatMetricsService.recordElasticsearchIndexSuccess(indexSample);
+            } catch (RuntimeException exception) {
+                chatMetricsService.recordElasticsearchIndexFailure(indexSample);
+                log.warn("Unable to index chat message into Elasticsearch. MongoDB history remains available.", exception);
+            }
+            Timer.Sample broadcastSample = chatMetricsService.startTimer();
+            try {
+                messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage));
+                chatMetricsService.recordWebSocketBroadcastSuccess(broadcastSample);
+            } catch (RuntimeException exception) {
+                chatMetricsService.recordWebSocketBroadcastFailure(broadcastSample);
+                throw exception;
+            }
+            chatMetricsService.recordKafkaConsumeSuccess(consumeSample, event);
         } catch (RuntimeException exception) {
-            log.warn("Unable to index chat message into Elasticsearch. MongoDB history remains available.", exception);
+            chatMetricsService.recordKafkaConsumeFailure(consumeSample, event);
+            throw exception;
         }
-        messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage));
     }
 
     private void incrementUnreadForRecipients(ChatMessageEvent event) {

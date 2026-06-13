@@ -25,6 +25,7 @@ services:
       - redis
       - minio
       - logstash
+      - tempo
     ports:
       - "8890:8890"
     environment:
@@ -51,6 +52,8 @@ services:
       APP_STORAGE_S3_ACCESS_KEY: kafka-talk
       APP_STORAGE_S3_SECRET_KEY: kafka-talk-secret
       APP_STORAGE_S3_PATH_STYLE_ACCESS: "true"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: 1.0
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
 
@@ -179,6 +182,44 @@ services:
     environment:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: kafka-prometheus
+    depends_on:
+      - auth-service
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: kafka-tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo-data:/tmp/tempo
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: kafka-grafana
+    depends_on:
+      - prometheus
+      - tempo
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
 volumes:
   postgres-data:
   mongodb-data:
@@ -186,3 +227,5 @@ volumes:
   minio-data:
   elasticsearch-data:
   jenkins-data:
+  tempo-data:
+  grafana-data:
