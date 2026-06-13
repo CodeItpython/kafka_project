@@ -198,6 +198,9 @@ Docker Desktop Kubernetes는 Docker Desktop 안에서 로컬 단일 노드 Kuber
 - Logstash: 로그 수집/가공
 - Kibana: Elasticsearch 시각화 UI
 - MinIO: 이미지/GIF/프로필 이미지 같은 바이너리 파일 저장
+- Prometheus: Spring Boot metrics 수집
+- Grafana: metrics/traces 대시보드
+- Tempo: OpenTelemetry trace 저장
 - Spring Boot: API/WebSocket/Kafka 처리
 - React: 웹 UI
 
@@ -223,6 +226,8 @@ scripts/k8s-apply.sh
 - Kibana NodePort: `http://localhost:30601`
 - MinIO API NodePort: `http://localhost:30900`
 - MinIO Console NodePort: `http://localhost:30901`
+- Prometheus NodePort: `http://localhost:30909`
+- Grafana NodePort: `http://localhost:30300`
 
 MinIO 기본 로컬 계정:
 
@@ -234,6 +239,63 @@ Bucket: kafka-talk-files
 
 백엔드는 `APP_STORAGE_TYPE=s3`일 때 MinIO/S3에 파일을 저장합니다. 브라우저에는 여전히 `/api/chat/attachments/{fileName}`, `/api/users/profile-images/{fileName}` URL을 내려주고, 백엔드가 내부에서 MinIO 객체를 읽어 응답합니다.
 IDE에서 `:auth-service:bootRun`으로만 실행하면 기본값은 `APP_STORAGE_TYPE=local`이므로 기존처럼 `/Users/gunwoo/Documents/KAFKA/backend/uploads` 아래에 저장됩니다.
+
+## Observability
+
+백엔드는 Spring Boot Actuator, Micrometer Prometheus, Micrometer Tracing, OpenTelemetry OTLP exporter를 사용합니다.
+
+노출되는 주요 엔드포인트:
+
+```text
+http://localhost:8890/actuator/health
+http://localhost:8890/actuator/prometheus
+```
+
+Docker Compose로 전체 관측성 스택을 띄우면 다음 주소를 사용합니다.
+
+```bash
+docker compose up -d --build auth-service prometheus tempo grafana
+```
+
+```text
+Prometheus: http://localhost:9090
+Grafana: http://localhost:3000
+Tempo: http://localhost:3200
+Grafana ID/PW: admin / admin
+```
+
+Kubernetes 배포에서는 다음 주소를 사용합니다.
+
+```text
+Prometheus: http://localhost:30909
+Grafana: http://localhost:30300
+Grafana ID/PW: admin / admin
+```
+
+Grafana datasource는 자동 등록됩니다.
+
+- `Kafka Talk Prometheus`: metrics 조회
+- `Kafka Talk Tempo`: OpenTelemetry trace 조회
+
+커스텀 metrics 이름:
+
+```text
+kafka_talk_kafka_publish_duration_seconds
+kafka_talk_kafka_consume_duration_seconds
+kafka_talk_elasticsearch_index_duration_seconds
+kafka_talk_search_duration_seconds
+kafka_talk_websocket_broadcast_duration_seconds
+```
+
+로컬 IDE에서 auth-service만 실행할 때는 tracing sampling 기본값이 `0.0`입니다. Tempo까지 같이 띄워 trace를 보고 싶으면 다음 환경변수를 주고 실행합니다.
+
+```bash
+export MANAGEMENT_TRACING_SAMPLING_PROBABILITY=1.0
+export MANAGEMENT_OTLP_TRACING_ENDPOINT=http://localhost:4318/v1/traces
+
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:bootRun
+```
 
 소스 변경 후 한 번에 로컬 Kubernetes에 반영하려면 다음 스크립트를 사용합니다.
 

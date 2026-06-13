@@ -69,19 +69,23 @@ spec:
                   key: root-password
             - name: APP_STORAGE_S3_PATH_STYLE_ACCESS
               value: "true"
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: MANAGEMENT_OTLP_TRACING_ENDPOINT
+              value: http://tempo:4318/v1/traces
             - name: LOGSTASH_HOST
               value: logstash
             - name: LOGSTASH_PORT
               value: "5000"
           readinessProbe:
             httpGet:
-              path: /api/auth/oauth/kakao/guide
+              path: /actuator/health/readiness
               port: 8890
             initialDelaySeconds: 20
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /api/auth/oauth/kakao/guide
+              path: /actuator/health/liveness
               port: 8890
             initialDelaySeconds: 40
             periodSeconds: 20
