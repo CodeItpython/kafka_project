@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
   AtSign,
+  Camera,
   CheckCircle2,
   ChevronRight,
   Hash,
@@ -12,8 +13,10 @@ import {
   LogOut,
   Mail,
   Menu,
+  MessageCircle,
   Paperclip,
   Plus,
+  Save,
   Search,
   Send,
   ShieldCheck,
@@ -30,6 +33,8 @@ type User = {
   email: string;
   name: string;
   provider: string;
+  statusMessage: string;
+  profileImageUrl: string | null;
 };
 
 type AuthResponse = {
@@ -86,7 +91,30 @@ type Contact = {
   email: string;
   name: string;
   provider: string;
+  statusMessage: string;
+  profileImageUrl: string | null;
   online: boolean;
+};
+
+type ProfileHistory = {
+  id: number;
+  name: string;
+  statusMessage: string;
+  profileImageUrl: string | null;
+  eventType: string;
+  createdAt: string;
+};
+
+type UserProfile = {
+  id: number;
+  email: string;
+  name: string;
+  provider: string;
+  statusMessage: string;
+  profileImageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  history: ProfileHistory[];
 };
 
 type AttachmentResponse = {
@@ -127,6 +155,10 @@ function App() {
   const [status, setStatus] = useState('');
   const [token, setToken] = useState(() => localStorage.getItem('accessToken') ?? '');
   const [user, setUser] = useState<User | null>(null);
+  const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
+  const [profileName, setProfileName] = useState('');
+  const [profileStatus, setProfileStatus] = useState('');
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState('');
@@ -203,6 +235,8 @@ function App() {
     localStorage.setItem('accessToken', data.accessToken);
     setToken(data.accessToken);
     setUser(data.user);
+    setProfileName(data.user.name);
+    setProfileStatus(data.user.statusMessage ?? '');
     setStatus(`${data.user.name}님으로 로그인되었습니다.`);
   }
 
@@ -264,10 +298,74 @@ function App() {
     try {
       const data = await request<User>('/auth/me');
       setUser(data);
+      setProfileName(data.name);
+      setProfileStatus(data.statusMessage ?? '');
     } catch {
       localStorage.removeItem('accessToken');
       setToken('');
       setUser(null);
+    }
+  }
+
+  async function loadMyProfile() {
+    if (!token) return;
+    const data = await request<UserProfile>('/users/me/profile');
+    setMyProfile(data);
+    setProfileName(data.name);
+    setProfileStatus(data.statusMessage ?? '');
+  }
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const data = await request<UserProfile>('/users/me/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: profileName, statusMessage: profileStatus })
+      });
+      setMyProfile(data);
+      setUser((current) => current ? {
+        ...current,
+        name: data.name,
+        statusMessage: data.statusMessage,
+        profileImageUrl: data.profileImageUrl
+      } : current);
+      setStatus('프로필을 저장했습니다.');
+      await loadContacts(contactQuery);
+    } catch (error) {
+      setStatus(readableError(error, '프로필을 저장하지 못했습니다.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function uploadProfileImage(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setStatus('프로필 이미지는 이미지 파일만 등록할 수 있습니다.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const data = await request<UserProfile>('/users/me/profile-image', {
+        method: 'POST',
+        body: formData
+      });
+      setMyProfile(data);
+      setUser((current) => current ? {
+        ...current,
+        name: data.name,
+        statusMessage: data.statusMessage,
+        profileImageUrl: data.profileImageUrl
+      } : current);
+      setStatus('프로필 이미지를 변경했습니다.');
+      await loadContacts(contactQuery);
+    } catch (error) {
+      setStatus(readableError(error, '프로필 이미지를 저장하지 못했습니다.'));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -373,6 +471,30 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function openContactProfile(contact: Contact) {
+    setLoading(true);
+    try {
+      const data = await request<UserProfile>(`/users/${contact.id}/profile`);
+      setSelectedProfile(data);
+    } catch (error) {
+      setStatus(readableError(error, '프로필을 불러오지 못했습니다.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openDirectFromProfile(profile: UserProfile) {
+    await openDirectRoom({
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      provider: profile.provider,
+      statusMessage: profile.statusMessage,
+      profileImageUrl: profile.profileImageUrl,
+      online: false
+    });
   }
 
   async function sendMessage(event: FormEvent) {
@@ -494,6 +616,10 @@ function App() {
     setRoomSuggestions([]);
     setMessageSuggestions([]);
     setPresence({ onlineUsers: [], typingUsers: [] });
+    setMyProfile(null);
+    setSelectedProfile(null);
+    setProfileName('');
+    setProfileStatus('');
     setSelectedRoomId('');
     setIsMenuOpen(false);
     clearAttachment();
@@ -518,6 +644,7 @@ function App() {
     if (user) {
       loadRooms('');
       loadContacts('');
+      loadMyProfile().catch(() => undefined);
       heartbeat().catch(() => undefined);
     }
   }, [user?.email]);
@@ -693,12 +820,35 @@ function App() {
       >
         <section className="sidebar">
           <div className="profile-card">
-            <div className="avatar">{user.name.slice(0, 1)}</div>
+            <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
             <div>
               <h1>Kafka Talk</h1>
               <p>{user.name} · {user.provider}</p>
+              {user.statusMessage && <small>{user.statusMessage}</small>}
             </div>
           </div>
+
+          <form className="profile-editor" onSubmit={saveProfile}>
+            <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
+            <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
+            <div className="profile-actions">
+              <label className="profile-image-button" title="프로필 이미지 변경">
+                <Camera size={16} aria-hidden />
+                <input type="file" accept="image/*" onChange={(event) => uploadProfileImage(event.target.files?.[0] ?? null)} />
+              </label>
+              <button type="submit" disabled={loading}><Save size={16} aria-hidden />저장</button>
+            </div>
+          </form>
+
+          {myProfile && myProfile.history.length > 0 && (
+            <section className="panel-section compact-history">
+              <div className="section-title">
+                <span>내 프로필 히스토리</span>
+                <small>{myProfile.history.length}</small>
+              </div>
+              <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
+            </section>
+          )}
 
           <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
             <Search size={17} aria-hidden />
@@ -712,20 +862,37 @@ function App() {
             </div>
             <div className="contact-list">
               {contacts.map((contact) => (
-                <button key={contact.email} onClick={() => openDirectRoom(contact)} disabled={loading}>
-                  <div className="mini-avatar presence-avatar">
-                    {contact.name.slice(0, 1)}
+                <button key={contact.email} onClick={() => openContactProfile(contact)} disabled={loading}>
+                  <div className="presence-avatar">
+                    <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
                     <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
                   </div>
                   <span>
                     <strong>{contact.name}</strong>
-                    <small>{contact.online ? '온라인' : contact.email}</small>
+                    <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
                   </span>
                   <ChevronRight size={16} aria-hidden />
                 </button>
               ))}
             </div>
           </section>
+
+          {selectedProfile && (
+            <section className="panel-section public-profile-card">
+              <div className="profile-card slim">
+                <ProfileAvatar className="avatar" name={selectedProfile.name} imageUrl={selectedProfile.profileImageUrl} />
+                <div>
+                  <h1>{selectedProfile.name}</h1>
+                  <p>{selectedProfile.email}</p>
+                  {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
+                </div>
+              </div>
+              <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
+                <MessageCircle size={17} aria-hidden />메시지
+              </button>
+              <ProfileHistoryList history={selectedProfile.history} />
+            </section>
+          )}
 
           <section className="panel-section">
             <div className="section-title">
@@ -921,6 +1088,41 @@ function SuggestionList({
           <span>{suggestion.text}</span>
           <small>{suggestion.type === 'ROOM' ? '방' : suggestion.roomName ?? '메시지'}</small>
         </button>
+      ))}
+    </div>
+  );
+}
+
+function ProfileAvatar({
+  className,
+  name,
+  imageUrl
+}: {
+  className: string;
+  name: string;
+  imageUrl: string | null;
+}) {
+  return (
+    <div className={`${className} profile-avatar`}>
+      {imageUrl ? <img src={imageUrl} alt={`${name} 프로필`} /> : <span>{name.slice(0, 1)}</span>}
+    </div>
+  );
+}
+
+function ProfileHistoryList({ history }: { history: ProfileHistory[] }) {
+  if (history.length === 0) {
+    return <p className="empty-state">아직 프로필 변경 기록이 없습니다.</p>;
+  }
+  return (
+    <div className="profile-history-list">
+      {history.map((item) => (
+        <article key={item.id}>
+          <ProfileAvatar className="mini-avatar" name={item.name} imageUrl={item.profileImageUrl} />
+          <span>
+            <strong>{item.statusMessage || item.name}</strong>
+            <small>{item.eventType === 'PROFILE_IMAGE_UPDATED' ? '이미지 변경' : '프로필 변경'} · {new Date(item.createdAt).toLocaleString()}</small>
+          </span>
+        </article>
       ))}
     </div>
   );

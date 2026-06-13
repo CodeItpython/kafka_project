@@ -23,6 +23,7 @@ services:
       - mongodb
       - elasticsearch
       - redis
+      - minio
       - logstash
     ports:
       - "8890:8890"
@@ -43,6 +44,13 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      APP_STORAGE_TYPE: s3
+      APP_STORAGE_S3_ENDPOINT: http://minio:9000
+      APP_STORAGE_S3_REGION: us-east-1
+      APP_STORAGE_S3_BUCKET: kafka-talk-files
+      APP_STORAGE_S3_ACCESS_KEY: kafka-talk
+      APP_STORAGE_S3_SECRET_KEY: kafka-talk-secret
+      APP_STORAGE_S3_PATH_STYLE_ACCESS: "true"
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
 
@@ -123,6 +131,19 @@ services:
     volumes:
       - redis-data:/data
 
+  minio:
+    image: minio/minio:latest
+    container_name: kafka-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: kafka-talk
+      MINIO_ROOT_PASSWORD: kafka-talk-secret
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - minio-data:/data
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
     container_name: kafka-elasticsearch
@@ -162,5 +183,6 @@ volumes:
   postgres-data:
   mongodb-data:
   redis-data:
+  minio-data:
   elasticsearch-data:
   jenkins-data:

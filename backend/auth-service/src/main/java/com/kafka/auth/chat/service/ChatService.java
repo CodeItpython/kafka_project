@@ -21,11 +21,6 @@ import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.chat.service.ChatStateService.UserProfileSnapshot;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.UserAccountRepository;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Arrays;
@@ -43,12 +38,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.kafka.auth.storage.ObjectStorageService;
+import com.kafka.auth.storage.StoredObject;
 
 @Service
 @Slf4j
@@ -62,8 +57,8 @@ public class ChatService {
     private final KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatStateService chatStateService;
+    private final ObjectStorageService objectStorageService;
     private final String chatTopic;
-    private final Path attachmentRoot;
 
     public ChatService(
             ChatRoomRepository chatRoomRepository,
@@ -73,8 +68,8 @@ public class ChatService {
             KafkaTemplate<String, ChatMessageEvent> kafkaTemplate,
             SimpMessagingTemplate messagingTemplate,
             ChatStateService chatStateService,
-            @Value("${app.chat.topic}") String chatTopic,
-            @Value("${app.chat.attachments.path:uploads/chat}") String attachmentPath
+            ObjectStorageService objectStorageService,
+            @Value("${app.chat.topic}") String chatTopic
     ) {
         this.chatRoomRepository = chatRoomRepository;
         this.chatMessageRepository = chatMessageRepository;
@@ -83,8 +78,8 @@ public class ChatService {
         this.kafkaTemplate = kafkaTemplate;
         this.messagingTemplate = messagingTemplate;
         this.chatStateService = chatStateService;
+        this.objectStorageService = objectStorageService;
         this.chatTopic = chatTopic;
-        this.attachmentRoot = Paths.get(attachmentPath).toAbsolutePath().normalize();
     }
 
     @Transactional
@@ -234,6 +229,8 @@ public class ChatService {
                         profile.email(),
                         profile.name(),
                         profile.provider(),
+                        profile.statusMessage(),
+                        profile.profileImageUrl(),
                         chatStateService.isOnline(profile.email())
                 ))
                 .toList();
@@ -343,33 +340,12 @@ public class ChatService {
 
         String extension = extension(file.getOriginalFilename(), contentType);
         String storedName = UUID.randomUUID() + extension;
-        try {
-            Files.createDirectories(attachmentRoot);
-            Path target = attachmentRoot.resolve(storedName).normalize();
-            if (!target.startsWith(attachmentRoot)) {
-                throw new IllegalArgumentException("잘못된 첨부 파일 경로입니다.");
-            }
-            file.transferTo(target);
-            return new AttachmentResponse("/api/chat/attachments/" + storedName, contentType, cleanName(file.getOriginalFilename()), file.getSize());
-        } catch (IOException exception) {
-            throw new UncheckedIOException("첨부 파일 저장에 실패했습니다.", exception);
-        }
+        objectStorageService.store("chat/" + storedName, file, contentType);
+        return new AttachmentResponse("/api/chat/attachments/" + storedName, contentType, cleanName(file.getOriginalFilename()), file.getSize());
     }
 
-    public Resource loadAttachment(String fileName) {
-        try {
-            Path target = attachmentRoot.resolve(fileName).normalize();
-            if (!target.startsWith(attachmentRoot) || !Files.exists(target)) {
-                throw new IllegalArgumentException("첨부 파일을 찾을 수 없습니다.");
-            }
-            Resource resource = new UrlResource(target.toUri());
-            if (!resource.isReadable()) {
-                throw new IllegalArgumentException("첨부 파일을 읽을 수 없습니다.");
-            }
-            return resource;
-        } catch (MalformedURLException exception) {
-            throw new IllegalArgumentException("첨부 파일 경로가 올바르지 않습니다.", exception);
-        }
+    public StoredObject loadAttachment(String fileName) {
+        return objectStorageService.load("chat/" + cleanName(fileName));
     }
 
     @KafkaListener(topics = "${app.chat.topic}", groupId = "${spring.kafka.consumer.group-id}")

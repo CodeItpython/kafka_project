@@ -13,8 +13,8 @@ import com.kafka.auth.chat.dto.ChatDtos.TypingRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.service.ChatService;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.storage.StoredObject;
 import jakarta.validation.Valid;
-import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -140,12 +140,12 @@ public class ChatController {
     }
 
     @GetMapping("/attachments/{fileName:.+}")
-    public ResponseEntity<Resource> attachment(@PathVariable String fileName) throws IOException {
-        Resource resource = chatService.loadAttachment(fileName);
-        String contentType = resource.getURL().openConnection().getContentType();
+    public ResponseEntity<Resource> attachment(@PathVariable String fileName) {
+        StoredObject storedObject = chatService.loadAttachment(fileName);
+        String contentType = storedObject.contentType();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, contentType == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : contentType)
-                .body(resource);
+                .body(storedObject.resource());
     }
 
     @DeleteMapping("/rooms/{roomId}/messages/{messageId}/me")

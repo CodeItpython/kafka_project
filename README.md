@@ -141,6 +141,20 @@ redis-cli keys 'state:*'
 redis-cli get 'state:unread:user@example.com:ROOM_ID'
 ```
 
+## 프로필과 상태메시지
+
+사용자는 자신의 이름, 상태메시지, 프로필 이미지를 수정할 수 있습니다. 친구 목록에서는 다른 사용자의 프로필 이미지와 상태메시지를 볼 수 있고, 친구를 선택하면 공개 프로필과 최근 프로필 변경 이력을 확인할 수 있습니다.
+
+주요 API:
+
+- `GET /api/users/me/profile`: 내 프로필과 최근 히스토리 조회
+- `PATCH /api/users/me/profile`: 이름/상태메시지 수정
+- `POST /api/users/me/profile-image`: 프로필 이미지 업로드
+- `GET /api/users/{userId}/profile`: 다른 사용자의 공개 프로필과 히스토리 조회
+- `GET /api/users/profile-images/{fileName}`: 프로필 이미지 파일 조회
+
+현재 프로필 이미지는 로컬 `uploads/profiles`에 저장합니다. 이후 MinIO/S3 단계에서 이 저장소를 객체 스토리지로 교체합니다.
+
 ## 카카오 로그인 설정
 
 현재 카카오 로그인이 안 된다면 먼저 백엔드에서 아래 응답을 확인합니다.
@@ -183,6 +197,7 @@ Docker Desktop Kubernetes는 Docker Desktop 안에서 로컬 단일 노드 Kuber
 - Elasticsearch: 채팅 검색/로그 검색 인덱스
 - Logstash: 로그 수집/가공
 - Kibana: Elasticsearch 시각화 UI
+- MinIO: 이미지/GIF/프로필 이미지 같은 바이너리 파일 저장
 - Spring Boot: API/WebSocket/Kafka 처리
 - React: 웹 UI
 
@@ -206,6 +221,19 @@ scripts/k8s-apply.sh
 - 프론트엔드 NodePort: `http://localhost:30880`
 - Auth service NodePort: `http://localhost:30890`
 - Kibana NodePort: `http://localhost:30601`
+- MinIO API NodePort: `http://localhost:30900`
+- MinIO Console NodePort: `http://localhost:30901`
+
+MinIO 기본 로컬 계정:
+
+```text
+ID: kafka-talk
+PW: kafka-talk-secret
+Bucket: kafka-talk-files
+```
+
+백엔드는 `APP_STORAGE_TYPE=s3`일 때 MinIO/S3에 파일을 저장합니다. 브라우저에는 여전히 `/api/chat/attachments/{fileName}`, `/api/users/profile-images/{fileName}` URL을 내려주고, 백엔드가 내부에서 MinIO 객체를 읽어 응답합니다.
+IDE에서 `:auth-service:bootRun`으로만 실행하면 기본값은 `APP_STORAGE_TYPE=local`이므로 기존처럼 `/Users/gunwoo/Documents/KAFKA/backend/uploads` 아래에 저장됩니다.
 
 소스 변경 후 한 번에 로컬 Kubernetes에 반영하려면 다음 스크립트를 사용합니다.
 

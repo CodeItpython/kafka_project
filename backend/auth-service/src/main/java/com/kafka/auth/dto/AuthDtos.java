@@ -45,7 +45,38 @@ public final class AuthDtos {
             Long id,
             String email,
             String name,
-            String provider
+            String provider,
+            String statusMessage,
+            String profileImageUrl
+    ) {
+    }
+
+    public record UpdateProfileRequest(
+            @NotBlank @Size(max = 80) String name,
+            @Size(max = 500) String statusMessage
+    ) {
+    }
+
+    public record UserProfileResponse(
+            Long id,
+            String email,
+            String name,
+            String provider,
+            String statusMessage,
+            String profileImageUrl,
+            Instant createdAt,
+            Instant updatedAt,
+            java.util.List<UserProfileHistoryResponse> history
+    ) {
+    }
+
+    public record UserProfileHistoryResponse(
+            Long id,
+            String name,
+            String statusMessage,
+            String profileImageUrl,
+            String eventType,
+            Instant createdAt
     ) {
     }
 

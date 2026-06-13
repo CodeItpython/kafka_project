@@ -56,6 +56,8 @@ public final class ChatDtos {
             String email,
             String name,
             String provider,
+            String statusMessage,
+            String profileImageUrl,
             boolean online
     ) {
     }

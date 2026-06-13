@@ -2,6 +2,7 @@
 target/
 build/
 .gradle/
+.gradle-home/
 node_modules/
 dist/
 .env

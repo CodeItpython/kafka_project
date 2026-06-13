@@ -34,6 +34,12 @@ public class LocalSchemaConstraintUpdater implements ApplicationRunner {
                     add constraint users_provider_check
                     check (provider in ('LOCAL', 'EMAIL', 'KAKAO'))
                     """);
+            jdbcTemplate.execute("update users set status_message = '' where status_message is null");
+            jdbcTemplate.execute("""
+                    update users
+                    set updated_at = coalesce(updated_at, created_at, now())
+                    where updated_at is null
+                    """);
             log.info("Updated users_provider_check constraint for local auth providers.");
         } catch (Exception exception) {
             log.warn("Could not update users_provider_check constraint. Continuing startup.", exception);
