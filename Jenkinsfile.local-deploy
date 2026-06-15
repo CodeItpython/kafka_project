@@ -7,7 +7,7 @@ pipeline {
 
     triggers {
         pollSCM('* * * * *')
-        upstream(upstreamProjects: 'kafka-chat-ci', threshold: hudson.model.Result.SUCCESS)
+        upstream(upstreamProjects: 'kafka-chat-main-ci', threshold: hudson.model.Result.SUCCESS)
     }
 
     environment {
@@ -59,7 +59,11 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                sh 'scripts/docker-build.sh'
+                sh '''
+                    set -eu
+                    IMAGE_TAG="${GIT_COMMIT:-local}"
+                    IMAGE_TAG="$IMAGE_TAG" scripts/docker-build.sh
+                '''
             }
         }
 
@@ -67,11 +71,12 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    IMAGE_TAG="${GIT_COMMIT:-local}"
                     . scripts/prepare-jenkins-kubeconfig.sh
                     kubectl apply -k k8s
-                    kubectl -n "$K8S_NAMESPACE" rollout restart deployment/discovery-service
-                    kubectl -n "$K8S_NAMESPACE" rollout restart deployment/auth-service
-                    kubectl -n "$K8S_NAMESPACE" rollout restart deployment/frontend
+                    kubectl -n "$K8S_NAMESPACE" set image deployment/discovery-service discovery-service="kafka-discovery-service:${IMAGE_TAG}"
+                    kubectl -n "$K8S_NAMESPACE" set image deployment/auth-service auth-service="kafka-auth-service:${IMAGE_TAG}"
+                    kubectl -n "$K8S_NAMESPACE" set image deployment/frontend frontend="kafka-frontend:${IMAGE_TAG}"
                     kubectl -n "$K8S_NAMESPACE" rollout status deployment/discovery-service
                     kubectl -n "$K8S_NAMESPACE" rollout status deployment/auth-service
                     kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend

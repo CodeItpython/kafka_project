@@ -37,6 +37,9 @@ services:
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost:8890/oauth2/callback/kakao}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.2}
+      OPENAI_RESPONSES_URL: ${OPENAI_RESPONSES_URL:-https://api.openai.com/v1/responses}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kafka_project
       SPRING_DATASOURCE_USERNAME: kafka
       SPRING_DATASOURCE_PASSWORD: kafka

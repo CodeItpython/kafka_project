@@ -79,6 +79,9 @@ docker compose up --build
 - Logstash TCP JSON input: `localhost:5001`
 - Logstash 컨테이너 내부 주소: `logstash:5000`
 - Kibana: `http://localhost:5601`
+- Prometheus: `http://localhost:9090`
+- Tempo: `http://localhost:3200`
+- Grafana: `http://localhost:3000`
 
 macOS에서는 5000번 포트를 AirPlay Receiver가 잡는 경우가 많습니다. 그래서 로컬 PC에서 Logstash로 직접 보낼 때는 `localhost:5001`을 쓰고, Docker/Kubernetes 내부 통신에서는 `logstash:5000`을 씁니다.
 
@@ -139,6 +142,57 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 redis-cli keys 'cache:*'
 redis-cli keys 'state:*'
 redis-cli get 'state:unread:user@example.com:ROOM_ID'
+```
+
+## GPT 대화 요약
+
+채팅방 안의 `GPT 요약` 버튼은 최근 텍스트 메시지를 백엔드에서 모은 뒤 OpenAI Responses API로 요약을 요청합니다.
+
+주의할 점:
+
+- ChatGPT Pro 구독과 OpenAI API Platform 과금은 별도입니다.
+- Pro 계정이어도 API를 쓰려면 `platform.openai.com`에서 API billing과 API key를 설정해야 합니다.
+- API key는 Git에 커밋하지 않고 `.env`, IntelliJ 환경변수, Kubernetes Secret으로만 주입합니다.
+
+로컬 IDE 실행:
+
+```bash
+export OPENAI_API_KEY='sk-...'
+export OPENAI_MODEL='gpt-5.2'
+
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:bootRun
+```
+
+Docker Compose 실행:
+
+```bash
+export OPENAI_API_KEY='sk-...'
+docker compose up -d --build auth-service frontend
+```
+
+Kubernetes 실행:
+
+```bash
+kubectl -n kafka-project create secret generic auth-secrets \
+  --from-literal=jwt-secret='change-this-local-kubernetes-secret-change-this' \
+  --from-literal=openai-api-key='sk-...' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+주요 API:
+
+- `POST /api/chat/rooms/{roomId}/summary`
+
+응답:
+
+```json
+{
+  "summary": "대화 요약 내용",
+  "model": "gpt-5.2",
+  "generatedAt": "2026-06-15T00:00:00Z",
+  "messageCount": 20
+}
 ```
 
 ## 프로필과 상태메시지
@@ -242,7 +296,16 @@ IDE에서 `:auth-service:bootRun`으로만 실행하면 기본값은 `APP_STORAG
 
 ## Observability
 
-백엔드는 Spring Boot Actuator, Micrometer Prometheus, Micrometer Tracing, OpenTelemetry OTLP exporter를 사용합니다.
+백엔드는 Spring Boot Actuator, Micrometer Prometheus, Micrometer Tracing, OpenTelemetry OTLP exporter를 사용합니다. ELK는 로그와 검색 확인, Prometheus/Grafana/Tempo는 metrics와 trace 확인에 사용합니다.
+
+각 도구 역할:
+
+- Elasticsearch: 채팅 메시지 검색 색인과 Logstash가 보낸 JSON 로그 저장소
+- Logstash: auth-service JSON 로그를 받아 Elasticsearch 인덱스로 전송
+- Kibana: Elasticsearch에 저장된 로그와 채팅 색인을 검색하는 UI
+- Prometheus: `/actuator/prometheus`를 주기적으로 긁어 metrics 저장
+- Tempo: OpenTelemetry trace 저장
+- Grafana: Prometheus metrics와 Tempo trace를 한 화면에서 보는 UI
 
 노출되는 주요 엔드포인트:
 

@@ -252,9 +252,11 @@ input:focus {
   display: grid;
   grid-template-columns: 0 minmax(0, 760px);
   justify-content: center;
-  align-items: start;
+  align-items: stretch;
   gap: 0;
+  height: 100vh;
   padding: 24px;
+  overflow: hidden;
   background: #f2f4f6;
   transition:
     grid-template-columns 340ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -267,12 +269,14 @@ input:focus {
 }
 
 .menu-pane {
+  position: relative;
   display: grid;
   align-content: start;
   gap: 0;
   width: 100%;
   min-width: 0;
-  min-height: calc(100vh - 48px);
+  min-height: 0;
+  height: calc(100vh - 48px);
   overflow: clip auto;
   border: 1px solid #e5e8eb;
   border-radius: 8px;
@@ -280,6 +284,22 @@ input:focus {
   box-shadow: 0 18px 50px rgb(25 31 40 / 8%);
   transform-origin: left center;
   will-change: opacity, transform;
+}
+
+.menu-close-button {
+  position: sticky;
+  top: 12px;
+  z-index: 4;
+  justify-self: end;
+  display: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin: 12px 12px 0 0;
+  border: 0;
+  border-radius: 8px;
+  color: #4e5968;
+  background: #f2f4f6;
 }
 
 .chat-shell:not(.menu-open) .menu-pane {
@@ -397,15 +417,23 @@ input:focus {
   margin-bottom: 0;
 }
 
-.public-profile-card {
+.public-profile-card,
+.contact-profile-inline {
   padding: 13px;
   border: 1px solid #e5e8eb;
   border-radius: 8px;
   background: #fbfcfd;
 }
 
-.public-profile-card .primary-button {
+.public-profile-card .primary-button,
+.contact-profile-inline .primary-button {
   width: 100%;
+}
+
+.contact-profile-inline {
+  display: grid;
+  gap: 12px;
+  margin: -2px 0 6px 48px;
 }
 
 .compact-history {
@@ -575,6 +603,7 @@ input:focus {
 }
 
 .contact-list button:hover,
+.contact-list button.active,
 .room-item:hover,
 .room-item.active {
   background: #f2f6ff;
@@ -637,9 +666,11 @@ input:focus {
 .conversation,
 .room-directory {
   display: grid;
-  min-height: calc(100vh - 48px);
+  min-height: 0;
+  height: calc(100vh - 48px);
   min-width: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 .conversation {
@@ -649,6 +680,8 @@ input:focus {
 .room-directory {
   align-content: start;
   gap: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .conversation-header,
@@ -669,10 +702,20 @@ input:focus {
 
 .conversation-header {
   justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .directory-header {
   justify-content: flex-start;
+}
+
+.header-navigation {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
 }
 
 .directory-section {
@@ -777,8 +820,57 @@ input:focus {
   display: flex;
   flex-direction: column;
   gap: 11px;
+  min-height: 0;
   overflow: auto;
   padding: 22px 5px;
+  overscroll-behavior: contain;
+}
+
+.refresh-messages-button {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid #d9e4ff;
+  border-radius: 999px;
+  color: #0054d1;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgb(25 31 40 / 10%);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.refresh-messages-button:disabled svg {
+  animation: spin 850ms linear infinite;
+}
+
+.summary-card {
+  display: grid;
+  gap: 10px;
+  width: min(620px, 100%);
+  padding: 14px;
+  border: 1px solid #d9e4ff;
+  border-radius: 8px;
+  color: #333d4b;
+  background: #f7fbff;
+}
+
+.summary-card p {
+  color: #333d4b;
+  line-height: 1.58;
+  white-space: pre-wrap;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .chat-bubble {
@@ -978,6 +1070,7 @@ input:focus {
     grid-template-columns: 1fr;
     gap: 0;
     min-height: 100vh;
+    height: 100vh;
     padding: 0;
   }
 
@@ -991,9 +1084,14 @@ input:focus {
     z-index: 30;
     width: 100%;
     min-height: 100vh;
+    height: 100vh;
     border: 0;
     border-radius: 0;
     box-shadow: 0 24px 80px rgb(25 31 40 / 14%);
+  }
+
+  .menu-close-button {
+    display: grid;
   }
 
   .sidebar,
@@ -1020,15 +1118,25 @@ input:focus {
 
   .conversation,
   .room-directory {
-    min-height: 100vh;
+    min-height: 0;
+    height: 100vh;
     padding: 12px;
   }
 
   .conversation-header,
   .directory-header {
     display: grid;
+    grid-template-columns: 1fr;
     gap: 13px;
     padding: 16px;
+  }
+
+  .header-navigation {
+    width: 100%;
+  }
+
+  .back-button {
+    flex: 1;
   }
 
   .header-actions {
@@ -1061,5 +1169,9 @@ input:focus {
   .soft-action-button {
     max-width: 100%;
     white-space: nowrap;
+  }
+
+  .contact-profile-inline {
+    margin-left: 0;
   }
 }

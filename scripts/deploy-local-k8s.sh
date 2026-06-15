@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 NAMESPACE="${K8S_NAMESPACE:-kafka-project}"
+IMAGE_TAG="${IMAGE_TAG:-local-$(date +%Y%m%d%H%M%S)}"
 
 cd "$ROOT_DIR"
 
@@ -13,15 +14,15 @@ echo "==> Verifying frontend"
 (cd frontend && npm ci && npm run build)
 
 echo "==> Building local Docker images"
-scripts/docker-build.sh
+IMAGE_TAG="$IMAGE_TAG" scripts/docker-build.sh
 
 echo "==> Applying Kubernetes manifests"
 kubectl apply -k k8s
 
-echo "==> Restarting application deployments"
-kubectl -n "$NAMESPACE" rollout restart deployment/discovery-service
-kubectl -n "$NAMESPACE" rollout restart deployment/auth-service
-kubectl -n "$NAMESPACE" rollout restart deployment/frontend
+echo "==> Updating application images to tag ${IMAGE_TAG}"
+kubectl -n "$NAMESPACE" set image deployment/discovery-service discovery-service="kafka-discovery-service:${IMAGE_TAG}"
+kubectl -n "$NAMESPACE" set image deployment/auth-service auth-service="kafka-auth-service:${IMAGE_TAG}"
+kubectl -n "$NAMESPACE" set image deployment/frontend frontend="kafka-frontend:${IMAGE_TAG}"
 
 echo "==> Waiting for rollout"
 kubectl -n "$NAMESPACE" rollout status deployment/discovery-service
