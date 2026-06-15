@@ -33,6 +33,16 @@ spec:
                 secretKeyRef:
                   name: auth-secrets
                   key: jwt-secret
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: OPENAI_MODEL
+              value: gpt-5.2
+            - name: OPENAI_RESPONSES_URL
+              value: https://api.openai.com/v1/responses
             - name: SPRING_DATASOURCE_URL
               value: jdbc:postgresql://postgres:5432/kafka_project
             - name: SPRING_DATASOURCE_USERNAME

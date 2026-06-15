@@ -3,6 +3,7 @@ package com.kafka.auth.chat.controller;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
+import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
@@ -120,6 +121,14 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.messages(roomId, user));
+    }
+
+    @PostMapping("/rooms/{roomId}/summary")
+    public ResponseEntity<ConversationSummaryResponse> summarizeRoom(
+            @PathVariable String roomId,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.summarizeRoom(roomId, user));
     }
 
     @PostMapping("/rooms/{roomId}/messages")

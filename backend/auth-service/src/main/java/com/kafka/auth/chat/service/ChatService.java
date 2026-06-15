@@ -5,6 +5,7 @@ import com.kafka.auth.chat.dto.ChatDtos.AttachmentResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
+import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
@@ -59,6 +60,7 @@ public class ChatService {
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatStateService chatStateService;
     private final ChatMetricsService chatMetricsService;
+    private final ChatSummaryService chatSummaryService;
     private final ObjectStorageService objectStorageService;
     private final String chatTopic;
 
@@ -71,6 +73,7 @@ public class ChatService {
             SimpMessagingTemplate messagingTemplate,
             ChatStateService chatStateService,
             ChatMetricsService chatMetricsService,
+            ChatSummaryService chatSummaryService,
             ObjectStorageService objectStorageService,
             @Value("${app.chat.topic}") String chatTopic
     ) {
@@ -82,6 +85,7 @@ public class ChatService {
         this.messagingTemplate = messagingTemplate;
         this.chatStateService = chatStateService;
         this.chatMetricsService = chatMetricsService;
+        this.chatSummaryService = chatSummaryService;
         this.objectStorageService = objectStorageService;
         this.chatTopic = chatTopic;
     }
@@ -138,6 +142,17 @@ public class ChatService {
                 .filter(message -> message.isVisibleTo(user.getEmail()))
                 .map(this::toMessageResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ConversationSummaryResponse summarizeRoom(String roomId, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        List<ChatMessageDocument> messages = chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 80));
+        Collections.reverse(messages);
+        List<ChatMessageDocument> visibleMessages = messages.stream()
+                .filter(message -> message.isVisibleTo(user.getEmail()))
+                .toList();
+        return chatSummaryService.summarize(visibleMessages);
     }
 
     @Transactional(readOnly = true)

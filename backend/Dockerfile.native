@@ -1,0 +1,19 @@
+FROM ghcr.io/graalvm/native-image-community:21 AS build
+WORKDIR /workspace
+COPY settings.gradle build.gradle gradlew ./
+COPY gradle ./gradle
+COPY auth-service ./auth-service
+COPY discovery-service ./discovery-service
+RUN ./gradlew :auth-service:nativeCompile --no-daemon
+
+FROM debian:bookworm-slim
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --home-dir /app appuser
+COPY --from=build /workspace/auth-service/build/native/nativeCompile/auth-service /app/app
+RUN chown appuser:appuser /app/app && chmod 500 /app/app
+USER appuser
+EXPOSE 8890
+ENTRYPOINT ["/app/app"]

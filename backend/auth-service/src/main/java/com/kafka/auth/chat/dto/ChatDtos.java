@@ -73,6 +73,14 @@ public final class ChatDtos {
     ) {
     }
 
+    public record ConversationSummaryResponse(
+            String summary,
+            String model,
+            Instant generatedAt,
+            int messageCount
+    ) {
+    }
+
     public record SearchSuggestionResponse(
             String text,
             String type,

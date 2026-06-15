@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
 import { AnimatePresence, motion } from 'motion/react';
@@ -16,10 +16,12 @@ import {
   MessageCircle,
   Paperclip,
   Plus,
+  RefreshCcw,
   Save,
   Search,
   Send,
   ShieldCheck,
+  Sparkles,
   Trash2,
   X,
   UserRound
@@ -136,6 +138,13 @@ type RoomPresence = {
   typingUsers: string[];
 };
 
+type ConversationSummary = {
+  summary: string;
+  model: string;
+  generatedAt: string;
+  messageCount: number;
+};
+
 const API_ROOT = '/api';
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
@@ -178,6 +187,11 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [messagesRefreshing, setMessagesRefreshing] = useState(false);
+  const [showRefreshButton, setShowRefreshButton] = useState(false);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
@@ -378,8 +392,11 @@ function App() {
 
   function openRoom(roomId: string) {
     setSelectedRoomId(roomId);
+    setConversationSummary(null);
+    setShowRefreshButton(false);
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     setIsMenuOpen(false);
+    requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
   async function loadContacts(query = contactQuery) {
@@ -399,6 +416,37 @@ function App() {
     const data = await request<ChatMessage[]>(`/chat/rooms/${roomId}/messages`);
     setMessages(data);
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
+  }
+
+  async function refreshMessages() {
+    if (!selectedRoomId || messagesRefreshing) return;
+    setMessagesRefreshing(true);
+    try {
+      await loadMessages(selectedRoomId);
+      setStatus('대화창을 새로고침했습니다.');
+    } catch (error) {
+      setStatus(readableError(error, '대화창을 새로고침하지 못했습니다.'));
+    } finally {
+      setMessagesRefreshing(false);
+    }
+  }
+
+  function handleMessageScroll(event: UIEvent<HTMLDivElement>) {
+    setShowRefreshButton(event.currentTarget.scrollTop < 28 && messages.length > 0);
+  }
+
+  async function summarizeConversation() {
+    if (!selectedRoomId || summaryLoading) return;
+    setSummaryLoading(true);
+    try {
+      const data = await request<ConversationSummary>(`/chat/rooms/${selectedRoomId}/summary`, { method: 'POST' });
+      setConversationSummary(data);
+      setStatus('대화 내용을 요약했습니다.');
+    } catch (error) {
+      setStatus(readableError(error, '대화 요약을 생성하지 못했습니다.'));
+    } finally {
+      setSummaryLoading(false);
+    }
   }
 
   async function heartbeat() {
@@ -663,6 +711,8 @@ function App() {
     if (selectedRoomId) {
       loadMessages(selectedRoomId);
       loadPresence(selectedRoomId);
+      setConversationSummary(null);
+      setShowRefreshButton(false);
     }
   }, [selectedRoomId]);
 
@@ -818,6 +868,9 @@ function App() {
         transition={{ type: 'spring', stiffness: 260, damping: 34, mass: 0.85 }}
         style={{ pointerEvents: isMenuOpen ? 'auto' : 'none' }}
       >
+        <button className="menu-close-button" type="button" onClick={() => setIsMenuOpen(false)} title="친구 닫기">
+          <X size={18} aria-hidden />
+        </button>
         <section className="sidebar">
           <div className="profile-card">
             <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
@@ -862,37 +915,38 @@ function App() {
             </div>
             <div className="contact-list">
               {contacts.map((contact) => (
-                <button key={contact.email} onClick={() => openContactProfile(contact)} disabled={loading}>
-                  <div className="presence-avatar">
-                    <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
-                    <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
-                  </div>
-                  <span>
-                    <strong>{contact.name}</strong>
-                    <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
-                  </span>
-                  <ChevronRight size={16} aria-hidden />
-                </button>
+                <React.Fragment key={contact.email}>
+                  <button className={selectedProfile?.email === contact.email ? 'active' : ''} onClick={() => openContactProfile(contact)} disabled={loading}>
+                    <div className="presence-avatar">
+                      <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
+                      <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
+                    </div>
+                    <span>
+                      <strong>{contact.name}</strong>
+                      <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
+                    </span>
+                    <ChevronRight size={16} aria-hidden />
+                  </button>
+                  {selectedProfile?.email === contact.email && (
+                    <section className="contact-profile-inline">
+                      <div className="profile-card slim">
+                        <ProfileAvatar className="avatar" name={selectedProfile.name} imageUrl={selectedProfile.profileImageUrl} />
+                        <div>
+                          <h1>{selectedProfile.name}</h1>
+                          <p>{selectedProfile.email}</p>
+                          {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
+                        </div>
+                      </div>
+                      <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
+                        <MessageCircle size={17} aria-hidden />메시지
+                      </button>
+                      <ProfileHistoryList history={selectedProfile.history} />
+                    </section>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           </section>
-
-          {selectedProfile && (
-            <section className="panel-section public-profile-card">
-              <div className="profile-card slim">
-                <ProfileAvatar className="avatar" name={selectedProfile.name} imageUrl={selectedProfile.profileImageUrl} />
-                <div>
-                  <h1>{selectedProfile.name}</h1>
-                  <p>{selectedProfile.email}</p>
-                  {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
-                </div>
-              </div>
-              <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
-                <MessageCircle size={17} aria-hidden />메시지
-              </button>
-              <ProfileHistoryList history={selectedProfile.history} />
-            </section>
-          )}
 
           <section className="panel-section">
             <div className="section-title">
@@ -918,13 +972,15 @@ function App() {
             transition={{ type: 'spring', stiffness: 230, damping: 28 }}
           >
             <header className="conversation-header">
-              <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-              </button>
-              <button className="back-button" type="button" onClick={() => setSelectedRoomId('')} title="채팅방 목록으로 돌아가기">
-                <ArrowLeft size={19} aria-hidden />
-                <span>채팅방 목록</span>
-              </button>
+              <div className="header-navigation">
+                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
+                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+                </button>
+                <button className="back-button" type="button" onClick={() => setSelectedRoomId('')} title="채팅방 목록으로 돌아가기">
+                  <ArrowLeft size={19} aria-hidden />
+                  <span>채팅방 목록</span>
+                </button>
+              </div>
               <div>
                   <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
                   <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
@@ -939,12 +995,30 @@ function App() {
                   <CheckCircle2 size={15} aria-hidden />
                   {connected ? '실시간 연결' : '연결 대기'}
                 </span>
+                <button className="soft-action-button" onClick={summarizeConversation} disabled={!selectedRoomId || messages.length === 0 || summaryLoading} type="button">
+                  <Sparkles size={15} aria-hidden />{summaryLoading ? '요약 중' : 'GPT 요약'}
+                </button>
                 <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
                 <button className="ghost-icon-button" onClick={deleteRoom} disabled={!selectedRoomId || loading} title="채팅방 삭제"><Trash2 size={17} aria-hidden /></button>
               </div>
             </header>
 
-            <div className="message-list">
+            <div className="message-list" ref={messageListRef} onScroll={handleMessageScroll}>
+              {(showRefreshButton || messagesRefreshing) && (
+                <button className="refresh-messages-button" type="button" onClick={refreshMessages} disabled={messagesRefreshing}>
+                  <RefreshCcw size={15} aria-hidden />
+                  {messagesRefreshing ? '불러오는 중' : '대화창 새로고침'}
+                </button>
+              )}
+              {conversationSummary && (
+                <section className="summary-card">
+                  <div className="section-title">
+                    <span>대화 요약</span>
+                    <small>{conversationSummary.model} · {conversationSummary.messageCount}개</small>
+                  </div>
+                  <p>{conversationSummary.summary}</p>
+                </section>
+              )}
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
               {messages.map((message) => (
                 <motion.article
@@ -1004,9 +1078,11 @@ function App() {
             transition={{ type: 'spring', stiffness: 230, damping: 28 }}
           >
             <header className="directory-header">
-              <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-              </button>
+              <div className="header-navigation">
+                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
+                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+                </button>
+              </div>
               <div>
                 <p className="eyebrow">Kafka Talk</p>
                 <h2>채팅방</h2>
