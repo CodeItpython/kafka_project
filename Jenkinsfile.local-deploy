@@ -60,7 +60,7 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    IMAGE_TAG="${GIT_COMMIT:-local}"
+                    IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
                     BACKEND_IMAGE_MODE=local-jar FRONTEND_IMAGE_MODE=local-dist IMAGE_TAG="$IMAGE_TAG" scripts/docker-build.sh
                 '''
             }
@@ -70,7 +70,7 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    IMAGE_TAG="${GIT_COMMIT:-local}"
+                    IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
                     . scripts/prepare-jenkins-kubeconfig.sh
                     kubectl apply -k k8s
                     kubectl -n "$K8S_NAMESPACE" set image deployment/discovery-service discovery-service="kafka-discovery-service:${IMAGE_TAG}"
