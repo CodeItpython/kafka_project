@@ -6,7 +6,6 @@ pipeline {
     }
 
     triggers {
-        pollSCM('* * * * *')
         upstream(upstreamProjects: 'kafka-chat-main-ci', threshold: hudson.model.Result.SUCCESS)
     }
 
@@ -25,7 +24,7 @@ pipeline {
         stage('Verify Backend') {
             steps {
                 dir('backend') {
-                    sh './gradlew test'
+                    sh './gradlew test :discovery-service:bootJar :auth-service:bootJar'
                 }
             }
         }
@@ -62,7 +61,7 @@ pipeline {
                 sh '''
                     set -eu
                     IMAGE_TAG="${GIT_COMMIT:-local}"
-                    IMAGE_TAG="$IMAGE_TAG" scripts/docker-build.sh
+                    BACKEND_IMAGE_MODE=local-jar FRONTEND_IMAGE_MODE=local-dist IMAGE_TAG="$IMAGE_TAG" scripts/docker-build.sh
                 '''
             }
         }
