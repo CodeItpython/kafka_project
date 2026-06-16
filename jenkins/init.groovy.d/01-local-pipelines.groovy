@@ -37,10 +37,9 @@ def configurePipeline = { String jobName, String scriptPath, String branchSpec, 
     job.setDefinition(definition)
 
     job.removeProperty(PipelineTriggersJobProperty)
-    def triggers = [new SCMTrigger(pollSpec)]
-    if (upstreamJobName != null) {
-        triggers.add(new ReverseBuildTrigger(upstreamJobName, Result.SUCCESS))
-    }
+    def triggers = upstreamJobName == null
+        ? [new SCMTrigger(pollSpec)]
+        : [new ReverseBuildTrigger(upstreamJobName, Result.SUCCESS)]
 
     def triggerProperty = new PipelineTriggersJobProperty(triggers)
     job.addProperty(triggerProperty)
@@ -49,7 +48,8 @@ def configurePipeline = { String jobName, String scriptPath, String branchSpec, 
     }
 
     job.save()
-    println("Configured ${jobName} from ${scriptPath}, branch ${branchSpec}, Poll SCM ${pollSpec}")
+    def triggerLabel = upstreamJobName == null ? "Poll SCM ${pollSpec}" : "Upstream ${upstreamJobName}"
+    println("Configured ${jobName} from ${scriptPath}, branch ${branchSpec}, ${triggerLabel}")
 }
 
 configurePipeline('kafka-chat-ci', 'Jenkinsfile', ciBranchSpec)
