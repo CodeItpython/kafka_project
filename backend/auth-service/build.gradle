@@ -1,5 +1,7 @@
 apply plugin: 'org.graalvm.buildtools.native'
 
+ext['testcontainers.version'] = '1.21.3'
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -22,7 +24,13 @@ dependencies {
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'org.postgresql:postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:mongodb'
+    testImplementation 'org.testcontainers:elasticsearch'
+    testImplementation 'org.testcontainers:kafka'
 }
 
 graalvmNative {
@@ -35,4 +43,22 @@ graalvmNative {
             buildArgs.add('--enable-url-protocols=http,https')
         }
     }
+}
+
+tasks.matching { task -> task.name in ['processTestAot', 'compileAotTestJava', 'processAotTestResources'] }.configureEach {
+    enabled = false
+}
+
+tasks.withType(Test).configureEach {
+    def unixSocket = file('/var/run/docker.sock')
+    def dockerDesktopSocket = file("${System.getProperty('user.home')}/.docker/run/docker.sock")
+    if (dockerDesktopSocket.exists()) {
+        environment 'DOCKER_HOST', "unix://${dockerDesktopSocket.absolutePath}"
+        environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', dockerDesktopSocket.absolutePath
+    } else if (unixSocket.exists()) {
+        environment 'DOCKER_HOST', "unix://${unixSocket.absolutePath}"
+        environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', unixSocket.absolutePath
+    }
+    environment 'DOCKER_API_VERSION', '1.54'
+    systemProperty 'api.version', '1.54'
 }

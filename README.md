@@ -147,6 +147,27 @@ redis-cli keys 'state:*'
 redis-cli get 'state:unread:user@example.com:ROOM_ID'
 ```
 
+## Testcontainers 통합 테스트
+
+`auth-service`는 PostgreSQL, MongoDB, Elasticsearch, Redis, Kafka를 실제 Docker 컨테이너로 띄우는 통합 테스트를 포함합니다. 이 테스트는 주요 인프라 연결과 저장/검색/메시지 발행 경로가 깨지지 않았는지 확인합니다.
+
+실행 명령:
+
+```bash
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:test --tests com.kafka.auth.infra.InfrastructureIntegrationTest
+```
+
+검증 범위:
+
+- PostgreSQL: 사용자 계정 저장/조회
+- MongoDB: 채팅 메시지 원본 저장/조회
+- Elasticsearch: 검색 문서 색인/조회
+- Redis: 상태 key/value 저장/조회
+- Kafka: `chat-messages` 토픽 메시지 발행
+
+Docker Desktop 29 계열은 docker-java 기본 API 버전인 `1.32`로 `/info`를 호출하면 빈 Docker 정보를 돌려줄 수 있습니다. 그래서 테스트 태스크는 `api.version=1.54`와 Docker Desktop socket 경로를 명시해 Testcontainers가 실제 Docker daemon에 붙도록 설정합니다.
+
 ## GPT 대화 요약
 
 채팅방 안의 `GPT 요약` 버튼은 최근 텍스트 메시지를 백엔드에서 모은 뒤 OpenAI Responses API로 요약을 요청합니다.
