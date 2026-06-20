@@ -19,6 +19,7 @@ import com.kafka.auth.chat.repository.ChatMessageRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
+import com.kafka.auth.chat.search.ChatMessageSearchService;
 import com.kafka.auth.chat.service.ChatStateService.UserProfileSnapshot;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.UserAccountRepository;
@@ -55,6 +56,7 @@ public class ChatService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatMessageSearchRepository chatMessageSearchRepository;
+    private final ChatMessageSearchService chatMessageSearchService;
     private final UserAccountRepository userAccountRepository;
     private final KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
     private final SimpMessagingTemplate messagingTemplate;
@@ -68,6 +70,7 @@ public class ChatService {
             ChatRoomRepository chatRoomRepository,
             ChatMessageRepository chatMessageRepository,
             ChatMessageSearchRepository chatMessageSearchRepository,
+            ChatMessageSearchService chatMessageSearchService,
             UserAccountRepository userAccountRepository,
             KafkaTemplate<String, ChatMessageEvent> kafkaTemplate,
             SimpMessagingTemplate messagingTemplate,
@@ -80,6 +83,7 @@ public class ChatService {
         this.chatRoomRepository = chatRoomRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.chatMessageSearchRepository = chatMessageSearchRepository;
+        this.chatMessageSearchService = chatMessageSearchService;
         this.userAccountRepository = userAccountRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.messagingTemplate = messagingTemplate;
@@ -161,8 +165,8 @@ public class ChatService {
             return List.of();
         }
         try {
-            return chatMetricsService.recordSearch("elasticsearch", () -> chatMessageSearchRepository
-                            .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(query, query)
+            return chatMetricsService.recordSearch("elasticsearch", () -> chatMessageSearchService
+                            .search(query, 20)
                             .stream()
                             .filter(message -> canReadMessage(message.getId(), user))
                             .map(this::toMessageResponse)
@@ -205,8 +209,8 @@ public class ChatService {
 
         try {
             chatMetricsService.recordSearch("elasticsearch_suggestion", () -> {
-                chatMessageSearchRepository
-                        .findTop20ByContentContainingOrRoomNameContainingOrderByCreatedAtDesc(normalizedQuery, normalizedQuery)
+                chatMessageSearchService
+                        .suggestions(normalizedQuery, 20)
                         .stream()
                         .filter(message -> canReadMessage(message.getId(), user))
                         .forEach(message -> {

@@ -20,16 +20,16 @@ public class ChatMessageSearchDocument {
     @Field(type = FieldType.Keyword)
     private String roomId;
 
-    @Field(type = FieldType.Text)
+    @Field(type = FieldType.Search_As_You_Type, maxShingleSize = 3)
     private String roomName;
 
     @Field(type = FieldType.Keyword)
     private String senderEmail;
 
-    @Field(type = FieldType.Text)
+    @Field(type = FieldType.Search_As_You_Type, maxShingleSize = 3)
     private String senderName;
 
-    @Field(type = FieldType.Text)
+    @Field(type = FieldType.Search_As_You_Type, maxShingleSize = 3)
     private String content;
 
     @Field(type = FieldType.Date, format = DateFormat.date_time)
