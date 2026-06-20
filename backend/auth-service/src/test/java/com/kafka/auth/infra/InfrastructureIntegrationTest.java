@@ -1,0 +1,151 @@
+package com.kafka.auth.infra;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.kafka.auth.chat.dto.ChatMessageEvent;
+import com.kafka.auth.chat.model.ChatMessageDocument;
+import com.kafka.auth.chat.repository.ChatMessageRepository;
+import com.kafka.auth.chat.search.ChatMessageSearchDocument;
+import com.kafka.auth.chat.search.ChatMessageSearchRepository;
+import com.kafka.auth.model.AuthProvider;
+import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.repository.UserAccountRepository;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.elasticsearch.ElasticsearchContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
+import org.testcontainers.utility.DockerImageName;
+
+@SpringBootTest
+@Testcontainers(disabledWithoutDocker = true)
+class InfrastructureIntegrationTest {
+    private static final Path TEST_UPLOAD_ROOT = Path.of("build", "test-uploads", "testcontainers").toAbsolutePath();
+
+    @Container
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
+            .withDatabaseName("kafka_project_test")
+            .withUsername("kafka")
+            .withPassword("kafka");
+
+    @Container
+    static final MongoDBContainer mongodb = new MongoDBContainer(DockerImageName.parse("mongo:7"));
+
+    @Container
+    static final ElasticsearchContainer elasticsearch = new ElasticsearchContainer(
+            DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:8.15.5")
+    )
+            .withEnv("xpack.security.enabled", "false")
+            .withStartupTimeout(Duration.ofMinutes(2));
+
+    @Container
+    static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
+            .withExposedPorts(6379);
+
+    @Container
+    static final ConfluentKafkaContainer kafka = new ConfluentKafkaContainer(
+            DockerImageName.parse("confluentinc/cp-kafka:7.6.1")
+    );
+
+    @Autowired
+    private UserAccountRepository userAccountRepository;
+
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
+
+    @Autowired
+    private ChatMessageSearchRepository chatMessageSearchRepository;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
+
+    @DynamicPropertySource
+    static void registerProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.driver-class-name", postgres::getDriverClassName);
+        registry.add("spring.data.mongodb.uri", mongodb::getReplicaSetUrl);
+        registry.add("spring.elasticsearch.uris", () -> "http://" + elasticsearch.getHttpHostAddress());
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("spring.kafka.consumer.group-id", () -> "chat-service-test-" + UUID.randomUUID());
+        registry.add("eureka.client.enabled", () -> "false");
+        registry.add("app.dev.seed-users", () -> "false");
+        registry.add("app.storage.type", () -> "local");
+        registry.add("app.storage.local.root-path", TEST_UPLOAD_ROOT::toString);
+        registry.add("management.tracing.sampling.probability", () -> "0.0");
+    }
+
+    @Test
+    void infrastructureContainersSupportCoreReadWritePaths() throws Exception {
+        UserAccount savedUser = userAccountRepository.save(new UserAccount(
+                "testcontainers@example.com",
+                "테스트컨테이너",
+                "encoded-password",
+                AuthProvider.LOCAL
+        ));
+        assertThat(userAccountRepository.findByEmail(savedUser.getEmail())).isPresent();
+
+        ChatMessageDocument mongoMessage = chatMessageRepository.save(new ChatMessageDocument(
+                "mongo-" + UUID.randomUUID(),
+                "room-testcontainers",
+                "테스트 방",
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "몽고 저장 테스트 메시지",
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        ));
+        assertThat(chatMessageRepository.findById(mongoMessage.getId())).isPresent();
+
+        ChatMessageSearchDocument searchDocument = chatMessageSearchRepository.save(new ChatMessageSearchDocument(
+                "search-" + UUID.randomUUID(),
+                "room-testcontainers",
+                "검색 테스트 방",
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "엘라스틱 자동완성 테스트 메시지",
+                Instant.now()
+        ));
+        assertThat(chatMessageSearchRepository.findById(searchDocument.getId())).isPresent();
+
+        redisTemplate.opsForValue().set("testcontainers:health", "ok");
+        assertThat(redisTemplate.opsForValue().get("testcontainers:health")).isEqualTo("ok");
+
+        ChatMessageEvent event = new ChatMessageEvent(
+                "kafka-" + UUID.randomUUID(),
+                "room-testcontainers",
+                "카프카 테스트 방",
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "카프카 전송 테스트 메시지",
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        );
+        kafkaTemplate.send("chat-messages", event.roomId(), event).get();
+    }
+}
