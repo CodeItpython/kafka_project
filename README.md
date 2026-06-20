@@ -114,13 +114,16 @@ http://localhost:5601
 
 채팅 메시지의 원본 저장소는 MongoDB입니다. 메시지를 보내면 백엔드가 Kafka 이벤트를 발행하고, Kafka consumer가 메시지를 MongoDB에 저장한 뒤 `chat-messages` Elasticsearch 인덱스에도 색인합니다.
 
-즉 새 메시지는 consumer가 처리한 뒤 자동으로 검색 대상이 됩니다. 단, Elasticsearch 인덱스를 삭제하거나 새로 만들면 기존 MongoDB 메시지는 재색인 작업이 필요합니다.
+`chat-messages` 인덱스의 `content`, `roomName`, `senderName` 필드는 `search_as_you_type`으로 매핑합니다. 이 방식은 사용자가 검색어를 다 입력하기 전에도 prefix 기반 후보를 빠르게 찾기 위해 Elasticsearch가 `_2gram`, `_3gram`, `_index_prefix` 보조 필드를 자동으로 만드는 구조입니다.
+
+즉 새 메시지는 consumer가 처리한 뒤 자동으로 검색 대상이 됩니다. 기존 인덱스가 옛 `text` 매핑이면 백엔드 시작 시 검색 인덱스를 재생성하고 MongoDB의 메시지 원본을 다시 색인합니다. 메시지 원본은 MongoDB에 남아 있으므로 검색 인덱스는 언제든 재구성 가능한 읽기 모델입니다.
 
 확인 명령:
 
 ```bash
 curl 'http://localhost:9200/_cat/indices?v'
-curl 'http://localhost:9200/chat-messages/_search?q=content:검색어&pretty'
+curl 'http://localhost:9200/chat-messages/_mapping?pretty'
+curl 'http://localhost:9200/chat-messages/_search?pretty'
 ```
 
 ## Redis 캐시와 상태 관리
