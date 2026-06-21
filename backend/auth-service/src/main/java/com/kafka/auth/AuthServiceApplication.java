@@ -1,11 +1,16 @@
 package com.kafka.auth;
 
+import com.kafka.auth.outbox.OutboxRelayProperties;
 import org.springframework.boot.autoconfigure.data.elasticsearch.ReactiveElasticsearchRepositoriesAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
+@EnableScheduling
 @EnableDiscoveryClient
+@EnableConfigurationProperties(OutboxRelayProperties.class)
 @SpringBootApplication(exclude = ReactiveElasticsearchRepositoriesAutoConfiguration.class)
 public class AuthServiceApplication {
     public static void main(String[] args) {

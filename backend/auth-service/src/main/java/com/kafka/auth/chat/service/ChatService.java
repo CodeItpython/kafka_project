@@ -22,6 +22,7 @@ import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchService;
 import com.kafka.auth.chat.service.ChatStateService.UserProfileSnapshot;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.outbox.ChatMessageOutboxService;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -39,7 +40,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,12 +58,12 @@ public class ChatService {
     private final ChatMessageSearchRepository chatMessageSearchRepository;
     private final ChatMessageSearchService chatMessageSearchService;
     private final UserAccountRepository userAccountRepository;
-    private final KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatStateService chatStateService;
     private final ChatMetricsService chatMetricsService;
     private final ChatSummaryService chatSummaryService;
     private final ObjectStorageService objectStorageService;
+    private final ChatMessageOutboxService chatMessageOutboxService;
     private final String chatTopic;
 
     public ChatService(
@@ -72,12 +72,12 @@ public class ChatService {
             ChatMessageSearchRepository chatMessageSearchRepository,
             ChatMessageSearchService chatMessageSearchService,
             UserAccountRepository userAccountRepository,
-            KafkaTemplate<String, ChatMessageEvent> kafkaTemplate,
             SimpMessagingTemplate messagingTemplate,
             ChatStateService chatStateService,
             ChatMetricsService chatMetricsService,
             ChatSummaryService chatSummaryService,
             ObjectStorageService objectStorageService,
+            ChatMessageOutboxService chatMessageOutboxService,
             @Value("${app.chat.topic}") String chatTopic
     ) {
         this.chatRoomRepository = chatRoomRepository;
@@ -85,12 +85,12 @@ public class ChatService {
         this.chatMessageSearchRepository = chatMessageSearchRepository;
         this.chatMessageSearchService = chatMessageSearchService;
         this.userAccountRepository = userAccountRepository;
-        this.kafkaTemplate = kafkaTemplate;
         this.messagingTemplate = messagingTemplate;
         this.chatStateService = chatStateService;
         this.chatMetricsService = chatMetricsService;
         this.chatSummaryService = chatSummaryService;
         this.objectStorageService = objectStorageService;
+        this.chatMessageOutboxService = chatMessageOutboxService;
         this.chatTopic = chatTopic;
     }
 
@@ -289,7 +289,7 @@ public class ChatService {
         return chatStateService.roomPresence(roomId, participants, user.getEmail());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ChatMessageEvent publishMessage(String roomId, SendMessageRequest request, UserAccount user) {
         ChatRoom room = ensureRoomAccess(roomId, user);
         AttachmentRequest attachment = request.attachment();
@@ -309,14 +309,7 @@ public class ChatService {
                 attachment == null ? null : attachment.size(),
                 Instant.now()
         );
-        Timer.Sample sample = chatMetricsService.startTimer();
-        try {
-            kafkaTemplate.send(chatTopic, roomId, event);
-            chatMetricsService.recordKafkaPublishSuccess(sample, event);
-        } catch (RuntimeException exception) {
-            chatMetricsService.recordKafkaPublishFailure(sample, event);
-            throw exception;
-        }
+        chatMessageOutboxService.append(event, chatTopic);
         return event;
     }
 
@@ -388,6 +381,11 @@ public class ChatService {
     public void persistAndBroadcast(ChatMessageEvent event) {
         Timer.Sample consumeSample = chatMetricsService.startTimer();
         try {
+            if (chatMessageRepository.existsById(event.messageId())) {
+                chatMetricsService.recordKafkaConsumeSuccess(consumeSample, event);
+                log.debug("Skipped duplicate chat message event. messageId={}", event.messageId());
+                return;
+            }
             ChatMessageDocument savedMessage = chatMessageRepository.save(new ChatMessageDocument(
                     event.messageId(),
                     event.roomId(),

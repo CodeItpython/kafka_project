@@ -126,6 +126,44 @@ curl 'http://localhost:9200/chat-messages/_mapping?pretty'
 curl 'http://localhost:9200/chat-messages/_search?pretty'
 ```
 
+## Debezium Outbox Pattern
+
+채팅 메시지 전송은 이제 `KafkaTemplate.send()`를 컨트롤러 요청 흐름에서 바로 호출하지 않습니다. 백엔드는 같은 트랜잭션 안에서 PostgreSQL `outbox_events` 테이블에 이벤트를 먼저 저장하고, outbox relay가 이 테이블의 `PENDING` 이벤트를 Kafka `chat-messages` 토픽으로 발행합니다.
+
+흐름:
+
+```text
+사용자 메시지 전송
+-> PostgreSQL outbox_events 저장
+-> outbox relay가 Kafka 발행
+-> Kafka consumer가 MongoDB 원본 저장
+-> Elasticsearch 검색 색인
+-> Redis unread 증가
+-> WebSocket broadcast
+```
+
+이 구조를 쓰는 이유는 API 요청 중 Kafka가 잠깐 불안정해도 메시지 이벤트를 DB에 먼저 남겨두고 재시도할 수 있기 때문입니다. 운영에서는 Debezium Outbox Event Router가 읽기 쉬운 기본 컬럼명인 `id`, `aggregatetype`, `aggregateid`, `type`, `payload`, `timestamp`를 사용합니다. 현재 로컬 개발에서는 별도 Kafka Connect 없이 앱 내부 relay가 outbox를 발행합니다.
+
+주요 설정:
+
+```properties
+app.outbox.relay.enabled=true
+app.outbox.relay.fixed-delay-ms=1000
+app.outbox.relay.batch-size=20
+app.outbox.relay.max-attempts=10
+app.outbox.relay.send-timeout-ms=5000
+```
+
+Debezium Connect를 붙여서 CDC 방식으로 발행할 때는 앱 내부 relay 중복 발행을 막기 위해 `APP_OUTBOX_RELAY_ENABLED=false`로 둡니다.
+
+상태 확인 SQL:
+
+```sql
+select id, aggregatetype, aggregateid, type, status, attempts, created_at, published_at
+from outbox_events
+order by created_at desc;
+```
+
 ## Redis 캐시와 상태 관리
 
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.

@@ -9,6 +9,11 @@ import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.outbox.ChatMessageOutboxService;
+import com.kafka.auth.outbox.OutboxEvent;
+import com.kafka.auth.outbox.OutboxEventRepository;
+import com.kafka.auth.outbox.OutboxEventStatus;
+import com.kafka.auth.outbox.OutboxRelayService;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -75,6 +80,15 @@ class InfrastructureIntegrationTest {
     @Autowired
     private KafkaTemplate<String, ChatMessageEvent> kafkaTemplate;
 
+    @Autowired
+    private ChatMessageOutboxService chatMessageOutboxService;
+
+    @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
+    private OutboxRelayService outboxRelayService;
+
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -91,6 +105,8 @@ class InfrastructureIntegrationTest {
         registry.add("app.dev.seed-users", () -> "false");
         registry.add("app.storage.type", () -> "local");
         registry.add("app.storage.local.root-path", TEST_UPLOAD_ROOT::toString);
+        registry.add("app.outbox.relay.initial-delay-ms", () -> "600000");
+        registry.add("app.outbox.relay.fixed-delay-ms", () -> "600000");
         registry.add("management.tracing.sampling.probability", () -> "0.0");
     }
 
@@ -147,5 +163,30 @@ class InfrastructureIntegrationTest {
                 Instant.now()
         );
         kafkaTemplate.send("chat-messages", event.roomId(), event).get();
+
+        ChatMessageEvent outboxEvent = new ChatMessageEvent(
+                "outbox-" + UUID.randomUUID(),
+                "room-testcontainers",
+                "카프카 테스트 방",
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "outbox 발행 테스트 메시지",
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        );
+        chatMessageOutboxService.append(outboxEvent, "chat-messages");
+        OutboxEvent pendingEvent = outboxEventRepository.findAll()
+                .stream()
+                .filter(outbox -> outboxEvent.messageId().equals(outbox.getAggregateId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(pendingEvent.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+
+        assertThat(outboxRelayService.publishReadyEvents()).isGreaterThanOrEqualTo(1);
+        OutboxEvent publishedEvent = outboxEventRepository.findById(pendingEvent.getId()).orElseThrow();
+        assertThat(publishedEvent.getStatus()).isEqualTo(OutboxEventStatus.PUBLISHED);
     }
 }
