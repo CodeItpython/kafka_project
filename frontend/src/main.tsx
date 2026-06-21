@@ -26,9 +26,16 @@ import {
   X,
   UserRound
 } from 'lucide-react';
+import { nativeBridge } from './platform/nativeBridge';
+import { safeStorage } from './platform/safeStorage';
+import { AppProviders } from './ui/AppProviders';
+import { useOverlay } from './ui/OverlayProvider';
+import { useScrollLinkedPreview } from './ui/useScrollLinkedPreview';
+import { useScrollReveal } from './ui/useScrollReveal';
 import './styles.css';
 
 type Mode = 'login' | 'register' | 'email';
+type AuthStep = 'landing' | 'form';
 
 type User = {
   id: number;
@@ -154,7 +161,32 @@ const SAMPLE_USERS = [
   { email: 'hyejin@example.com', name: '혜진' }
 ];
 
+const LANDING_CARDS = [
+  {
+    title: '실시간 채팅',
+    description: 'Kafka 이벤트로 새 메시지가 바로 도착해요.',
+    tone: 'blue'
+  },
+  {
+    title: '프로필 히스토리',
+    description: '이름, 상태메시지, 이미지 변경 흐름을 추적해요.',
+    tone: 'cream'
+  },
+  {
+    title: '메시지 검색',
+    description: 'Elastic 기반으로 대화 내용을 빠르게 찾아요.',
+    tone: 'dark'
+  },
+  {
+    title: '웹뷰 감성 UI',
+    description: '스크롤과 프리뷰가 반응하는 앱 같은 화면이에요.',
+    tone: 'green'
+  }
+];
+
 function App() {
+  const overlay = useOverlay();
+  const [authStep, setAuthStep] = useState<AuthStep>('landing');
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState(SAMPLE_USERS[0].email);
   const [name, setName] = useState(SAMPLE_USERS[0].name);
@@ -162,7 +194,7 @@ function App() {
   const [code, setCode] = useState('');
   const [debugCode, setDebugCode] = useState('');
   const [status, setStatus] = useState('');
-  const [token, setToken] = useState(() => localStorage.getItem('accessToken') ?? '');
+  const [token, setToken] = useState(() => safeStorage.getString('accessToken') ?? '');
   const [user, setUser] = useState<User | null>(null);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
@@ -191,17 +223,51 @@ function App() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
+  const [activePreviewRoomId, setActivePreviewRoomId] = useState('');
+  const [previewCursor, setPreviewCursor] = useState({ visible: false, active: false, x: 0, y: 0 });
+  const chatShellRef = useRef<HTMLElement | null>(null);
+  const roomDirectoryRef = useRef<HTMLElement | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
-  const directRooms = rooms.filter((room) => room.type === 'DIRECT');
-  const groupRooms = rooms.filter((room) => room.type === 'GROUP');
+  const directRooms = useMemo(() => rooms.filter((room) => room.type === 'DIRECT'), [rooms]);
+  const groupRooms = useMemo(() => rooms.filter((room) => room.type === 'GROUP'), [rooms]);
+  const previewRooms = useMemo(() => [...groupRooms, ...directRooms], [groupRooms, directRooms]);
+  const activePreviewRoom = previewRooms.find((room) => room.id === activePreviewRoomId) ?? previewRooms[0] ?? null;
 
   const title = useMemo(() => {
     if (mode === 'register') return '계정 만들기';
     if (mode === 'email') return '이메일 인증 로그인';
     return '다시 오신 걸 환영해요';
   }, [mode]);
+
+  function movePreviewCursor(event: React.PointerEvent<HTMLElement>, active: boolean) {
+    if (event.pointerType === 'touch') return;
+    setPreviewCursor({
+      visible: true,
+      active,
+      x: event.clientX,
+      y: event.clientY
+    });
+  }
+
+  useScrollReveal(chatShellRef, [
+    Boolean(user),
+    isMenuOpen,
+    selectedRoomId,
+    contacts.length,
+    directRooms.length,
+    groupRooms.length,
+    messages.length,
+    searchResults.length,
+    Boolean(conversationSummary)
+  ]);
+
+  useScrollLinkedPreview(
+    roomDirectoryRef,
+    [previewRooms.map((room) => room.id).join('|')],
+    setActivePreviewRoomId
+  );
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const isFormData = init?.body instanceof FormData;
@@ -246,11 +312,13 @@ function App() {
   }
 
   function saveSession(data: AuthResponse) {
-    localStorage.setItem('accessToken', data.accessToken);
+    safeStorage.setString('accessToken', data.accessToken);
     setToken(data.accessToken);
     setUser(data.user);
     setProfileName(data.user.name);
     setProfileStatus(data.user.statusMessage ?? '');
+    nativeBridge.notifyLoginCompleted(data.user.id, data.user.provider);
+    nativeBridge.haptic('success');
     setStatus(`${data.user.name}님으로 로그인되었습니다.`);
   }
 
@@ -315,7 +383,7 @@ function App() {
       setProfileName(data.name);
       setProfileStatus(data.statusMessage ?? '');
     } catch {
-      localStorage.removeItem('accessToken');
+      safeStorage.remove('accessToken');
       setToken('');
       setUser(null);
     }
@@ -396,6 +464,8 @@ function App() {
     setShowRefreshButton(false);
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     setIsMenuOpen(false);
+    nativeBridge.notifyScreenOpened(`chat-room:${roomId}`);
+    nativeBridge.haptic('light');
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
@@ -655,7 +725,7 @@ function App() {
   }
 
   function logout() {
-    localStorage.removeItem('accessToken');
+    safeStorage.remove('accessToken');
     setToken('');
     setUser(null);
     setRooms([]);
@@ -671,6 +741,8 @@ function App() {
     setSelectedRoomId('');
     setIsMenuOpen(false);
     clearAttachment();
+    nativeBridge.notifyLogoutCompleted();
+    nativeBridge.haptic('medium');
     setStatus('로그아웃되었습니다.');
   }
 
@@ -678,11 +750,32 @@ function App() {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const kakaoToken = hashParams.get('access_token');
     if (kakaoToken) {
-      localStorage.setItem('accessToken', kakaoToken);
+      safeStorage.setString('accessToken', kakaoToken);
       setToken(kakaoToken);
       window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
+
+  useEffect(() => {
+    nativeBridge.notifyScreenOpened(user ? 'chat-home' : 'auth');
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (status) {
+      overlay.toast(status);
+    }
+  }, [overlay, status]);
+
+  useEffect(() => {
+    if (!activePreviewRoomId && previewRooms.length > 0) {
+      setActivePreviewRoomId(previewRooms[0].id);
+      return;
+    }
+
+    if (activePreviewRoomId && !previewRooms.some((room) => room.id === activePreviewRoomId)) {
+      setActivePreviewRoomId(previewRooms[0]?.id ?? '');
+    }
+  }, [activePreviewRoomId, previewRooms]);
 
   useEffect(() => {
     loadMe();
@@ -792,6 +885,10 @@ function App() {
   }, [selectedRoomId]);
 
   if (!user) {
+    if (authStep === 'landing') {
+      return <LandingPage onStart={() => setAuthStep('form')} />;
+    }
+
     return (
       <main className="auth-shell">
         <motion.section
@@ -800,6 +897,7 @@ function App() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
         >
+          <button className="auth-back-button" type="button" onClick={() => setAuthStep('landing')}>서비스 소개</button>
           <div className="auth-copy">
             <div className="brand-mark"><ShieldCheck size={25} aria-hidden /></div>
             <p className="eyebrow">Kafka Talk</p>
@@ -853,6 +951,7 @@ function App() {
 
   return (
     <motion.main
+      ref={chatShellRef}
       layout
       transition={{ layout: { type: 'spring', stiffness: 240, damping: 32 } }}
       className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}
@@ -872,91 +971,85 @@ function App() {
           <X size={18} aria-hidden />
         </button>
         <section className="sidebar">
-          <div className="profile-card">
-            <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
-            <div>
-              <h1>Kafka Talk</h1>
-              <p>{user.name} · {user.provider}</p>
-              {user.statusMessage && <small>{user.statusMessage}</small>}
+          <div className="sidebar-scroll">
+            <div className="profile-card">
+              <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
+              <div>
+                <h1>Kafka Talk</h1>
+                <p>{user.name} · {user.provider}</p>
+                {user.statusMessage && <small>{user.statusMessage}</small>}
+              </div>
             </div>
+
+            <form className="profile-editor" onSubmit={saveProfile}>
+              <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
+              <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
+              <div className="profile-actions">
+                <label className="profile-image-button" title="프로필 이미지 변경">
+                  <Camera size={16} aria-hidden />
+                  <input type="file" accept="image/*" onChange={(event) => uploadProfileImage(event.target.files?.[0] ?? null)} />
+                </label>
+                <button type="submit" disabled={loading}><Save size={16} aria-hidden />저장</button>
+              </div>
+            </form>
+
+            {myProfile && myProfile.history.length > 0 && (
+              <section className="panel-section compact-history">
+                <SectionHeader title="내 프로필 히스토리" meta={myProfile.history.length} />
+                <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
+              </section>
+            )}
+
+            <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
+              <Search size={17} aria-hidden />
+              <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
+            </form>
+
+            <section className="panel-section">
+              <SectionHeader title="친구" meta={contacts.length} />
+              <div className="contact-list">
+                {contacts.map((contact, index) => (
+                  <React.Fragment key={contact.email}>
+                    <EntityListItem
+                      active={selectedProfile?.email === contact.email}
+                      disabled={loading}
+                      accentIndex={index}
+                      leading={(
+                        <div className="presence-avatar">
+                          <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
+                          <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
+                        </div>
+                      )}
+                      title={contact.name}
+                      description={contact.statusMessage || (contact.online ? '온라인' : contact.email)}
+                      trailing={<ChevronRight size={16} aria-hidden />}
+                      onPointerMove={(event) => movePreviewCursor(event, true)}
+                      onPointerLeave={() => setPreviewCursor((current) => ({ ...current, visible: false, active: false }))}
+                      onClick={() => openContactProfile(contact)}
+                    />
+                    {selectedProfile?.email === contact.email && (
+                      <ContactProfileCard
+                        profile={selectedProfile}
+                        loading={loading}
+                        onMessage={() => openDirectFromProfile(selectedProfile)}
+                      />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel-section">
+              <SectionHeader title="1:1 대화" meta={directRooms.length} />
+              <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onCursorMove={movePreviewCursor} onCursorLeave={() => setPreviewCursor((current) => ({ ...current, visible: false, active: false }))} onSelect={openRoom} />
+            </section>
           </div>
 
-          <form className="profile-editor" onSubmit={saveProfile}>
-            <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
-            <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
-            <div className="profile-actions">
-              <label className="profile-image-button" title="프로필 이미지 변경">
-                <Camera size={16} aria-hidden />
-                <input type="file" accept="image/*" onChange={(event) => uploadProfileImage(event.target.files?.[0] ?? null)} />
-              </label>
-              <button type="submit" disabled={loading}><Save size={16} aria-hidden />저장</button>
-            </div>
-          </form>
-
-          {myProfile && myProfile.history.length > 0 && (
-            <section className="panel-section compact-history">
-              <div className="section-title">
-                <span>내 프로필 히스토리</span>
-                <small>{myProfile.history.length}</small>
-              </div>
-              <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
-            </section>
-          )}
-
-          <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
-            <Search size={17} aria-hidden />
-            <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
-          </form>
-
-          <section className="panel-section">
-            <div className="section-title">
-              <span>친구</span>
-              <small>{contacts.length}</small>
-            </div>
-            <div className="contact-list">
-              {contacts.map((contact) => (
-                <React.Fragment key={contact.email}>
-                  <button className={selectedProfile?.email === contact.email ? 'active' : ''} onClick={() => openContactProfile(contact)} disabled={loading}>
-                    <div className="presence-avatar">
-                      <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
-                      <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
-                    </div>
-                    <span>
-                      <strong>{contact.name}</strong>
-                      <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
-                    </span>
-                    <ChevronRight size={16} aria-hidden />
-                  </button>
-                  {selectedProfile?.email === contact.email && (
-                    <section className="contact-profile-inline">
-                      <div className="profile-card slim">
-                        <ProfileAvatar className="avatar" name={selectedProfile.name} imageUrl={selectedProfile.profileImageUrl} />
-                        <div>
-                          <h1>{selectedProfile.name}</h1>
-                          <p>{selectedProfile.email}</p>
-                          {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
-                        </div>
-                      </div>
-                      <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
-                        <MessageCircle size={17} aria-hidden />메시지
-                      </button>
-                      <ProfileHistoryList history={selectedProfile.history} />
-                    </section>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-section">
-            <div className="section-title">
-              <span>1:1 대화</span>
-              <small>{directRooms.length}</small>
-            </div>
-            <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-          </section>
-
-          <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+          <div className="sidebar-footer">
+            <UiButton className="logout-button" variant="muted" onClick={logout}>
+              <LogOut size={17} aria-hidden />로그아웃
+            </UiButton>
+          </div>
         </section>
       </motion.aside>
 
@@ -1012,10 +1105,7 @@ function App() {
               )}
               {conversationSummary && (
                 <section className="summary-card">
-                  <div className="section-title">
-                    <span>대화 요약</span>
-                    <small>{conversationSummary.model} · {conversationSummary.messageCount}개</small>
-                  </div>
+                  <SectionHeader title="대화 요약" meta={`${conversationSummary.model} · ${conversationSummary.messageCount}개`} />
                   <p>{conversationSummary.summary}</p>
                 </section>
               )}
@@ -1069,6 +1159,7 @@ function App() {
           </motion.section>
         ) : (
           <motion.section
+            ref={roomDirectoryRef}
             key="rooms"
             className="room-directory"
             layout
@@ -1077,71 +1168,85 @@ function App() {
             exit={{ opacity: 0, x: -18 }}
             transition={{ type: 'spring', stiffness: 230, damping: 28 }}
           >
-            <header className="directory-header">
-              <div className="header-navigation">
-                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-                </button>
-              </div>
-              <div>
-                <p className="eyebrow">Kafka Talk</p>
-                <h2>채팅방</h2>
-                <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
-              </div>
-            </header>
+            <div className="room-preview-layout">
+              <RoomPreviewPanel room={activePreviewRoom} totalCount={previewRooms.length} />
 
-            <section className="directory-section">
-              <div className="section-title">
-                <span>그룹 채팅</span>
-                <small>{groupRooms.length}</small>
-              </div>
-              <form className="room-create" onSubmit={createRoom}>
-                <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
-                <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
-                <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
-              </form>
-              <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
-                <Search size={17} aria-hidden />
-                <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
-              </form>
-              <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
-              <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-            </section>
+              <div
+                className={cn('room-preview-list', previewCursor.visible && 'cursor-active')}
+                onPointerMove={(event) => {
+                  movePreviewCursor(event, false);
+                }}
+                onPointerLeave={() => setPreviewCursor((current) => ({ ...current, visible: false, active: false }))}
+              >
+                <header className="directory-header">
+                  <div className="header-navigation">
+                    <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
+                      {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+                    </button>
+                  </div>
+                  <div>
+                    <p className="eyebrow">Kafka Talk</p>
+                    <h2>채팅방</h2>
+                    <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
+                  </div>
+                </header>
 
-            <section className="directory-section">
-              <div className="section-title">
-                <span>최근 1:1 대화</span>
-                <small>{directRooms.length}</small>
-              </div>
-              <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
-            </section>
+                <section className="directory-section">
+                  <SectionHeader title="그룹 채팅" meta={groupRooms.length} />
+                  <form className="room-create" onSubmit={createRoom}>
+                    <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
+                    <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
+                    <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
+                  </form>
+                  <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
+                    <Search size={17} aria-hidden />
+                    <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
+                  </form>
+                  <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
+                  <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} previewRoomId={activePreviewRoomId} onPreview={setActivePreviewRoomId} onCursorMove={movePreviewCursor} onCursorLeave={(event) => movePreviewCursor(event, false)} onSelect={openRoom} />
+                </section>
 
-            <section className="directory-section">
-              <div className="section-title">
-                <span>메시지 검색</span>
-                <small>Elastic</small>
-              </div>
-              <form className="search-row compact" onSubmit={searchMessages}>
-                <Search size={17} aria-hidden />
-                <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
-              </form>
-              <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
-              <div className="search-results">
-                {searchResults.map((message) => (
-                  <button key={message.id} onClick={() => openRoom(message.roomId)}>
-                    <span>{message.roomName}</span>
-                    <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
-                    <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
-                  </button>
-                ))}
-                {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
-              </div>
-            </section>
+                <section className="directory-section">
+                  <SectionHeader title="최근 1:1 대화" meta={directRooms.length} />
+                  <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} previewRoomId={activePreviewRoomId} onPreview={setActivePreviewRoomId} onCursorMove={movePreviewCursor} onCursorLeave={(event) => movePreviewCursor(event, false)} onSelect={openRoom} />
+                </section>
 
-            {status && <p className="notice">{status}</p>}
+                <section className="directory-section">
+                  <SectionHeader title="메시지 검색" meta="Elastic" />
+                  <form className="search-row compact" onSubmit={searchMessages}>
+                    <Search size={17} aria-hidden />
+                    <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
+                  </form>
+                  <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
+                  <div className="search-results">
+                    {searchResults.map((message) => (
+                      <button key={message.id} onClick={() => openRoom(message.roomId)}>
+                        <span>{message.roomName}</span>
+                        <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
+                        <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
+                      </button>
+                    ))}
+                    {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
+                  </div>
+                </section>
+
+                {status && <p className="notice">{status}</p>}
+              </div>
+
+            </div>
           </motion.section>
         )}
       </AnimatePresence>
+      <span
+        className={cn('preview-cursor', previewCursor.visible && 'visible', previewCursor.active && 'active')}
+        style={{
+          '--cursor-x': `${previewCursor.x}px`,
+          '--cursor-y': `${previewCursor.y}px`
+        } as React.CSSProperties}
+        aria-hidden
+      >
+        열기
+      </span>
     </motion.main>
   );
 }
@@ -1166,6 +1271,291 @@ function SuggestionList({
         </button>
       ))}
     </div>
+  );
+}
+
+function LandingPage({ onStart }: { onStart: () => void }) {
+  const [dragX, setDragX] = useState(0);
+  const [dragState, setDragState] = useState<{
+    active: boolean;
+    startX: number;
+    originX: number;
+    cursorVisible: boolean;
+    cursorX: number;
+    cursorY: number;
+  }>({
+    active: false,
+    startX: 0,
+    originX: 0,
+    cursorVisible: false,
+    cursorX: 0,
+    cursorY: 0
+  });
+
+  function clampDrag(value: number) {
+    return Math.max(-420, Math.min(80, value));
+  }
+
+  function getLocalPointer(event: React.PointerEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+  return (
+    <main className="landing-shell">
+      <section className="landing-hero">
+        <nav className="landing-nav" aria-label="서비스 소개">
+          <strong>Kafka Talk</strong>
+          <button type="button" onClick={onStart}>로그인</button>
+        </nav>
+
+        <div className="landing-grid">
+          <motion.div
+            className="landing-copy"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: 'easeOut' }}
+          >
+            <p className="eyebrow">WebView-like chat experience</p>
+            <h1>톡톡 튀는 대화 경험을 Kafka 위에 올립니다.</h1>
+            <p>친구 목록, 실시간 메시지, 검색, 프로필 변경 흐름까지 하나의 가벼운 웹앱에서 자연스럽게 이어집니다.</p>
+            <div className="landing-actions">
+              <button type="button" onClick={onStart}>시작하기</button>
+              <span>카드를 드래그해서 기능을 둘러보세요</span>
+            </div>
+          </motion.div>
+
+          <motion.aside
+            className="landing-preview"
+            initial={{ opacity: 0, scale: 0.96, rotate: -1 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
+          >
+            <div className="landing-preview-window">
+              <span className="landing-preview-dot" />
+              <span className="landing-preview-dot" />
+              <span className="landing-preview-dot" />
+            </div>
+            <div className="landing-message-card mine">민지님이 입력 중...</div>
+            <div className="landing-message-card">오늘 저녁에 Kafka Talk에서 얘기해요.</div>
+            <div className="landing-message-card accent">새 메시지 3개</div>
+          </motion.aside>
+        </div>
+      </section>
+
+      <section
+        className={cn('landing-drag-section', dragState.active && 'dragging')}
+        onPointerMove={(event) => {
+          const pointer = getLocalPointer(event);
+          setDragState((current) => {
+            const next = {
+              ...current,
+              cursorVisible: true,
+              cursorX: pointer.x,
+              cursorY: pointer.y
+            };
+
+            if (!current.active) return next;
+
+            const nextX = clampDrag(current.originX + event.clientX - current.startX);
+            setDragX(nextX);
+            return next;
+          });
+        }}
+        onPointerLeave={() => setDragState((current) => ({ ...current, active: false, cursorVisible: false }))}
+        onPointerUp={() => setDragState((current) => ({ ...current, active: false }))}
+      >
+        <div className="landing-section-heading">
+          <h2>서비스를 손으로 넘겨보세요</h2>
+          <p>스크롤과 드래그가 살아있는 첫 화면으로 앱 같은 감각을 만듭니다.</p>
+        </div>
+        <div
+          className="landing-card-track"
+          style={{ transform: `translate3d(${dragX}px, 0, 0)` }}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const section = event.currentTarget.closest<HTMLElement>('.landing-drag-section');
+            const rect = section?.getBoundingClientRect();
+            setDragState({
+              active: true,
+              startX: event.clientX,
+              originX: dragX,
+              cursorVisible: true,
+              cursorX: rect ? event.clientX - rect.left : 0,
+              cursorY: rect ? event.clientY - rect.top : 0
+            });
+          }}
+        >
+          {LANDING_CARDS.map((card, index) => (
+            <article className={cn('landing-feature-card', `tone-${card.tone}`)} key={card.title}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <h3>{card.title}</h3>
+              <p>{card.description}</p>
+            </article>
+          ))}
+        </div>
+        <span
+          className={cn('landing-drag-cursor', dragState.cursorVisible && 'visible', dragState.active && 'grabbing')}
+          style={{
+            '--cursor-x': `${dragState.cursorX}px`,
+            '--cursor-y': `${dragState.cursorY}px`
+          } as React.CSSProperties}
+          aria-hidden
+        >
+          {dragState.active ? '끌기' : 'Drag'}
+        </span>
+      </section>
+    </main>
+  );
+}
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+function UiButton({
+  children,
+  className,
+  variant = 'primary',
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'muted' | 'ghost';
+}) {
+  return (
+    <button className={cn('ui-button', `ui-button-${variant}`, className)} type="button" {...props}>
+      {children}
+    </button>
+  );
+}
+
+function SectionHeader({
+  title,
+  meta
+}: {
+  title: string;
+  meta: string | number;
+}) {
+  return (
+    <div className="section-title">
+      <span>{title}</span>
+      <small>{meta}</small>
+    </div>
+  );
+}
+
+function EntityListItem({
+  active = false,
+  disabled = false,
+  accentIndex = 0,
+  leading,
+  title,
+  description,
+  trailing,
+  onClick,
+  onFocus,
+  onMouseEnter,
+  onPointerMove,
+  onPointerLeave,
+  previewId
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  accentIndex?: number;
+  leading: React.ReactNode;
+  title: string;
+  description: string | null;
+  trailing?: React.ReactNode;
+  onClick: () => void;
+  onFocus?: () => void;
+  onMouseEnter?: () => void;
+  onPointerMove?: (event: React.PointerEvent<HTMLElement>) => void;
+  onPointerLeave?: (event: React.PointerEvent<HTMLElement>) => void;
+  previewId?: string;
+}) {
+  return (
+    <button
+      className={cn('entity-list-item', `accent-${accentIndex % 5}`, active && 'active')}
+      data-preview-id={previewId}
+      onClick={onClick}
+      onFocus={onFocus}
+      onMouseEnter={onMouseEnter}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      disabled={disabled}
+      type="button"
+    >
+      <span className="entity-list-leading">{leading}</span>
+      <span className="entity-list-copy">
+        <strong>{title}</strong>
+        {description && <small>{description}</small>}
+      </span>
+      {trailing && <span className="entity-list-trailing">{trailing}</span>}
+    </button>
+  );
+}
+
+function RoomPreviewPanel({
+  room,
+  totalCount
+}: {
+  room: ChatRoom | null;
+  totalCount: number;
+}) {
+  const previewLetter = room?.type === 'DIRECT' ? '@' : '#';
+  const previewTitle = room?.name ?? '채팅방을 선택하세요';
+  const previewDescription = room?.type === 'DIRECT'
+    ? '1:1 대화를 바로 이어갈 수 있어요.'
+    : room?.description || '그룹 채팅방에서 팀 대화를 시작해보세요.';
+
+  return (
+    <aside className="room-preview-panel">
+      <div className="room-preview-symbol" aria-hidden>{previewLetter}</div>
+      <div className="room-preview-copy">
+        <span>{room?.type === 'DIRECT' ? 'Direct' : 'Group'} Preview</span>
+        <h3>{previewTitle}</h3>
+        <p>{previewDescription}</p>
+      </div>
+      <dl className="room-preview-meta">
+        <div>
+          <dt>전체 방</dt>
+          <dd>{totalCount}</dd>
+        </div>
+        <div>
+          <dt>읽지 않음</dt>
+          <dd>{room?.unreadCount ?? 0}</dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
+
+function ContactProfileCard({
+  profile,
+  loading,
+  onMessage
+}: {
+  profile: UserProfile;
+  loading: boolean;
+  onMessage: () => void;
+}) {
+  return (
+    <section className="contact-profile-inline">
+      <div className="profile-card slim">
+        <ProfileAvatar className="avatar" name={profile.name} imageUrl={profile.profileImageUrl} />
+        <div>
+          <h1>{profile.name}</h1>
+          <p>{profile.email}</p>
+          {profile.statusMessage && <small>{profile.statusMessage}</small>}
+        </div>
+      </div>
+      <UiButton className="contact-message-button" onClick={onMessage} disabled={loading}>
+        <MessageCircle size={17} aria-hidden />메시지
+      </UiButton>
+      <ProfileHistoryList history={profile.history} />
+    </section>
   );
 }
 
@@ -1207,10 +1597,18 @@ function ProfileHistoryList({ history }: { history: ProfileHistory[] }) {
 function RoomList({
   rooms,
   selectedRoomId,
+  previewRoomId,
+  onPreview,
+  onCursorMove,
+  onCursorLeave,
   onSelect
 }: {
   rooms: ChatRoom[];
   selectedRoomId: string;
+  previewRoomId?: string;
+  onPreview?: (roomId: string) => void;
+  onCursorMove?: (event: React.PointerEvent<HTMLElement>, active: boolean) => void;
+  onCursorLeave?: (event: React.PointerEvent<HTMLElement>) => void;
   onSelect: (roomId: string) => void;
 }) {
   if (rooms.length === 0) {
@@ -1218,15 +1616,22 @@ function RoomList({
   }
   return (
     <div className="room-list">
-      {rooms.map((room) => (
-        <button key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'} onClick={() => onSelect(room.id)}>
-          {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
-          <span>
-            <strong>{room.name}</strong>
-            <small>{room.type === 'DIRECT' ? '개인 메시지' : room.description}</small>
-          </span>
-          {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
-        </button>
+      {rooms.map((room, index) => (
+        <EntityListItem
+          key={room.id}
+          active={room.id === selectedRoomId || room.id === previewRoomId}
+          accentIndex={index}
+          leading={room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
+          title={room.name}
+          description={room.type === 'DIRECT' ? '개인 메시지' : room.description}
+          trailing={room.unreadCount > 0 ? <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i> : undefined}
+          previewId={room.id}
+          onFocus={() => onPreview?.(room.id)}
+          onMouseEnter={() => onPreview?.(room.id)}
+          onPointerMove={(event) => onCursorMove?.(event, true)}
+          onPointerLeave={onCursorLeave}
+          onClick={() => onSelect(room.id)}
+        />
       ))}
     </div>
   );
@@ -1234,6 +1639,8 @@ function RoomList({
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <AppProviders>
+      <App />
+    </AppProviders>
   </React.StrictMode>
 );
