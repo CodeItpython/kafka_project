@@ -1239,7 +1239,10 @@ function App() {
       </AnimatePresence>
       <span
         className={cn('preview-cursor', previewCursor.visible && 'visible', previewCursor.active && 'active')}
-        style={{ transform: `translate3d(${previewCursor.x}px, ${previewCursor.y}px, 0)` }}
+        style={{
+          '--cursor-x': `${previewCursor.x}px`,
+          '--cursor-y': `${previewCursor.y}px`
+        } as React.CSSProperties}
         aria-hidden
       >
         열기
@@ -1396,7 +1399,10 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         </div>
         <span
           className={cn('landing-drag-cursor', dragState.cursorVisible && 'visible', dragState.active && 'grabbing')}
-          style={{ left: dragState.cursorX, top: dragState.cursorY }}
+          style={{
+            '--cursor-x': `${dragState.cursorX}px`,
+            '--cursor-y': `${dragState.cursorY}px`
+          } as React.CSSProperties}
           aria-hidden
         >
           {dragState.active ? '끌기' : 'Drag'}
