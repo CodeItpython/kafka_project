@@ -4,11 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.model.ChatMessageDocument;
+import com.kafka.auth.chat.model.ChatRoom;
 import com.kafka.auth.chat.repository.ChatMessageRepository;
+import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.notification.NotificationDtos.NotificationListResponse;
+import com.kafka.auth.notification.NotificationService;
+import com.kafka.auth.notification.UserNotificationRepository;
 import com.kafka.auth.outbox.ChatMessageOutboxService;
 import com.kafka.auth.outbox.OutboxEvent;
 import com.kafka.auth.outbox.OutboxEventRepository;
@@ -18,6 +23,7 @@ import com.kafka.auth.repository.UserAccountRepository;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +78,9 @@ class InfrastructureIntegrationTest {
     private ChatMessageRepository chatMessageRepository;
 
     @Autowired
+    private ChatRoomRepository chatRoomRepository;
+
+    @Autowired
     private ChatMessageSearchRepository chatMessageSearchRepository;
 
     @Autowired
@@ -88,6 +97,12 @@ class InfrastructureIntegrationTest {
 
     @Autowired
     private OutboxRelayService outboxRelayService;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private UserNotificationRepository userNotificationRepository;
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
@@ -107,6 +122,7 @@ class InfrastructureIntegrationTest {
         registry.add("app.storage.local.root-path", TEST_UPLOAD_ROOT::toString);
         registry.add("app.outbox.relay.initial-delay-ms", () -> "600000");
         registry.add("app.outbox.relay.fixed-delay-ms", () -> "600000");
+        registry.add("app.push.fcm.enabled", () -> "false");
         registry.add("management.tracing.sampling.probability", () -> "0.0");
     }
 
@@ -188,5 +204,43 @@ class InfrastructureIntegrationTest {
         assertThat(outboxRelayService.publishReadyEvents()).isGreaterThanOrEqualTo(1);
         OutboxEvent publishedEvent = outboxEventRepository.findById(pendingEvent.getId()).orElseThrow();
         assertThat(publishedEvent.getStatus()).isEqualTo(OutboxEventStatus.PUBLISHED);
+
+        UserAccount recipient = userAccountRepository.save(new UserAccount(
+                "recipient@example.com",
+                "수신자",
+                "encoded-password",
+                AuthProvider.LOCAL
+        ));
+        ChatRoom notificationRoom = chatRoomRepository.save(new ChatRoom(
+                "알림 테스트 방",
+                "알림 저장 검증",
+                savedUser.getEmail()
+        ));
+        ChatMessageEvent notificationEvent = new ChatMessageEvent(
+                "notification-" + UUID.randomUUID(),
+                notificationRoom.getId(),
+                notificationRoom.getName(),
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "알림 저장 테스트 메시지",
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        );
+
+        notificationService.createChatMessageNotifications(notificationEvent, Set.of(recipient.getEmail()));
+        NotificationListResponse notificationList = notificationService.notifications(recipient);
+        assertThat(notificationList.unreadCount()).isEqualTo(1);
+        assertThat(notificationList.notifications())
+                .singleElement()
+                .satisfies(notification -> {
+                    assertThat(notification.targetRoomId()).isEqualTo(notificationRoom.getId());
+                    assertThat(notification.body()).isEqualTo("알림 저장 테스트 메시지");
+                });
+
+        notificationService.markAllRead(recipient);
+        assertThat(userNotificationRepository.countByRecipientEmailAndReadAtIsNull(recipient.getEmail())).isZero();
     }
 }
