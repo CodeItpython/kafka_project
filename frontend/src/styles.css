@@ -1274,7 +1274,8 @@ input:focus {
   min-width: 0;
   min-height: 100%;
   position: relative;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .room-preview-panel {
