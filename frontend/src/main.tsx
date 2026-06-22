@@ -1,10 +1,14 @@
 import React, { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
+import { initializeApp, getApps } from 'firebase/app';
+import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
   AtSign,
+  Bell,
+  BellRing,
   Camera,
   CheckCircle2,
   ChevronRight,
@@ -145,7 +149,39 @@ type ConversationSummary = {
   messageCount: number;
 };
 
+type UserNotification = {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  actorEmail: string;
+  actorName: string;
+  targetRoomId: string | null;
+  targetMessageId: string | null;
+  read: boolean;
+  createdAt: string;
+};
+
+type NotificationListResponse = {
+  notifications: UserNotification[];
+  unreadCount: number;
+};
+
+type NotificationSubscriptionResponse = {
+  topic: string;
+  unreadCount: number;
+};
+
 const API_ROOT = '/api';
+const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '';
+const FIREBASE_CONFIG = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? ''
+};
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
   { email: 'minji@example.com', name: '민지' },
@@ -153,6 +189,16 @@ const SAMPLE_USERS = [
   { email: 'seoyeon@example.com', name: '서연' },
   { email: 'hyejin@example.com', name: '혜진' }
 ];
+
+function canUseFirebaseMessaging() {
+  return Boolean(
+    FIREBASE_VAPID_KEY
+    && FIREBASE_CONFIG.apiKey
+    && FIREBASE_CONFIG.projectId
+    && FIREBASE_CONFIG.messagingSenderId
+    && FIREBASE_CONFIG.appId
+  );
+}
 
 function App() {
   const [mode, setMode] = useState<Mode>('login');
@@ -188,6 +234,10 @@ function App() {
   const [connected, setConnected] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [notificationTopic, setNotificationTopic] = useState('');
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [pushStatus, setPushStatus] = useState('브라우저 알림 대기');
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
@@ -460,6 +510,67 @@ function App() {
     setPresence(data);
   }
 
+  async function loadNotifications() {
+    if (!token) return;
+    const data = await request<NotificationListResponse>('/notifications');
+    setNotifications(data.notifications);
+    setNotificationUnreadCount(data.unreadCount);
+  }
+
+  async function loadNotificationSubscription() {
+    if (!token) return;
+    const data = await request<NotificationSubscriptionResponse>('/notifications/subscription');
+    setNotificationTopic(data.topic);
+    setNotificationUnreadCount(data.unreadCount);
+  }
+
+  async function markAllNotificationsRead() {
+    const data = await request<NotificationListResponse>('/notifications/read-all', { method: 'PATCH' });
+    setNotifications(data.notifications);
+    setNotificationUnreadCount(data.unreadCount);
+  }
+
+  async function registerBrowserPush() {
+    if (!canUseFirebaseMessaging()) {
+      setPushStatus('Firebase 설정 없음');
+      return;
+    }
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      setPushStatus('브라우저 알림 미지원');
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      setPushStatus('브라우저 알림 꺼짐');
+      return;
+    }
+    try {
+      const supported = await isSupported();
+      if (!supported) {
+        setPushStatus('FCM 미지원 브라우저');
+        return;
+      }
+      const app = getApps().length > 0 ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
+      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      const messaging = getMessaging(app);
+      const pushToken = await getToken(messaging, {
+        vapidKey: FIREBASE_VAPID_KEY,
+        serviceWorkerRegistration: registration
+      });
+      if (!pushToken) {
+        setPushStatus('푸시 토큰 없음');
+        return;
+      }
+      await request<void>('/notifications/push-tokens', {
+        method: 'POST',
+        body: JSON.stringify({ token: pushToken, platform: 'WEB' })
+      });
+      setPushStatus('브라우저 알림 켜짐');
+    } catch {
+      setPushStatus('푸시 연결 실패');
+    }
+  }
+
   function pushTyping(typing: boolean) {
     if (!selectedRoomId || !token) return;
     request<void>(`/chat/rooms/${selectedRoomId}/typing`, {
@@ -666,6 +777,10 @@ function App() {
     setPresence({ onlineUsers: [], typingUsers: [] });
     setMyProfile(null);
     setSelectedProfile(null);
+    setNotifications([]);
+    setNotificationTopic('');
+    setNotificationUnreadCount(0);
+    setPushStatus('브라우저 알림 대기');
     setProfileName('');
     setProfileStatus('');
     setSelectedRoomId('');
@@ -693,9 +808,16 @@ function App() {
       loadRooms('');
       loadContacts('');
       loadMyProfile().catch(() => undefined);
+      loadNotifications().catch(() => undefined);
+      loadNotificationSubscription().catch(() => undefined);
       heartbeat().catch(() => undefined);
     }
   }, [user?.email]);
+
+  useEffect(() => {
+    if (!token || !user) return;
+    registerBrowserPush().catch(() => setPushStatus('푸시 연결 실패'));
+  }, [token, user?.email]);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -790,6 +912,29 @@ function App() {
       client.deactivate();
     };
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (!notificationTopic || !token) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const client = new Client({
+      brokerURL: `${protocol}//${window.location.host}/ws/websocket`,
+      reconnectDelay: 3000,
+      onConnect: () => {
+        client.subscribe(notificationTopic, (frame: IMessage) => {
+          const notification = JSON.parse(frame.body) as UserNotification;
+          setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)].slice(0, 30));
+          setNotificationUnreadCount((current) => current + (notification.read ? 0 : 1));
+          if (notification.targetRoomId !== selectedRoomId) {
+            setRooms((current) => current.map((room) => room.id === notification.targetRoomId ? { ...room, unreadCount: room.unreadCount + 1 } : room));
+          }
+        });
+      }
+    });
+    client.activate();
+    return () => {
+      client.deactivate();
+    };
+  }, [notificationTopic, selectedRoomId, token]);
 
   if (!user) {
     return (
@@ -892,6 +1037,37 @@ function App() {
               <button type="submit" disabled={loading}><Save size={16} aria-hidden />저장</button>
             </div>
           </form>
+
+          <section className="panel-section notification-panel">
+            <div className="section-title">
+              <span>알림</span>
+              <small>{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</small>
+            </div>
+            <div className="push-status">
+              {notificationUnreadCount > 0 ? <BellRing size={16} aria-hidden /> : <Bell size={16} aria-hidden />}
+              <span>{pushStatus}</span>
+              <button type="button" onClick={markAllNotificationsRead} disabled={notificationUnreadCount === 0}>읽음</button>
+            </div>
+            <div className="notification-list">
+              {notifications.slice(0, 5).map((notification) => (
+                <button
+                  key={notification.id}
+                  type="button"
+                  className={notification.read ? '' : 'unread'}
+                  onClick={() => {
+                    if (notification.targetRoomId) {
+                      openRoom(notification.targetRoomId);
+                    }
+                  }}
+                >
+                  <strong>{notification.title}</strong>
+                  <span>{notification.body}</span>
+                  <small>{new Date(notification.createdAt).toLocaleTimeString()}</small>
+                </button>
+              ))}
+              {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
+            </div>
+          </section>
 
           {myProfile && myProfile.history.length > 0 && (
             <section className="panel-section compact-history">

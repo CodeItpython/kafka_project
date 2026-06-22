@@ -22,6 +22,7 @@ import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchService;
 import com.kafka.auth.chat.service.ChatStateService.UserProfileSnapshot;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.notification.NotificationService;
 import com.kafka.auth.outbox.ChatMessageOutboxService;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.nio.file.Paths;
@@ -64,6 +65,7 @@ public class ChatService {
     private final ChatSummaryService chatSummaryService;
     private final ObjectStorageService objectStorageService;
     private final ChatMessageOutboxService chatMessageOutboxService;
+    private final NotificationService notificationService;
     private final String chatTopic;
 
     public ChatService(
@@ -78,6 +80,7 @@ public class ChatService {
             ChatSummaryService chatSummaryService,
             ObjectStorageService objectStorageService,
             ChatMessageOutboxService chatMessageOutboxService,
+            NotificationService notificationService,
             @Value("${app.chat.topic}") String chatTopic
     ) {
         this.chatRoomRepository = chatRoomRepository;
@@ -91,6 +94,7 @@ public class ChatService {
         this.chatSummaryService = chatSummaryService;
         this.objectStorageService = objectStorageService;
         this.chatMessageOutboxService = chatMessageOutboxService;
+        this.notificationService = notificationService;
         this.chatTopic = chatTopic;
     }
 
@@ -424,6 +428,7 @@ public class ChatService {
                 chatMetricsService.recordWebSocketBroadcastFailure(broadcastSample);
                 throw exception;
             }
+            notifyRecipients(event);
             chatMetricsService.recordKafkaConsumeSuccess(consumeSample, event);
         } catch (RuntimeException exception) {
             chatMetricsService.recordKafkaConsumeFailure(consumeSample, event);
@@ -438,6 +443,16 @@ public class ChatService {
             chatStateService.incrementUnread(event.roomId(), recipients);
         } catch (RuntimeException exception) {
             log.debug("Unable to update Redis unread counts. roomId={}", event.roomId(), exception);
+        }
+    }
+
+    private void notifyRecipients(ChatMessageEvent event) {
+        try {
+            ChatRoom room = ensureRoom(event.roomId());
+            Set<String> recipients = notificationRecipients(room, event.senderEmail());
+            notificationService.createChatMessageNotifications(event, recipients);
+        } catch (RuntimeException exception) {
+            log.debug("Unable to create chat notifications. roomId={}", event.roomId(), exception);
         }
     }
 

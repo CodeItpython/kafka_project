@@ -185,6 +185,55 @@ redis-cli keys 'state:*'
 redis-cli get 'state:unread:user@example.com:ROOM_ID'
 ```
 
+## 알림과 FCM Push
+
+채팅 메시지가 Kafka consumer에서 MongoDB에 저장되고 WebSocket으로 broadcast된 뒤, 수신자별 알림이 PostgreSQL `notifications` 테이블에 저장됩니다. 접속 중인 브라우저는 `/topic/notifications/{userHash}` WebSocket topic으로 실시간 알림을 받고, 브라우저 Push 권한과 Firebase 설정이 있으면 FCM으로 오프라인 Push도 받을 수 있습니다.
+
+알림 흐름:
+
+```text
+Kafka chat-messages consume
+-> MongoDB 메시지 저장
+-> Redis unread count 증가
+-> PostgreSQL notifications 저장
+-> WebSocket 알림 전송
+-> FCM Web Push 전송
+```
+
+로컬 개발에서는 FCM 설정이 없어도 `notifications` 테이블과 WebSocket 알림은 동작합니다. Firebase 프로젝트를 붙일 때는 프론트엔드 `.env`에 Web SDK 값을 넣고, 백엔드에는 Firebase Admin SDK 서비스 계정을 secret으로 넣습니다.
+
+프론트엔드 `.env` 예시:
+
+```properties
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_VAPID_KEY=
+```
+
+백엔드/Kubernetes secret 예시:
+
+```yaml
+stringData:
+  fcm-enabled: "true"
+  fcm-project-id: "firebase-project-id"
+  fcm-service-account-json: '{"type":"service_account",...}'
+  fcm-dry-run: "false"
+```
+
+주요 API:
+
+```bash
+GET /api/notifications
+GET /api/notifications/subscription
+PATCH /api/notifications/read-all
+POST /api/notifications/push-tokens
+DELETE /api/notifications/push-tokens
+```
+
 ## Testcontainers 통합 테스트
 
 `auth-service`는 PostgreSQL, MongoDB, Elasticsearch, Redis, Kafka를 실제 Docker 컨테이너로 띄우는 통합 테스트를 포함합니다. 이 테스트는 주요 인프라 연결과 저장/검색/메시지 발행 경로가 깨지지 않았는지 확인합니다.
