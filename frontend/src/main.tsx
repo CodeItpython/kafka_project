@@ -7,6 +7,7 @@ import {
   AtSign,
   Camera,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Hash,
   KeyRound,
@@ -226,6 +227,7 @@ function App() {
   const [activePreviewRoomId, setActivePreviewRoomId] = useState('');
   const [previewCursor, setPreviewCursor] = useState({ visible: false, active: false, x: 0, y: 0 });
   const chatShellRef = useRef<HTMLElement | null>(null);
+  const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
 
@@ -234,6 +236,22 @@ function App() {
   const groupRooms = useMemo(() => rooms.filter((room) => room.type === 'GROUP'), [rooms]);
   const previewRooms = useMemo(() => [...groupRooms, ...directRooms], [groupRooms, directRooms]);
   const activePreviewRoom = previewRooms.find((room) => room.id === activePreviewRoomId) ?? previewRooms[0] ?? null;
+  const showSidebarScrollHint = useScrollAffordance(sidebarScrollRef, [
+    isMenuOpen,
+    contacts.length,
+    directRooms.length,
+    Boolean(selectedProfile),
+    myProfile?.history.length ?? 0
+  ]);
+  const showDirectoryScrollHint = useScrollAffordance(roomDirectoryRef, [
+    selectedRoomId,
+    groupRooms.length,
+    directRooms.length,
+    roomSuggestions.length,
+    messageSuggestions.length,
+    searchResults.length,
+    status
+  ]);
 
   const title = useMemo(() => {
     if (mode === 'register') return '계정 만들기';
@@ -248,6 +266,13 @@ function App() {
       active,
       x: event.clientX,
       y: event.clientY
+    });
+  }
+
+  function scrollContainerDown(ref: React.RefObject<HTMLElement | null>) {
+    ref.current?.scrollBy({
+      top: Math.max(260, ref.current.clientHeight * 0.72),
+      behavior: 'smooth'
     });
   }
 
@@ -971,7 +996,7 @@ function App() {
           <X size={18} aria-hidden />
         </button>
         <section className="sidebar">
-          <div className="sidebar-scroll">
+          <div className="sidebar-scroll" ref={sidebarScrollRef}>
             <div className="profile-card">
               <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
               <div>
@@ -1044,6 +1069,13 @@ function App() {
               <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onCursorMove={movePreviewCursor} onCursorLeave={() => setPreviewCursor((current) => ({ ...current, visible: false, active: false }))} onSelect={openRoom} />
             </section>
           </div>
+
+          <ScrollAffordanceButton
+            visible={showSidebarScrollHint}
+            label="사이드바 더 보기"
+            className="sidebar-scroll-affordance"
+            onClick={() => scrollContainerDown(sidebarScrollRef)}
+          />
 
           <div className="sidebar-footer">
             <UiButton className="logout-button" variant="muted" onClick={logout}>
@@ -1234,6 +1266,12 @@ function App() {
               </div>
 
             </div>
+            <ScrollAffordanceButton
+              visible={showDirectoryScrollHint}
+              label="채팅방 더 보기"
+              className="directory-scroll-affordance"
+              onClick={() => scrollContainerDown(roomDirectoryRef)}
+            />
           </motion.section>
         )}
       </AnimatePresence>
@@ -1634,6 +1672,70 @@ function RoomList({
         />
       ))}
     </div>
+  );
+}
+
+function useScrollAffordance(
+  ref: React.RefObject<HTMLElement | null>,
+  dependencies: Array<string | number | boolean | null | undefined>
+) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      setVisible(false);
+      return undefined;
+    }
+
+    let frame = 0;
+    const update = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const remaining = element.scrollHeight - element.scrollTop - element.clientHeight;
+        setVisible(remaining > 32);
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(element);
+    Array.from(element.children).forEach((child) => resizeObserver.observe(child));
+    element.addEventListener('scroll', update, { passive: true });
+    update();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      element.removeEventListener('scroll', update);
+    };
+  }, [ref, ...dependencies]);
+
+  return visible;
+}
+
+function ScrollAffordanceButton({
+  visible,
+  label,
+  className,
+  onClick
+}: {
+  visible: boolean;
+  label: string;
+  className: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={cn('scroll-affordance', className, visible && 'visible')}
+      type="button"
+      onClick={onClick}
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
+      title={label}
+    >
+      <ChevronDown size={22} aria-hidden />
+      <span>{label}</span>
+    </button>
   );
 }
 
