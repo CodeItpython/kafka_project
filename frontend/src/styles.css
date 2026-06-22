@@ -28,6 +28,14 @@ body {
   margin: 0;
   color: var(--color-text);
   background: var(--color-fill);
+  overflow-x: hidden;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
 }
 
 button,
@@ -666,6 +674,8 @@ input:focus {
   justify-content: center;
   align-items: stretch;
   gap: 0;
+  width: 100%;
+  max-width: 100vw;
   height: 100vh;
   padding: 28px;
   overflow: hidden;
@@ -739,6 +749,7 @@ input:focus {
   display: flex;
   flex-direction: column;
   gap: 0;
+  min-width: 0;
   height: 100%;
   overflow: hidden;
   border-bottom: 0;
@@ -746,7 +757,9 @@ input:focus {
 
 .sidebar-scroll {
   min-height: 0;
+  min-width: 0;
   flex: 1 1 auto;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: 18px;
@@ -1246,16 +1259,22 @@ input:focus {
 .room-directory {
   align-content: start;
   gap: 24px;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .room-preview-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.18fr);
-  gap: 28px;
+  grid-template-columns: minmax(0, clamp(320px, 44vw, 560px)) minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 100%;
   position: relative;
+  overflow: hidden;
 }
 
 .room-preview-panel {
@@ -1264,6 +1283,9 @@ input:focus {
   display: grid;
   align-content: center;
   gap: 24px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: calc(100vh - 56px);
   padding: clamp(30px, 3vw, 44px);
   border-radius: var(--radius-lg);
@@ -1286,12 +1308,15 @@ input:focus {
 .room-preview-symbol {
   position: relative;
   z-index: 1;
+  justify-self: center;
+  inline-size: fit-content;
+  max-inline-size: min(100%, 260px);
   color: #000000;
-  max-width: 100%;
+  max-width: min(100%, 260px);
   overflow: hidden;
-  font-size: clamp(118px, 13vw, 218px);
+  font-size: clamp(104px, 12vw, 188px);
   font-weight: 950;
-  line-height: 0.9;
+  line-height: 1;
   letter-spacing: 0;
   text-align: center;
 }
@@ -1301,6 +1326,7 @@ input:focus {
   z-index: 1;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .room-preview-copy span {
@@ -1312,7 +1338,8 @@ input:focus {
 
 .room-preview-copy h3 {
   margin: 0;
-  font-size: clamp(30px, 3.2vw, 44px);
+  max-width: 100%;
+  font-size: clamp(28px, 3vw, 40px);
   font-weight: 950;
   line-height: 1.12;
   letter-spacing: 0;
@@ -1335,6 +1362,7 @@ input:focus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
   margin: 0;
 }
 
