@@ -90,6 +90,22 @@ type ChatMessage = {
   attachmentSize: number | null;
   deletedForEveryone: boolean;
   createdAt: string;
+  readCount: number;
+  deliveryStatus: 'SENT' | 'READ';
+};
+
+type ReadReceipt = {
+  email: string;
+  name: string;
+  profileImageUrl: string | null;
+  online: boolean;
+  lastReadAt: string | null;
+};
+
+type RoomReadSummary = {
+  roomId: string;
+  currentUserLastReadAt: string | null;
+  receipts: ReadReceipt[];
 };
 
 type Contact = {
@@ -218,6 +234,7 @@ function App() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [readReceipts, setReadReceipts] = useState<ReadReceipt[]>([]);
   const [roomName, setRoomName] = useState('프로젝트 채팅방');
   const [roomDescription, setRoomDescription] = useState('Kafka 이벤트로 메시지를 주고받는 공간');
   const [draft, setDraft] = useState('');
@@ -242,6 +259,7 @@ function App() {
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const readReceiptsRef = useRef<ReadReceipt[]>([]);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
@@ -461,11 +479,47 @@ function App() {
     return request<SearchSuggestion[]>(`/chat/suggestions?scope=${scope}&query=${encodeURIComponent(query.trim())}`);
   }
 
+  function withReadCounts(items: ChatMessage[], receipts: ReadReceipt[]) {
+    return items.map((message) => {
+      const readCount = receipts.filter((receipt) => {
+        if (receipt.email.toLowerCase() === message.senderEmail.toLowerCase() || !receipt.lastReadAt) {
+          return false;
+        }
+        return new Date(receipt.lastReadAt).getTime() >= new Date(message.createdAt).getTime();
+      }).length;
+      return {
+        ...message,
+        readCount,
+        deliveryStatus: readCount > 0 ? 'READ' as const : 'SENT' as const
+      };
+    });
+  }
+
+  function applyReadReceipts(receipts: ReadReceipt[]) {
+    readReceiptsRef.current = receipts;
+    setReadReceipts(receipts);
+    setMessages((current) => withReadCounts(current, receipts));
+  }
+
+  async function loadReadReceipts(roomId: string) {
+    if (!roomId) return;
+    const data = await request<RoomReadSummary>(`/chat/rooms/${roomId}/read-receipts`);
+    applyReadReceipts(data.receipts);
+  }
+
+  async function markRoomRead(roomId: string) {
+    if (!roomId) return;
+    const data = await request<RoomReadSummary>(`/chat/rooms/${roomId}/read`, { method: 'POST' });
+    applyReadReceipts(data.receipts);
+    setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
+  }
+
   async function loadMessages(roomId: string) {
     if (!roomId) return;
     const data = await request<ChatMessage[]>(`/chat/rooms/${roomId}/messages`);
-    setMessages(data);
+    setMessages(withReadCounts(data, readReceiptsRef.current));
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
+    await loadReadReceipts(roomId);
   }
 
   async function refreshMessages() {
@@ -771,6 +825,8 @@ function App() {
     setUser(null);
     setRooms([]);
     setMessages([]);
+    setReadReceipts([]);
+    readReceiptsRef.current = [];
     setSearchResults([]);
     setRoomSuggestions([]);
     setMessageSuggestions([]);
@@ -831,6 +887,8 @@ function App() {
 
   useEffect(() => {
     if (selectedRoomId) {
+      setReadReceipts([]);
+      readReceiptsRef.current = [];
       loadMessages(selectedRoomId);
       loadPresence(selectedRoomId);
       setConversationSummary(null);
@@ -897,9 +955,17 @@ function App() {
         setConnected(true);
         client.subscribe(`/topic/rooms/${selectedRoomId}`, (frame: IMessage) => {
           const message = JSON.parse(frame.body) as ChatMessage;
+          const messageWithReadState = withReadCounts([message], readReceiptsRef.current)[0];
           setMessages((current) => current.some((item) => item.id === message.id)
-            ? current.map((item) => item.id === message.id ? message : item)
-            : [...current, message]);
+            ? current.map((item) => item.id === message.id ? messageWithReadState : item)
+            : [...current, messageWithReadState]);
+          if (user && message.senderEmail.toLowerCase() !== user.email.toLowerCase()) {
+            markRoomRead(selectedRoomId).catch(() => undefined);
+          }
+        });
+        client.subscribe(`/topic/rooms/${selectedRoomId}/read-receipts`, (frame: IMessage) => {
+          const summary = JSON.parse(frame.body) as RoomReadSummary;
+          applyReadReceipts(summary.receipts);
         });
       },
       onDisconnect: () => setConnected(false),
@@ -911,7 +977,7 @@ function App() {
       setConnected(false);
       client.deactivate();
     };
-  }, [selectedRoomId]);
+  }, [selectedRoomId, user?.email]);
 
   useEffect(() => {
     if (!notificationTopic || !token) return;
@@ -1164,6 +1230,7 @@ function App() {
                   <div className="presence-line">
                     {presence.onlineUsers.length > 0 && <span>{presence.onlineUsers.length}명 온라인</span>}
                     {presence.typingUsers.length > 0 && <strong>{presence.typingUsers.join(', ')} 입력 중</strong>}
+                    {readReceipts.length > 0 && <span>{readReceipts.filter((receipt) => receipt.lastReadAt).length}명 읽음 상태</span>}
                   </div>
                 </div>
               <div className="header-actions">
@@ -1218,6 +1285,9 @@ function App() {
                       )}
                       {message.content && <p>{message.content}</p>}
                       <div className="message-actions">
+                        {message.senderEmail === user.email && (
+                          <span className="read-state">{message.readCount > 0 ? `읽음 ${message.readCount}` : '전송됨'}</span>
+                        )}
                         <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
                         {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
                       </div>

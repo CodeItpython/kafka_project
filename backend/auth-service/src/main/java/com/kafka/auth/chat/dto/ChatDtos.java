@@ -73,6 +73,22 @@ public final class ChatDtos {
     ) {
     }
 
+    public record ReadReceiptResponse(
+            String email,
+            String name,
+            String profileImageUrl,
+            boolean online,
+            Instant lastReadAt
+    ) {
+    }
+
+    public record RoomReadSummaryResponse(
+            String roomId,
+            Instant currentUserLastReadAt,
+            java.util.List<ReadReceiptResponse> receipts
+    ) {
+    }
+
     public record ConversationSummaryResponse(
             String summary,
             String model,
@@ -101,7 +117,9 @@ public final class ChatDtos {
             String attachmentName,
             Long attachmentSize,
             boolean deletedForEveryone,
-            Instant createdAt
+            Instant createdAt,
+            long readCount,
+            String deliveryStatus
     ) {
     }
 }

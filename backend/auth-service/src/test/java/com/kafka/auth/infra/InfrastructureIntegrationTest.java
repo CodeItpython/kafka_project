@@ -3,12 +3,14 @@ package com.kafka.auth.infra;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kafka.auth.chat.dto.ChatMessageEvent;
+import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.model.ChatMessageDocument;
 import com.kafka.auth.chat.model.ChatRoom;
 import com.kafka.auth.chat.repository.ChatMessageRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
+import com.kafka.auth.chat.service.ChatReadReceiptService;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.notification.NotificationDtos.NotificationListResponse;
@@ -103,6 +105,9 @@ class InfrastructureIntegrationTest {
 
     @Autowired
     private UserNotificationRepository userNotificationRepository;
+
+    @Autowired
+    private ChatReadReceiptService chatReadReceiptService;
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
@@ -242,5 +247,16 @@ class InfrastructureIntegrationTest {
 
         notificationService.markAllRead(recipient);
         assertThat(userNotificationRepository.countByRecipientEmailAndReadAtIsNull(recipient.getEmail())).isZero();
+
+        String unreadKey = "state:unread:" + recipient.getEmail().toLowerCase() + ":" + notificationRoom.getId();
+        redisTemplate.opsForValue().set(unreadKey, "3");
+        RoomReadSummaryResponse readSummary = chatReadReceiptService.markRead(notificationRoom, recipient, Instant.now());
+        assertThat(readSummary.currentUserLastReadAt()).isNotNull();
+        assertThat(readSummary.receipts())
+                .anySatisfy(receipt -> {
+                    assertThat(receipt.email()).isEqualTo(recipient.getEmail());
+                    assertThat(receipt.lastReadAt()).isNotNull();
+                });
+        assertThat(redisTemplate.opsForValue().get(unreadKey)).isNull();
     }
 }
