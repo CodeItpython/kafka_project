@@ -1,6 +1,7 @@
 package com.kafka.auth.config;
 
 import com.kafka.auth.chat.repository.ChatMessageRepository;
+import com.kafka.auth.chat.repository.ChatRoomReadStateRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.notification.PushDeviceTokenRepository;
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.FilterType;
                 UserAccountRepository.class,
                 EmailVerificationCodeRepository.class,
                 ChatRoomRepository.class,
+                ChatRoomReadStateRepository.class,
                 OutboxEventRepository.class,
                 UserNotificationRepository.class,
                 PushDeviceTokenRepository.class
@@ -29,7 +31,18 @@ import org.springframework.context.annotation.FilterType;
 )
 @EnableMongoRepositories(
         basePackageClasses = ChatMessageRepository.class,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ChatRoomRepository.class)
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = {
+                        ChatRoomRepository.class,
+                        ChatRoomReadStateRepository.class,
+                        UserAccountRepository.class,
+                        EmailVerificationCodeRepository.class,
+                        OutboxEventRepository.class,
+                        UserNotificationRepository.class,
+                        PushDeviceTokenRepository.class
+                }
+        )
 )
 @EnableElasticsearchRepositories(basePackageClasses = ChatMessageSearchRepository.class)
 public class RepositoryConfig {

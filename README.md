@@ -177,6 +177,22 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 메시지가 Kafka consumer를 통해 MongoDB에 저장되면, 백엔드는 수신자별 unread 카운터를 Redis에서 증가시킵니다.
 사용자가 채팅방을 열어 메시지 목록을 조회하면 해당 방의 unread 카운터를 삭제해서 읽음 처리합니다.
 
+## 채팅 읽음 상태
+
+안 읽은 메시지 수는 Redis처럼 휘발되어도 되는 빠른 상태로 관리하지만, "언제까지 읽었는지"는 PostgreSQL `chat_room_read_states` 테이블에 저장합니다. 각 채팅방과 사용자 조합마다 `last_read_at`을 남기고, 메시지 응답에는 상대 사용자가 해당 메시지 시각 이후까지 읽었는지 계산한 `readCount`, `deliveryStatus`를 포함합니다.
+
+흐름:
+
+```text
+사용자가 채팅방 입장 또는 읽음 처리
+-> PostgreSQL chat_room_read_states upsert
+-> Redis state:unread:{email}:{roomId} 삭제
+-> /topic/rooms/{roomId}/read-receipts WebSocket broadcast
+-> 프론트엔드가 내 메시지의 전송됨/읽음 표시 갱신
+```
+
+읽음 상태는 장기 이력에 가까우므로 PostgreSQL에 보관하고, unread count는 화면 목록을 빠르게 그리기 위한 캐시성 상태이므로 Redis에 둡니다.
+
 확인 명령:
 
 ```bash

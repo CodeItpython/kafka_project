@@ -9,6 +9,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
+import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
@@ -62,6 +63,7 @@ public class ChatService {
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatStateService chatStateService;
     private final ChatMetricsService chatMetricsService;
+    private final ChatReadReceiptService chatReadReceiptService;
     private final ChatSummaryService chatSummaryService;
     private final ObjectStorageService objectStorageService;
     private final ChatMessageOutboxService chatMessageOutboxService;
@@ -77,6 +79,7 @@ public class ChatService {
             SimpMessagingTemplate messagingTemplate,
             ChatStateService chatStateService,
             ChatMetricsService chatMetricsService,
+            ChatReadReceiptService chatReadReceiptService,
             ChatSummaryService chatSummaryService,
             ObjectStorageService objectStorageService,
             ChatMessageOutboxService chatMessageOutboxService,
@@ -91,6 +94,7 @@ public class ChatService {
         this.messagingTemplate = messagingTemplate;
         this.chatStateService = chatStateService;
         this.chatMetricsService = chatMetricsService;
+        this.chatReadReceiptService = chatReadReceiptService;
         this.chatSummaryService = chatSummaryService;
         this.objectStorageService = objectStorageService;
         this.chatMessageOutboxService = chatMessageOutboxService;
@@ -140,16 +144,32 @@ public class ChatService {
         });
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ChatMessageResponse> messages(String roomId, UserAccount user) {
-        ensureRoomAccess(roomId, user);
+        ChatRoom room = ensureRoomAccess(roomId, user);
         List<ChatMessageDocument> messages = chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 50));
         Collections.reverse(messages);
-        chatStateService.markRoomRead(roomId, user.getEmail());
+        RoomReadSummaryResponse readSummary = chatReadReceiptService.markRead(room, user, Instant.now());
+        publishReadSummary(roomId, readSummary);
+        Map<String, Instant> lastReadByEmail = chatReadReceiptService.lastReadByEmail(roomId);
         return messages.stream()
                 .filter(message -> message.isVisibleTo(user.getEmail()))
-                .map(this::toMessageResponse)
+                .map(message -> toMessageResponse(message, lastReadByEmail))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public RoomReadSummaryResponse readReceipts(String roomId, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        return chatReadReceiptService.summary(room, user);
+    }
+
+    @Transactional
+    public RoomReadSummaryResponse markRead(String roomId, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        RoomReadSummaryResponse readSummary = chatReadReceiptService.markRead(room, user, Instant.now());
+        publishReadSummary(roomId, readSummary);
+        return readSummary;
     }
 
     @Transactional(readOnly = true)
@@ -182,7 +202,7 @@ public class ChatService {
                             .findTop20ByContentContainingIgnoreCaseOrderByCreatedAtDesc(query)
                             .stream()
                             .filter(message -> canReadMessage(message, user))
-                            .map(this::toMessageResponse)
+                            .map(message -> toMessageResponse(message, Map.of()))
                             .toList()
             );
         }
@@ -329,7 +349,7 @@ public class ChatService {
         ensureRoomAccess(roomId, user);
         ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
         message.hideFor(user.getEmail());
-        return toMessageResponse(chatMessageRepository.save(message));
+        return toMessageResponse(chatMessageRepository.save(message), chatReadReceiptService.lastReadByEmail(roomId));
     }
 
     @Transactional
@@ -354,7 +374,7 @@ public class ChatService {
         } catch (RuntimeException exception) {
             log.warn("Unable to delete chat message from Elasticsearch index.", exception);
         }
-        ChatMessageResponse response = toMessageResponse(saved);
+        ChatMessageResponse response = toMessageResponse(saved, chatReadReceiptService.lastReadByEmail(roomId));
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId, response);
         return response;
     }
@@ -422,7 +442,7 @@ public class ChatService {
             }
             Timer.Sample broadcastSample = chatMetricsService.startTimer();
             try {
-                messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage));
+                messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage, Map.of()));
                 chatMetricsService.recordWebSocketBroadcastSuccess(broadcastSample);
             } catch (RuntimeException exception) {
                 chatMetricsService.recordWebSocketBroadcastFailure(broadcastSample);
@@ -453,6 +473,14 @@ public class ChatService {
             notificationService.createChatMessageNotifications(event, recipients);
         } catch (RuntimeException exception) {
             log.debug("Unable to create chat notifications. roomId={}", event.roomId(), exception);
+        }
+    }
+
+    private void publishReadSummary(String roomId, RoomReadSummaryResponse readSummary) {
+        try {
+            messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/read-receipts", readSummary);
+        } catch (RuntimeException exception) {
+            log.debug("Unable to publish read receipt update. roomId={}", roomId, exception);
         }
     }
 
@@ -593,7 +621,8 @@ public class ChatService {
         return Paths.get(fileName).getFileName().toString().replaceAll("[^a-zA-Z0-9._가-힣-]", "_");
     }
 
-    private ChatMessageResponse toMessageResponse(ChatMessageDocument message) {
+    private ChatMessageResponse toMessageResponse(ChatMessageDocument message, Map<String, Instant> lastReadByEmail) {
+        long readCount = chatReadReceiptService.readCount(message, lastReadByEmail);
         return new ChatMessageResponse(
                 message.getId(),
                 message.getRoomId(),
@@ -606,7 +635,9 @@ public class ChatService {
                 message.getAttachmentName(),
                 message.getAttachmentSize(),
                 message.isDeletedForEveryone(),
-                message.getCreatedAt()
+                message.getCreatedAt(),
+                readCount,
+                readCount > 0 ? "READ" : "SENT"
         );
     }
 
@@ -623,7 +654,9 @@ public class ChatService {
                 null,
                 null,
                 false,
-                message.getCreatedAt()
+                message.getCreatedAt(),
+                0,
+                "SENT"
         );
     }
 }
