@@ -1,6 +1,7 @@
 package com.kafka.auth.chat.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 
 public final class ChatDtos {
@@ -67,6 +68,19 @@ public final class ChatDtos {
     ) {
     }
 
+    public record MessageReactionRequest(
+            @NotBlank @Size(max = 16) String emoji
+    ) {
+    }
+
+    public record MessageReactionResponse(
+            String emoji,
+            long count,
+            boolean reactedByMe,
+            java.util.List<String> reactorEmails
+    ) {
+    }
+
     public record RoomPresenceResponse(
             java.util.List<String> onlineUsers,
             java.util.List<String> typingUsers
@@ -119,7 +133,8 @@ public final class ChatDtos {
             boolean deletedForEveryone,
             Instant createdAt,
             long readCount,
-            String deliveryStatus
+            String deliveryStatus,
+            java.util.List<MessageReactionResponse> reactions
     ) {
     }
 }

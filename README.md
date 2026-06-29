@@ -193,6 +193,22 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 
 읽음 상태는 장기 이력에 가까우므로 PostgreSQL에 보관하고, unread count는 화면 목록을 빠르게 그리기 위한 캐시성 상태이므로 Redis에 둡니다.
 
+## 메시지 리액션
+
+메시지 리액션은 채팅 메시지 원본인 MongoDB `chat_messages` 도큐먼트 안에 저장합니다. 리액션은 메시지와 생명주기가 같고, 메시지를 조회할 때 항상 같이 필요한 작은 부가 상태라 별도 PostgreSQL 테이블보다 MongoDB nested map이 현재 구조에 더 단순합니다.
+
+흐름:
+
+```text
+사용자가 메시지 리액션 클릭
+-> MongoDB chat_messages.reactionEmailsByEmoji 갱신
+-> 같은 이모지를 다시 누르면 내 이메일 제거
+-> /topic/rooms/{roomId} WebSocket broadcast
+-> 프론트엔드가 같은 messageId를 교체해 리액션 배지 갱신
+```
+
+응답 메시지에는 `reactions`가 포함됩니다. 각 항목은 `emoji`, `count`, `reactedByMe`, `reactorEmails`를 담습니다.
+
 확인 명령:
 
 ```bash

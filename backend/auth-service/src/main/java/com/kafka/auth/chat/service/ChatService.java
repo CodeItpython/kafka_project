@@ -8,6 +8,8 @@ import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
+import com.kafka.auth.chat.dto.ChatDtos.MessageReactionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
@@ -154,7 +156,7 @@ public class ChatService {
         Map<String, Instant> lastReadByEmail = chatReadReceiptService.lastReadByEmail(roomId);
         return messages.stream()
                 .filter(message -> message.isVisibleTo(user.getEmail()))
-                .map(message -> toMessageResponse(message, lastReadByEmail))
+                .map(message -> toMessageResponse(message, lastReadByEmail, user.getEmail()))
                 .toList();
     }
 
@@ -202,7 +204,7 @@ public class ChatService {
                             .findTop20ByContentContainingIgnoreCaseOrderByCreatedAtDesc(query)
                             .stream()
                             .filter(message -> canReadMessage(message, user))
-                            .map(message -> toMessageResponse(message, Map.of()))
+                            .map(message -> toMessageResponse(message, Map.of(), user.getEmail()))
                             .toList()
             );
         }
@@ -349,7 +351,7 @@ public class ChatService {
         ensureRoomAccess(roomId, user);
         ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
         message.hideFor(user.getEmail());
-        return toMessageResponse(chatMessageRepository.save(message), chatReadReceiptService.lastReadByEmail(roomId));
+        return toMessageResponse(chatMessageRepository.save(message), chatReadReceiptService.lastReadByEmail(roomId), user.getEmail());
     }
 
     @Transactional
@@ -374,8 +376,24 @@ public class ChatService {
         } catch (RuntimeException exception) {
             log.warn("Unable to delete chat message from Elasticsearch index.", exception);
         }
-        ChatMessageResponse response = toMessageResponse(saved, chatReadReceiptService.lastReadByEmail(roomId));
+        ChatMessageResponse response = toMessageResponse(saved, chatReadReceiptService.lastReadByEmail(roomId), user.getEmail());
         messagingTemplate.convertAndSend("/topic/rooms/" + roomId, response);
+        return response;
+    }
+
+    @Transactional
+    public ChatMessageResponse toggleReaction(String roomId, String messageId, MessageReactionRequest request, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
+        if (message.isDeletedForEveryone()) {
+            throw new IllegalArgumentException("삭제된 메시지에는 반응할 수 없습니다.");
+        }
+        String emoji = normalizeReaction(request.emoji());
+        message.toggleReaction(emoji, user.getEmail());
+        ChatMessageDocument saved = chatMessageRepository.save(message);
+        Map<String, Instant> lastReadByEmail = chatReadReceiptService.lastReadByEmail(roomId);
+        ChatMessageResponse response = toMessageResponse(saved, lastReadByEmail, user.getEmail());
+        messagingTemplate.convertAndSend("/topic/rooms/" + roomId, toMessageResponse(saved, lastReadByEmail, null));
         return response;
     }
 
@@ -442,7 +460,7 @@ public class ChatService {
             }
             Timer.Sample broadcastSample = chatMetricsService.startTimer();
             try {
-                messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage, Map.of()));
+                messagingTemplate.convertAndSend("/topic/rooms/" + event.roomId(), toMessageResponse(savedMessage, Map.of(), null));
                 chatMetricsService.recordWebSocketBroadcastSuccess(broadcastSample);
             } catch (RuntimeException exception) {
                 chatMetricsService.recordWebSocketBroadcastFailure(broadcastSample);
@@ -576,6 +594,17 @@ public class ChatService {
         return message;
     }
 
+    private String normalizeReaction(String emoji) {
+        if (emoji == null || emoji.isBlank()) {
+            throw new IllegalArgumentException("반응 이모지가 필요합니다.");
+        }
+        String normalized = emoji.trim();
+        if (normalized.length() > 16) {
+            throw new IllegalArgumentException("반응 이모지는 16자 이하만 가능합니다.");
+        }
+        return normalized;
+    }
+
     private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail) {
         return new ChatRoomResponse(
                 room.getId(),
@@ -621,7 +650,7 @@ public class ChatService {
         return Paths.get(fileName).getFileName().toString().replaceAll("[^a-zA-Z0-9._가-힣-]", "_");
     }
 
-    private ChatMessageResponse toMessageResponse(ChatMessageDocument message, Map<String, Instant> lastReadByEmail) {
+    private ChatMessageResponse toMessageResponse(ChatMessageDocument message, Map<String, Instant> lastReadByEmail, String currentUserEmail) {
         long readCount = chatReadReceiptService.readCount(message, lastReadByEmail);
         return new ChatMessageResponse(
                 message.getId(),
@@ -637,8 +666,23 @@ public class ChatService {
                 message.isDeletedForEveryone(),
                 message.getCreatedAt(),
                 readCount,
-                readCount > 0 ? "READ" : "SENT"
+                readCount > 0 ? "READ" : "SENT",
+                toReactionResponses(message, currentUserEmail)
         );
+    }
+
+    private List<MessageReactionResponse> toReactionResponses(ChatMessageDocument message, String currentUserEmail) {
+        return message.getReactionEmailsByEmoji()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
+                .map(entry -> new MessageReactionResponse(
+                        entry.getKey(),
+                        entry.getValue().size(),
+                        currentUserEmail != null && entry.getValue().stream().anyMatch(email -> email.equalsIgnoreCase(currentUserEmail)),
+                        entry.getValue().stream().toList()
+                ))
+                .toList();
     }
 
     private ChatMessageResponse toMessageResponse(ChatMessageSearchDocument message) {
@@ -656,7 +700,8 @@ public class ChatService {
                 false,
                 message.getCreatedAt(),
                 0,
-                "SENT"
+                "SENT",
+                List.of()
         );
     }
 }

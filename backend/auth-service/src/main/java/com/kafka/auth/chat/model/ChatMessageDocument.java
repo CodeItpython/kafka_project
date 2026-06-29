@@ -1,7 +1,9 @@
 package com.kafka.auth.chat.model;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -30,6 +32,7 @@ public class ChatMessageDocument {
     private Long attachmentSize;
     private boolean deletedForEveryone;
     private Set<String> deletedForEmails = new LinkedHashSet<>();
+    private Map<String, Set<String>> reactionEmailsByEmoji = new LinkedHashMap<>();
 
     @Indexed
     private Instant createdAt;
@@ -75,6 +78,19 @@ public class ChatMessageDocument {
         attachmentType = null;
         attachmentName = null;
         attachmentSize = null;
+        reactionEmailsByEmoji.clear();
+    }
+
+    public boolean toggleReaction(String emoji, String email) {
+        Set<String> emails = reactionEmailsByEmoji.computeIfAbsent(emoji, key -> new LinkedHashSet<>());
+        boolean added = emails.add(email);
+        if (!added) {
+            emails.remove(email);
+            if (emails.isEmpty()) {
+                reactionEmailsByEmoji.remove(emoji);
+            }
+        }
+        return added;
     }
 
 }
