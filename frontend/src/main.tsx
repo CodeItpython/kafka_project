@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   AtSign,
   Bell,
+  BellOff,
   BellRing,
   Camera,
   CheckCircle2,
@@ -19,6 +20,7 @@ import {
   Menu,
   MessageCircle,
   Paperclip,
+  Pin,
   Plus,
   RefreshCcw,
   Save,
@@ -75,6 +77,8 @@ type ChatRoom = {
   type: 'GROUP' | 'DIRECT';
   createdAt: string;
   unreadCount: number;
+  pinned: boolean;
+  muted: boolean;
 };
 
 type ChatMessage = {
@@ -469,6 +473,34 @@ function App() {
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
     const data = await request<ChatRoom[]>(`/chat/rooms${suffix}`);
     setRooms(data);
+  }
+
+  async function updateRoomPreference(room: ChatRoom, preference: { pinned?: boolean; muted?: boolean }) {
+    try {
+      const updated = await request<ChatRoom>(`/chat/rooms/${room.id}/preferences`, {
+        method: 'PATCH',
+        body: JSON.stringify(preference)
+      });
+      setRooms((current) => sortRooms(current.map((item) => item.id === updated.id ? updated : item)));
+      if (preference.muted !== undefined) {
+        setStatus(preference.muted ? `${updated.name} 알림을 껐습니다.` : `${updated.name} 알림을 켰습니다.`);
+      } else if (preference.pinned !== undefined) {
+        setStatus(preference.pinned ? `${updated.name} 채팅방을 고정했습니다.` : `${updated.name} 채팅방 고정을 해제했습니다.`);
+      } else {
+        setStatus(`${updated.name} 설정을 변경했습니다.`);
+      }
+    } catch (error) {
+      setStatus(readableError(error, '채팅방 설정을 변경하지 못했습니다.'));
+    }
+  }
+
+  function sortRooms(items: ChatRoom[]) {
+    return [...items].sort((first, second) => {
+      if (first.pinned !== second.pinned) {
+        return first.pinned ? -1 : 1;
+      }
+      return new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
+    });
   }
 
   function openRoom(roomId: string) {
@@ -1238,7 +1270,13 @@ function App() {
               <span>1:1 대화</span>
               <small>{directRooms.length}</small>
             </div>
-            <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+            <RoomList
+              rooms={directRooms}
+              selectedRoomId={selectedRoomId}
+              onSelect={openRoom}
+              onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
+              onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
+            />
           </section>
 
           <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
@@ -1439,7 +1477,13 @@ function App() {
                 <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
               </form>
               <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
-              <RoomList rooms={groupRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+              <RoomList
+                rooms={groupRooms}
+                selectedRoomId={selectedRoomId}
+                onSelect={openRoom}
+                onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
+                onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
+              />
             </section>
 
             <section className="directory-section">
@@ -1447,7 +1491,13 @@ function App() {
                 <span>최근 1:1 대화</span>
                 <small>{directRooms.length}</small>
               </div>
-              <RoomList rooms={directRooms} selectedRoomId={selectedRoomId} onSelect={openRoom} />
+              <RoomList
+                rooms={directRooms}
+                selectedRoomId={selectedRoomId}
+                onSelect={openRoom}
+                onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
+                onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
+              />
             </section>
 
             <section className="directory-section">
@@ -1541,11 +1591,15 @@ function ProfileHistoryList({ history }: { history: ProfileHistory[] }) {
 function RoomList({
   rooms,
   selectedRoomId,
-  onSelect
+  onSelect,
+  onTogglePinned,
+  onToggleMuted
 }: {
   rooms: ChatRoom[];
   selectedRoomId: string;
   onSelect: (roomId: string) => void;
+  onTogglePinned: (room: ChatRoom) => void;
+  onToggleMuted: (room: ChatRoom) => void;
 }) {
   if (rooms.length === 0) {
     return <p className="empty-state">아직 대화가 없습니다.</p>;
@@ -1553,14 +1607,24 @@ function RoomList({
   return (
     <div className="room-list">
       {rooms.map((room) => (
-        <button key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'} onClick={() => onSelect(room.id)}>
-          {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
-          <span>
-            <strong>{room.name}</strong>
-            <small>{room.type === 'DIRECT' ? '개인 메시지' : room.description}</small>
-          </span>
-          {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
-        </button>
+        <article key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}>
+          <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
+            {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
+            <span>
+              <strong>{room.name}</strong>
+              <small>{room.type === 'DIRECT' ? '개인 메시지' : room.description}</small>
+            </span>
+          </button>
+          <div className="room-meta-actions">
+            {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
+            <button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'}>
+              <Pin size={14} aria-hidden />
+            </button>
+            <button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'}>
+              {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
+            </button>
+          </div>
+        </article>
       ))}
     </div>
   );

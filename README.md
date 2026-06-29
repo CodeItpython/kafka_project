@@ -193,6 +193,27 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 
 읽음 상태는 장기 이력에 가까우므로 PostgreSQL에 보관하고, unread count는 화면 목록을 빠르게 그리기 위한 캐시성 상태이므로 Redis에 둡니다.
 
+## 채팅방 고정과 알림 끄기
+
+채팅방별 사용자 설정은 PostgreSQL `chat_room_user_preferences` 테이블에 저장합니다.
+
+- `pinned`: 내 채팅방 목록에서 해당 방을 위로 고정합니다.
+- `muted`: 새 메시지가 와도 내 알림 목록과 푸시 알림 생성 대상에서 제외합니다.
+
+사용 API:
+
+```http
+PATCH /api/chat/rooms/{roomId}/preferences
+Content-Type: application/json
+
+{
+  "pinned": true,
+  "muted": false
+}
+```
+
+응답의 `ChatRoomResponse`에는 `pinned`, `muted`가 포함됩니다. 프론트엔드는 이 값을 기준으로 방 목록을 정렬하고, 알림 아이콘 상태를 표시합니다. unread count는 메시지를 놓치지 않도록 그대로 증가하고, 알림 생성만 끕니다.
+
 ## 메시지 리액션
 
 메시지 리액션은 채팅 메시지 원본인 MongoDB `chat_messages` 도큐먼트 안에 저장합니다. 리액션은 메시지와 생명주기가 같고, 메시지를 조회할 때 항상 같이 필요한 작은 부가 상태라 별도 PostgreSQL 테이블보다 MongoDB nested map이 현재 구조에 더 단순합니다.

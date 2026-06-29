@@ -11,6 +11,7 @@ import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
+import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
@@ -18,8 +19,10 @@ import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.model.ChatMessageDocument;
 import com.kafka.auth.chat.model.ChatRoom;
 import com.kafka.auth.chat.model.ChatRoomType;
+import com.kafka.auth.chat.model.ChatRoomUserPreference;
 import com.kafka.auth.chat.repository.ChatMessageRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
+import com.kafka.auth.chat.repository.ChatRoomUserPreferenceRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchService;
@@ -58,6 +61,7 @@ public class ChatService {
     private static final long MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
     private final ChatRoomRepository chatRoomRepository;
+    private final ChatRoomUserPreferenceRepository chatRoomUserPreferenceRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatMessageSearchRepository chatMessageSearchRepository;
     private final ChatMessageSearchService chatMessageSearchService;
@@ -74,6 +78,7 @@ public class ChatService {
 
     public ChatService(
             ChatRoomRepository chatRoomRepository,
+            ChatRoomUserPreferenceRepository chatRoomUserPreferenceRepository,
             ChatMessageRepository chatMessageRepository,
             ChatMessageSearchRepository chatMessageSearchRepository,
             ChatMessageSearchService chatMessageSearchService,
@@ -89,6 +94,7 @@ public class ChatService {
             @Value("${app.chat.topic}") String chatTopic
     ) {
         this.chatRoomRepository = chatRoomRepository;
+        this.chatRoomUserPreferenceRepository = chatRoomUserPreferenceRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.chatMessageSearchRepository = chatMessageSearchRepository;
         this.chatMessageSearchService = chatMessageSearchService;
@@ -139,9 +145,11 @@ public class ChatService {
             List<ChatRoom> rooms = query == null || query.isBlank()
                     ? chatRoomRepository.findVisibleRooms(user.getEmail(), ChatRoomType.GROUP, PageRequest.of(0, 30))
                     : chatRoomRepository.searchVisibleRooms(user.getEmail(), ChatRoomType.GROUP, query, PageRequest.of(0, 30));
+            Map<String, ChatRoomUserPreference> preferences = roomPreferencesMap(rooms, user.getEmail());
             return rooms.stream()
                     .filter(room -> room.isVisibleTo(user.getEmail()))
-                    .map(room -> toRoomResponse(room, user.getEmail()))
+                    .map(room -> toRoomResponse(room, user.getEmail(), preferences.get(room.getId())))
+                    .sorted(roomResponseComparator())
                     .toList();
         });
     }
@@ -351,6 +359,18 @@ public class ChatService {
     }
 
     @Transactional
+    public ChatRoomResponse updateRoomPreference(String roomId, RoomPreferenceRequest request, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        ChatRoomUserPreference preference = chatRoomUserPreferenceRepository
+                .findByRoomIdAndUserEmail(roomId, user.getEmail())
+                .orElseGet(() -> new ChatRoomUserPreference(roomId, user.getEmail()));
+        preference.update(request.pinned(), request.muted());
+        ChatRoomUserPreference saved = chatRoomUserPreferenceRepository.save(preference);
+        chatStateService.evictRoomCaches(user.getEmail());
+        return toRoomResponse(room, user.getEmail(), saved);
+    }
+
+    @Transactional
     public ChatMessageResponse hideMessageForMe(String roomId, String messageId, UserAccount user) {
         ensureRoomAccess(roomId, user);
         ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
@@ -495,6 +515,7 @@ public class ChatService {
         try {
             ChatRoom room = ensureRoom(event.roomId());
             Set<String> recipients = notificationRecipients(room, event.senderEmail());
+            recipients.removeAll(mutedRecipientEmails(room.getId(), recipients));
             notificationService.createChatMessageNotifications(event, recipients);
         } catch (RuntimeException exception) {
             log.debug("Unable to create chat notifications. roomId={}", event.roomId(), exception);
@@ -518,6 +539,17 @@ public class ChatService {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         recipients.removeIf(email -> email.equalsIgnoreCase(senderEmail));
         return recipients;
+    }
+
+    private Set<String> mutedRecipientEmails(String roomId, Set<String> recipients) {
+        if (recipients.isEmpty()) {
+            return Set.of();
+        }
+        return chatRoomUserPreferenceRepository.findByRoomIdAndUserEmailIn(roomId, recipients)
+                .stream()
+                .filter(ChatRoomUserPreference::isMuted)
+                .map(ChatRoomUserPreference::getUserEmail)
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     private ChatRoom ensureRoom(String roomId) {
@@ -612,7 +644,30 @@ public class ChatService {
         return normalized;
     }
 
+    private Map<String, ChatRoomUserPreference> roomPreferencesMap(List<ChatRoom> rooms, String currentUserEmail) {
+        if (rooms.isEmpty()) {
+            return Map.of();
+        }
+        List<String> roomIds = rooms.stream().map(ChatRoom::getId).toList();
+        return chatRoomUserPreferenceRepository.findByRoomIdInAndUserEmail(roomIds, currentUserEmail)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(ChatRoomUserPreference::getRoomId, preference -> preference));
+    }
+
+    private Comparator<ChatRoomResponse> roomResponseComparator() {
+        return Comparator.comparing(ChatRoomResponse::pinned)
+                .reversed()
+                .thenComparing(ChatRoomResponse::createdAt, Comparator.reverseOrder());
+    }
+
     private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail) {
+        ChatRoomUserPreference preference = chatRoomUserPreferenceRepository
+                .findByRoomIdAndUserEmail(room.getId(), currentUserEmail)
+                .orElse(null);
+        return toRoomResponse(room, currentUserEmail, preference);
+    }
+
+    private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail, ChatRoomUserPreference preference) {
         return new ChatRoomResponse(
                 room.getId(),
                 room.getName(),
@@ -620,7 +675,9 @@ public class ChatService {
                 room.getCreatedBy(),
                 room.getType().name(),
                 room.getCreatedAt(),
-                chatStateService.unreadCount(room.getId(), currentUserEmail)
+                chatStateService.unreadCount(room.getId(), currentUserEmail),
+                preference != null && preference.isPinned(),
+                preference != null && preference.isMuted()
         );
     }
 

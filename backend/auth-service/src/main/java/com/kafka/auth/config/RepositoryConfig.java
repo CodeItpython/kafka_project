@@ -3,6 +3,7 @@ package com.kafka.auth.config;
 import com.kafka.auth.chat.repository.ChatMessageRepository;
 import com.kafka.auth.chat.repository.ChatRoomReadStateRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
+import com.kafka.auth.chat.repository.ChatRoomUserPreferenceRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.notification.PushDeviceTokenRepository;
 import com.kafka.auth.notification.UserNotificationRepository;
@@ -23,6 +24,7 @@ import org.springframework.context.annotation.FilterType;
                 EmailVerificationCodeRepository.class,
                 ChatRoomRepository.class,
                 ChatRoomReadStateRepository.class,
+                ChatRoomUserPreferenceRepository.class,
                 OutboxEventRepository.class,
                 UserNotificationRepository.class,
                 PushDeviceTokenRepository.class
@@ -36,6 +38,7 @@ import org.springframework.context.annotation.FilterType;
                 classes = {
                         ChatRoomRepository.class,
                         ChatRoomReadStateRepository.class,
+                        ChatRoomUserPreferenceRepository.class,
                         UserAccountRepository.class,
                         EmailVerificationCodeRepository.class,
                         OutboxEventRepository.class,

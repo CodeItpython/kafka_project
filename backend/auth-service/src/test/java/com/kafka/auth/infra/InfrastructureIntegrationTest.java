@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
+import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
@@ -266,6 +267,30 @@ class InfrastructureIntegrationTest {
                 });
 
         notificationService.markAllRead(recipient);
+        assertThat(userNotificationRepository.countByRecipientEmailAndReadAtIsNull(recipient.getEmail())).isZero();
+
+        assertThat(chatService.updateRoomPreference(notificationRoom.getId(), new RoomPreferenceRequest(true, true), recipient))
+                .satisfies(preference -> {
+                    assertThat(preference.pinned()).isTrue();
+                    assertThat(preference.muted()).isTrue();
+                });
+        ChatMessageEvent mutedNotificationEvent = new ChatMessageEvent(
+                "muted-notification-" + UUID.randomUUID(),
+                notificationRoom.getId(),
+                notificationRoom.getName(),
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "알림 끄기 테스트 메시지",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        );
+        chatService.persistAndBroadcast(mutedNotificationEvent);
         assertThat(userNotificationRepository.countByRecipientEmailAndReadAtIsNull(recipient.getEmail())).isZero();
 
         String unreadKey = "state:unread:" + recipient.getEmail().toLowerCase() + ":" + notificationRoom.getId();
