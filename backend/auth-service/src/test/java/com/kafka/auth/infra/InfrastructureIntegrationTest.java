@@ -2,6 +2,8 @@ package com.kafka.auth.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
+import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.model.ChatMessageDocument;
@@ -11,6 +13,7 @@ import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.chat.service.ChatReadReceiptService;
+import com.kafka.auth.chat.service.ChatService;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.notification.NotificationDtos.NotificationListResponse;
@@ -108,6 +111,9 @@ class InfrastructureIntegrationTest {
 
     @Autowired
     private ChatReadReceiptService chatReadReceiptService;
+
+    @Autowired
+    private ChatService chatService;
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
@@ -258,5 +264,41 @@ class InfrastructureIntegrationTest {
                     assertThat(receipt.lastReadAt()).isNotNull();
                 });
         assertThat(redisTemplate.opsForValue().get(unreadKey)).isNull();
+
+        ChatMessageDocument reactionMessage = chatMessageRepository.save(new ChatMessageDocument(
+                "reaction-" + UUID.randomUUID(),
+                notificationRoom.getId(),
+                notificationRoom.getName(),
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "반응 저장 테스트 메시지",
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        ));
+        ChatMessageResponse reactionAdded = chatService.toggleReaction(
+                notificationRoom.getId(),
+                reactionMessage.getId(),
+                new MessageReactionRequest("👍"),
+                recipient
+        );
+        assertThat(reactionAdded.reactions())
+                .singleElement()
+                .satisfies(reaction -> {
+                    assertThat(reaction.emoji()).isEqualTo("👍");
+                    assertThat(reaction.count()).isEqualTo(1);
+                    assertThat(reaction.reactedByMe()).isTrue();
+                    assertThat(reaction.reactorEmails()).containsExactly(recipient.getEmail());
+                });
+
+        ChatMessageResponse reactionRemoved = chatService.toggleReaction(
+                notificationRoom.getId(),
+                reactionMessage.getId(),
+                new MessageReactionRequest("👍"),
+                recipient
+        );
+        assertThat(reactionRemoved.reactions()).isEmpty();
     }
 }

@@ -1004,6 +1004,63 @@ input:focus {
   margin-top: 10px;
 }
 
+.reaction-strip,
+.quick-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.reaction-strip {
+  margin-top: 10px;
+}
+
+.reaction-strip button,
+.quick-reactions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 34px;
+  min-height: 28px;
+  border: 1px solid #e5e8eb;
+  border-radius: 999px;
+  padding: 0 9px;
+  color: #4e5968;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.reaction-strip button:hover,
+.quick-reactions button:hover {
+  transform: translateY(-1px);
+  border-color: #b4d5ff;
+  background: #f2f8ff;
+}
+
+.reaction-strip button.active,
+.quick-reactions button.active {
+  border-color: #0064ff;
+  color: #0064ff;
+  background: #eaf3ff;
+}
+
+.chat-bubble.mine .reaction-strip button,
+.chat-bubble.mine .quick-reactions button {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.chat-bubble.mine .reaction-strip button.active,
+.chat-bubble.mine .quick-reactions button.active {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .read-state {
   display: inline-flex;
   align-items: center;
@@ -1030,6 +1087,31 @@ input:focus {
 .chat-bubble.mine .message-actions button {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.18);
+}
+
+.message-actions .quick-reactions button {
+  min-width: 34px;
+  border: 1px solid #e5e8eb;
+  color: #4e5968;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.message-actions .quick-reactions button.active {
+  border-color: #0064ff;
+  color: #0064ff;
+  background: #eaf3ff;
+}
+
+.chat-bubble.mine .message-actions .quick-reactions button {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.chat-bubble.mine .message-actions .quick-reactions button.active {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .composer {

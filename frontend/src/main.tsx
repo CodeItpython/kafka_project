@@ -92,6 +92,14 @@ type ChatMessage = {
   createdAt: string;
   readCount: number;
   deliveryStatus: 'SENT' | 'READ';
+  reactions: MessageReaction[];
+};
+
+type MessageReaction = {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+  reactorEmails: string[];
 };
 
 type ReadReceipt = {
@@ -189,6 +197,7 @@ type NotificationSubscriptionResponse = {
 };
 
 const API_ROOT = '/api';
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
 const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '';
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
@@ -490,9 +499,20 @@ function App() {
       return {
         ...message,
         readCount,
-        deliveryStatus: readCount > 0 ? 'READ' as const : 'SENT' as const
+        deliveryStatus: readCount > 0 ? 'READ' as const : 'SENT' as const,
+        reactions: normalizeReactions(message.reactions ?? [])
       };
     });
+  }
+
+  function normalizeReactions(reactions: MessageReaction[]) {
+    if (!user) {
+      return reactions;
+    }
+    return reactions.map((reaction) => ({
+      ...reaction,
+      reactedByMe: reaction.reactorEmails.some((email) => email.toLowerCase() === user.email.toLowerCase())
+    }));
   }
 
   function applyReadReceipts(receipts: ReadReceipt[]) {
@@ -762,10 +782,24 @@ function App() {
   async function deleteMessageForEveryone(message: ChatMessage) {
     try {
       const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/everyone`, { method: 'DELETE' });
-      setMessages((current) => current.map((item) => item.id === updated.id ? updated : item));
+      const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
+      setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
       setSearchResults((current) => current.filter((item) => item.id !== updated.id));
     } catch (error) {
       setStatus(readableError(error, '모두에게 삭제하지 못했습니다.'));
+    }
+  }
+
+  async function toggleMessageReaction(message: ChatMessage, emoji: string) {
+    try {
+      const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/reactions`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji })
+      });
+      const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
+      setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
+    } catch (error) {
+      setStatus(readableError(error, '반응을 저장하지 못했습니다.'));
     }
   }
 
@@ -1284,7 +1318,36 @@ function App() {
                         </a>
                       )}
                       {message.content && <p>{message.content}</p>}
+                      {message.reactions.length > 0 && (
+                        <div className="reaction-strip" aria-label="메시지 반응">
+                          {message.reactions.map((reaction) => (
+                            <button
+                              key={`${message.id}-${reaction.emoji}`}
+                              type="button"
+                              className={reaction.reactedByMe ? 'active' : ''}
+                              onClick={() => toggleMessageReaction(message, reaction.emoji)}
+                              title={`${reaction.emoji} ${reaction.count}명`}
+                            >
+                              <span>{reaction.emoji}</span>
+                              <strong>{reaction.count}</strong>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="message-actions">
+                        <div className="quick-reactions" aria-label="빠른 반응">
+                          {QUICK_REACTIONS.map((emoji) => (
+                            <button
+                              key={`${message.id}-${emoji}`}
+                              type="button"
+                              className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
+                              onClick={() => toggleMessageReaction(message, emoji)}
+                              title={`${emoji} 반응`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
                         {message.senderEmail === user.email && (
                           <span className="read-state">{message.readCount > 0 ? `읽음 ${message.readCount}` : '전송됨'}</span>
                         )}

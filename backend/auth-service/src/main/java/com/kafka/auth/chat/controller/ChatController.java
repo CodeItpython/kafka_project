@@ -6,6 +6,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
@@ -199,6 +200,16 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.deleteMessageForEveryone(roomId, messageId, user));
+    }
+
+    @PostMapping("/rooms/{roomId}/messages/{messageId}/reactions")
+    public ResponseEntity<ChatMessageResponse> toggleReaction(
+            @PathVariable String roomId,
+            @PathVariable String messageId,
+            @Valid @RequestBody MessageReactionRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.toggleReaction(roomId, messageId, request, user));
     }
 
     @GetMapping("/messages/search")
