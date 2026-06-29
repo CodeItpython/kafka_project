@@ -42,6 +42,12 @@ public final class ChatDtos {
     ) {
     }
 
+    public record RoomPreferenceRequest(
+            Boolean pinned,
+            Boolean muted
+    ) {
+    }
+
     public record ChatRoomResponse(
             String id,
             String name,
@@ -49,7 +55,9 @@ public final class ChatDtos {
             String createdBy,
             String type,
             Instant createdAt,
-            long unreadCount
+            long unreadCount,
+            boolean pinned,
+            boolean muted
     ) {
     }
 
