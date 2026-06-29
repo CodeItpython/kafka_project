@@ -93,6 +93,9 @@ type ChatMessage = {
   readCount: number;
   deliveryStatus: 'SENT' | 'READ';
   reactions: MessageReaction[];
+  replyToMessageId: string | null;
+  replyToSenderName: string | null;
+  replyToContent: string | null;
 };
 
 type MessageReaction = {
@@ -243,6 +246,7 @@ function App() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [readReceipts, setReadReceipts] = useState<ReadReceipt[]>([]);
   const [roomName, setRoomName] = useState('프로젝트 채팅방');
   const [roomDescription, setRoomDescription] = useState('Kafka 이벤트로 메시지를 주고받는 공간');
@@ -734,7 +738,9 @@ function App() {
     event.preventDefault();
     if (!selectedRoomId || (!draft.trim() && !attachment)) return;
     const content = draft.trim();
+    const replyToMessageId = replyTarget?.id ?? null;
     setDraft('');
+    setReplyTarget(null);
     try {
       let uploaded: AttachmentResponse | null = null;
       if (attachment) {
@@ -747,12 +753,13 @@ function App() {
       }
       await request(`/chat/rooms/${selectedRoomId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ content, attachment: uploaded })
+        body: JSON.stringify({ content, attachment: uploaded, replyToMessageId })
       });
       clearAttachment();
       setTimeout(() => loadMessages(selectedRoomId), 350);
     } catch (error) {
       setDraft(content);
+      setReplyTarget(replyTarget);
       setStatus(readableError(error, '메시지 전송에 실패했습니다.'));
     }
   }
@@ -859,6 +866,7 @@ function App() {
     setUser(null);
     setRooms([]);
     setMessages([]);
+    setReplyTarget(null);
     setReadReceipts([]);
     readReceiptsRef.current = [];
     setSearchResults([]);
@@ -923,6 +931,7 @@ function App() {
     if (selectedRoomId) {
       setReadReceipts([]);
       readReceiptsRef.current = [];
+      setReplyTarget(null);
       loadMessages(selectedRoomId);
       loadPresence(selectedRoomId);
       setConversationSummary(null);
@@ -1312,6 +1321,12 @@ function App() {
                     <p className="deleted-message">삭제된 메시지입니다.</p>
                   ) : (
                     <>
+                      {message.replyToMessageId && (
+                        <div className="reply-preview">
+                          <strong>{message.replyToSenderName ?? '메시지'}</strong>
+                          <span>{message.replyToContent ?? '원본 메시지'}</span>
+                        </div>
+                      )}
                       {message.attachmentUrl && (
                         <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
                           <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
@@ -1351,6 +1366,7 @@ function App() {
                         {message.senderEmail === user.email && (
                           <span className="read-state">{message.readCount > 0 ? `읽음 ${message.readCount}` : '전송됨'}</span>
                         )}
+                        <button onClick={() => setReplyTarget(message)} type="button">답장</button>
                         <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
                         {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
                       </div>
@@ -1361,6 +1377,15 @@ function App() {
             </div>
 
             <form className="composer" onSubmit={sendMessage}>
+              {replyTarget && (
+                <div className="composer-reply-preview">
+                  <span>
+                    <strong>{replyTarget.senderName}</strong>
+                    <small>{replyTarget.content || replyTarget.attachmentName || '첨부 메시지'}</small>
+                  </span>
+                  <button type="button" onClick={() => setReplyTarget(null)} title="답장 취소"><X size={16} aria-hidden /></button>
+                </div>
+              )}
               {attachmentPreview && (
                 <div className="attachment-preview">
                   <img src={attachmentPreview} alt={attachment?.name ?? '첨부 미리보기'} />

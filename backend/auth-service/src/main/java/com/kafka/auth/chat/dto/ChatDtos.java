@@ -16,7 +16,8 @@ public final class ChatDtos {
 
     public record SendMessageRequest(
             String content,
-            AttachmentRequest attachment
+            AttachmentRequest attachment,
+            String replyToMessageId
     ) {
     }
 
@@ -134,7 +135,10 @@ public final class ChatDtos {
             Instant createdAt,
             long readCount,
             String deliveryStatus,
-            java.util.List<MessageReactionResponse> reactions
+            java.util.List<MessageReactionResponse> reactions,
+            String replyToMessageId,
+            String replyToSenderName,
+            String replyToContent
     ) {
     }
 }

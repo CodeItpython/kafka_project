@@ -322,6 +322,7 @@ public class ChatService {
         if ((request.content() == null || request.content().isBlank()) && attachment == null) {
             throw new IllegalArgumentException("메시지 내용이나 첨부 파일이 필요합니다.");
         }
+        ChatMessageDocument replySource = resolveReplySource(roomId, request.replyToMessageId(), user);
         ChatMessageEvent event = new ChatMessageEvent(
                 UUID.randomUUID().toString(),
                 room.getId(),
@@ -333,6 +334,9 @@ public class ChatService {
                 attachment == null ? null : attachment.type(),
                 attachment == null ? null : attachment.name(),
                 attachment == null ? null : attachment.size(),
+                replySource == null ? null : replySource.getId(),
+                replySource == null ? null : replySource.getSenderName(),
+                replySource == null ? null : replyPreview(replySource),
                 Instant.now()
         );
         chatMessageOutboxService.append(event, chatTopic);
@@ -439,6 +443,9 @@ public class ChatService {
                     event.attachmentType(),
                     event.attachmentName(),
                     event.attachmentSize(),
+                    event.replyToMessageId(),
+                    event.replyToSenderName(),
+                    event.replyToContent(),
                     event.createdAt()
             ));
             incrementUnreadForRecipients(event);
@@ -667,7 +674,10 @@ public class ChatService {
                 message.getCreatedAt(),
                 readCount,
                 readCount > 0 ? "READ" : "SENT",
-                toReactionResponses(message, currentUserEmail)
+                toReactionResponses(message, currentUserEmail),
+                message.getReplyToMessageId(),
+                message.getReplyToSenderName(),
+                message.getReplyToContent()
         );
     }
 
@@ -701,7 +711,36 @@ public class ChatService {
                 message.getCreatedAt(),
                 0,
                 "SENT",
-                List.of()
+                List.of(),
+                null,
+                null,
+                null
         );
+    }
+
+    private ChatMessageDocument resolveReplySource(String roomId, String replyToMessageId, UserAccount user) {
+        if (replyToMessageId == null || replyToMessageId.isBlank()) {
+            return null;
+        }
+        ChatMessageDocument replySource = ensureMessageInRoom(roomId, replyToMessageId);
+        if (replySource.isDeletedForEveryone() || !replySource.isVisibleTo(user.getEmail())) {
+            throw new IllegalArgumentException("답장할 수 없는 메시지입니다.");
+        }
+        return replySource;
+    }
+
+    private String replyPreview(ChatMessageDocument message) {
+        String source = message.getContent();
+        if ((source == null || source.isBlank()) && message.getAttachmentName() != null) {
+            source = message.getAttachmentName();
+        }
+        if (source == null || source.isBlank()) {
+            source = "첨부 메시지";
+        }
+        String normalized = source.trim().replaceAll("\\s+", " ");
+        if (normalized.length() <= 80) {
+            return normalized;
+        }
+        return normalized.substring(0, 80) + "...";
     }
 }
