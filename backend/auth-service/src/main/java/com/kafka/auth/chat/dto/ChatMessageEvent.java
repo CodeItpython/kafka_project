@@ -13,6 +13,9 @@ public record ChatMessageEvent(
         String attachmentType,
         String attachmentName,
         Long attachmentSize,
+        String replyToMessageId,
+        String replyToSenderName,
+        String replyToContent,
         Instant createdAt
 ) {
 }

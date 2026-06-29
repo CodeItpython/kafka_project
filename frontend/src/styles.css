@@ -975,6 +975,46 @@ input:focus {
   word-break: break-word;
 }
 
+.reply-preview,
+.composer-reply-preview {
+  display: grid;
+  gap: 3px;
+  border-left: 3px solid #0064ff;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #f7fbff;
+}
+
+.reply-preview {
+  margin-bottom: 10px;
+}
+
+.reply-preview strong,
+.composer-reply-preview strong {
+  color: #0064ff;
+  font-size: 12px;
+}
+
+.reply-preview span,
+.composer-reply-preview small {
+  overflow: hidden;
+  color: #4e5968;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-bubble.mine .reply-preview {
+  border-left-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.chat-bubble.mine .reply-preview strong,
+.chat-bubble.mine .reply-preview span {
+  color: #ffffff;
+}
+
 .deleted-message {
   color: #8b95a1;
   font-style: italic;
@@ -1122,6 +1162,29 @@ input:focus {
   border: 1px solid #e5e8eb;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.composer-reply-preview {
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr 32px;
+  align-items: center;
+}
+
+.composer-reply-preview span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.composer-reply-preview button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  color: #6b7684;
+  background: #e5e8eb;
 }
 
 .composer input {

@@ -209,6 +209,24 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 
 응답 메시지에는 `reactions`가 포함됩니다. 각 항목은 `emoji`, `count`, `reactedByMe`, `reactorEmails`를 담습니다.
 
+## 답장 메시지
+
+답장 기능은 원본 메시지 전체를 다시 참조하지 않고, 전송 시점의 원본 메시지 스냅샷을 새 메시지에 저장합니다. 원본 메시지가 나중에 삭제되거나 수정 개념이 생겨도 답장 말풍선에는 당시 사용자가 본 `replyToSenderName`, `replyToContent`가 안정적으로 남습니다.
+
+흐름:
+
+```text
+사용자가 메시지에서 답장 선택
+-> 프론트 composer에 답장 미리보기 표시
+-> 메시지 전송 시 replyToMessageId 포함
+-> 백엔드가 같은 채팅방 메시지인지 검증
+-> Kafka outbox payload에 답장 스냅샷 저장
+-> Kafka consumer가 MongoDB chat_messages에 답장 필드 저장
+-> WebSocket으로 답장 메시지 broadcast
+```
+
+답장 스냅샷은 MongoDB 메시지 도큐먼트의 `replyToMessageId`, `replyToSenderName`, `replyToContent` 필드에 저장합니다.
+
 확인 명령:
 
 ```bash

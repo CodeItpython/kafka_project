@@ -2,8 +2,10 @@ package com.kafka.auth.infra;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
+import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.model.ChatMessageDocument;
@@ -115,6 +117,9 @@ class InfrastructureIntegrationTest {
     @Autowired
     private ChatService chatService;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -187,6 +192,9 @@ class InfrastructureIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 Instant.now()
         );
         kafkaTemplate.send("chat-messages", event.roomId(), event).get();
@@ -198,6 +206,9 @@ class InfrastructureIntegrationTest {
                 savedUser.getEmail(),
                 savedUser.getName(),
                 "outbox 발행 테스트 메시지",
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -234,6 +245,9 @@ class InfrastructureIntegrationTest {
                 savedUser.getEmail(),
                 savedUser.getName(),
                 "알림 저장 테스트 메시지",
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -300,5 +314,20 @@ class InfrastructureIntegrationTest {
                 recipient
         );
         assertThat(reactionRemoved.reactions()).isEmpty();
+
+        ChatMessageEvent replyEvent = chatService.publishMessage(
+                notificationRoom.getId(),
+                new SendMessageRequest("답장 저장 테스트", null, reactionMessage.getId()),
+                recipient
+        );
+        OutboxEvent replyOutbox = outboxEventRepository.findAll()
+                .stream()
+                .filter(outbox -> replyEvent.messageId().equals(outbox.getAggregateId()))
+                .findFirst()
+                .orElseThrow();
+        ChatMessageEvent replyPayload = objectMapper.readValue(replyOutbox.getPayload(), ChatMessageEvent.class);
+        assertThat(replyPayload.replyToMessageId()).isEqualTo(reactionMessage.getId());
+        assertThat(replyPayload.replyToSenderName()).isEqualTo(savedUser.getName());
+        assertThat(replyPayload.replyToContent()).isEqualTo("반응 저장 테스트 메시지");
     }
 }

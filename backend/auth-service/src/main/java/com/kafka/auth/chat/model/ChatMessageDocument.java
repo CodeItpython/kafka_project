@@ -30,6 +30,9 @@ public class ChatMessageDocument {
     private String attachmentType;
     private String attachmentName;
     private Long attachmentSize;
+    private String replyToMessageId;
+    private String replyToSenderName;
+    private String replyToContent;
     private boolean deletedForEveryone;
     private Set<String> deletedForEmails = new LinkedHashSet<>();
     private Map<String, Set<String>> reactionEmailsByEmoji = new LinkedHashMap<>();
@@ -48,6 +51,9 @@ public class ChatMessageDocument {
             String attachmentType,
             String attachmentName,
             Long attachmentSize,
+            String replyToMessageId,
+            String replyToSenderName,
+            String replyToContent,
             Instant createdAt
     ) {
         this.id = id;
@@ -60,7 +66,41 @@ public class ChatMessageDocument {
         this.attachmentType = attachmentType;
         this.attachmentName = attachmentName;
         this.attachmentSize = attachmentSize;
+        this.replyToMessageId = replyToMessageId;
+        this.replyToSenderName = replyToSenderName;
+        this.replyToContent = replyToContent;
         this.createdAt = createdAt;
+    }
+
+    public ChatMessageDocument(
+            String id,
+            String roomId,
+            String roomName,
+            String senderEmail,
+            String senderName,
+            String content,
+            String attachmentUrl,
+            String attachmentType,
+            String attachmentName,
+            Long attachmentSize,
+            Instant createdAt
+    ) {
+        this(
+                id,
+                roomId,
+                roomName,
+                senderEmail,
+                senderName,
+                content,
+                attachmentUrl,
+                attachmentType,
+                attachmentName,
+                attachmentSize,
+                null,
+                null,
+                null,
+                createdAt
+        );
     }
 
     public boolean isVisibleTo(String email) {
