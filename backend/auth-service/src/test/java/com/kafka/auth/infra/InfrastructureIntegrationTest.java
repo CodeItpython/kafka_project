@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
+import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
@@ -340,6 +341,25 @@ class InfrastructureIntegrationTest {
         );
         assertThat(reactionRemoved.reactions()).isEmpty();
 
+        ChatMessageResponse editedMessage = chatService.editMessage(
+                notificationRoom.getId(),
+                reactionMessage.getId(),
+                new EditMessageRequest("수정된 반응 테스트 메시지"),
+                savedUser
+        );
+        assertThat(editedMessage.content()).isEqualTo("수정된 반응 테스트 메시지");
+        assertThat(editedMessage.editedAt()).isNotNull();
+        assertThat(chatMessageRepository.findById(reactionMessage.getId()))
+                .get()
+                .satisfies(message -> {
+                    assertThat(message.getContent()).isEqualTo("수정된 반응 테스트 메시지");
+                    assertThat(message.getEditedAt()).isNotNull();
+                });
+        assertThat(chatMessageSearchRepository.findById(reactionMessage.getId()))
+                .get()
+                .extracting(ChatMessageSearchDocument::getContent)
+                .isEqualTo("수정된 반응 테스트 메시지");
+
         ChatMessageEvent replyEvent = chatService.publishMessage(
                 notificationRoom.getId(),
                 new SendMessageRequest("답장 저장 테스트", null, reactionMessage.getId()),
@@ -353,6 +373,6 @@ class InfrastructureIntegrationTest {
         ChatMessageEvent replyPayload = objectMapper.readValue(replyOutbox.getPayload(), ChatMessageEvent.class);
         assertThat(replyPayload.replyToMessageId()).isEqualTo(reactionMessage.getId());
         assertThat(replyPayload.replyToSenderName()).isEqualTo(savedUser.getName());
-        assertThat(replyPayload.replyToContent()).isEqualTo("반응 저장 테스트 메시지");
+        assertThat(replyPayload.replyToContent()).isEqualTo("수정된 반응 테스트 메시지");
     }
 }

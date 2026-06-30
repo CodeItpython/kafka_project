@@ -1055,6 +1055,58 @@ input:focus {
   font-style: italic;
 }
 
+.edited-label {
+  display: inline-flex;
+  margin-top: 6px;
+  color: #8b95a1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-bubble.mine .edited-label {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.message-edit-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.message-edit-panel textarea {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  border: 1px solid #d1d6db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #191f28;
+  background: #ffffff;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.message-edit-panel div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.message-edit-panel button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #4e5968;
+  background: #f2f4f6;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.message-edit-panel button:last-child {
+  color: #ffffff;
+  background: #0064ff;
+}
+
 .message-media {
   display: block;
   overflow: hidden;
@@ -1149,6 +1201,10 @@ input:focus {
 }
 
 .message-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-height: 28px;
   border: 0;
   border-radius: 999px;

@@ -34,6 +34,7 @@ public class ChatMessageDocument {
     private String replyToSenderName;
     private String replyToContent;
     private boolean deletedForEveryone;
+    private Instant editedAt;
     private Set<String> deletedForEmails = new LinkedHashSet<>();
     private Map<String, Set<String>> reactionEmailsByEmoji = new LinkedHashMap<>();
 
@@ -119,6 +120,11 @@ public class ChatMessageDocument {
         attachmentName = null;
         attachmentSize = null;
         reactionEmailsByEmoji.clear();
+    }
+
+    public void editContent(String content) {
+        this.content = content;
+        this.editedAt = Instant.now();
     }
 
     public boolean toggleReaction(String emoji, String email) {

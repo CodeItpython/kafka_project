@@ -6,6 +6,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
@@ -211,6 +212,16 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.deleteMessageForEveryone(roomId, messageId, user));
+    }
+
+    @PatchMapping("/rooms/{roomId}/messages/{messageId}")
+    public ResponseEntity<ChatMessageResponse> editMessage(
+            @PathVariable String roomId,
+            @PathVariable String messageId,
+            @Valid @RequestBody EditMessageRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.editMessage(roomId, messageId, request, user));
     }
 
     @PostMapping("/rooms/{roomId}/messages/{messageId}/reactions")

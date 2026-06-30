@@ -22,6 +22,7 @@ import {
   Paperclip,
   Pin,
   Plus,
+  Pencil,
   RefreshCcw,
   Save,
   Search,
@@ -94,6 +95,7 @@ type ChatMessage = {
   attachmentSize: number | null;
   deletedForEveryone: boolean;
   createdAt: string;
+  editedAt: string | null;
   readCount: number;
   deliveryStatus: 'SENT' | 'READ';
   reactions: MessageReaction[];
@@ -251,6 +253,8 @@ function App() {
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState('');
+  const [editingDraft, setEditingDraft] = useState('');
   const [readReceipts, setReadReceipts] = useState<ReadReceipt[]>([]);
   const [roomName, setRoomName] = useState('프로젝트 채팅방');
   const [roomDescription, setRoomDescription] = useState('Kafka 이벤트로 메시지를 주고받는 공간');
@@ -507,6 +511,7 @@ function App() {
     setSelectedRoomId(roomId);
     setConversationSummary(null);
     setShowRefreshButton(false);
+    cancelEditingMessage();
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     setIsMenuOpen(false);
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
@@ -829,6 +834,37 @@ function App() {
     }
   }
 
+  function startEditingMessage(message: ChatMessage) {
+    setReplyTarget(null);
+    setEditingMessageId(message.id);
+    setEditingDraft(message.content);
+  }
+
+  function cancelEditingMessage() {
+    setEditingMessageId('');
+    setEditingDraft('');
+  }
+
+  async function editMessage(message: ChatMessage) {
+    const content = editingDraft.trim();
+    if (!content) {
+      setStatus('수정할 메시지 내용을 입력해주세요.');
+      return;
+    }
+    try {
+      const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content })
+      });
+      const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
+      setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
+      setSearchResults((current) => current.map((item) => item.id === normalized.id ? normalized : item));
+      cancelEditingMessage();
+    } catch (error) {
+      setStatus(readableError(error, '메시지를 수정하지 못했습니다.'));
+    }
+  }
+
   async function toggleMessageReaction(message: ChatMessage, emoji: string) {
     try {
       const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/reactions`, {
@@ -899,6 +935,7 @@ function App() {
     setRooms([]);
     setMessages([]);
     setReplyTarget(null);
+    cancelEditingMessage();
     setReadReceipts([]);
     readReceiptsRef.current = [];
     setSearchResults([]);
@@ -1357,6 +1394,14 @@ function App() {
                   </div>
                   {message.deletedForEveryone ? (
                     <p className="deleted-message">삭제된 메시지입니다.</p>
+                  ) : editingMessageId === message.id ? (
+                    <div className="message-edit-panel">
+                      <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} maxLength={2000} autoFocus />
+                      <div>
+                        <button type="button" onClick={cancelEditingMessage}>취소</button>
+                        <button type="button" onClick={() => editMessage(message)} disabled={!editingDraft.trim()}>저장</button>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       {message.replyToMessageId && (
@@ -1371,6 +1416,7 @@ function App() {
                         </a>
                       )}
                       {message.content && <p>{message.content}</p>}
+                      {message.editedAt && <span className="edited-label">수정됨</span>}
                       {message.reactions.length > 0 && (
                         <div className="reaction-strip" aria-label="메시지 반응">
                           {message.reactions.map((reaction) => (
@@ -1403,6 +1449,9 @@ function App() {
                         </div>
                         {message.senderEmail === user.email && (
                           <span className="read-state">{message.readCount > 0 ? `읽음 ${message.readCount}` : '전송됨'}</span>
+                        )}
+                        {message.senderEmail === user.email && message.content && (
+                          <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
                         )}
                         <button onClick={() => setReplyTarget(message)} type="button">답장</button>
                         <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>

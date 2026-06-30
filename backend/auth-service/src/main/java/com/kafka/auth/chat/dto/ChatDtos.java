@@ -82,6 +82,11 @@ public final class ChatDtos {
     ) {
     }
 
+    public record EditMessageRequest(
+            @NotBlank @Size(max = 2000) String content
+    ) {
+    }
+
     public record MessageReactionResponse(
             String emoji,
             long count,
@@ -141,6 +146,7 @@ public final class ChatDtos {
             Long attachmentSize,
             boolean deletedForEveryone,
             Instant createdAt,
+            Instant editedAt,
             long readCount,
             String deliveryStatus,
             java.util.List<MessageReactionResponse> reactions,
