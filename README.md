@@ -248,6 +248,35 @@ Content-Type: application/json
 
 답장 스냅샷은 MongoDB 메시지 도큐먼트의 `replyToMessageId`, `replyToSenderName`, `replyToContent` 필드에 저장합니다.
 
+## 메시지 수정
+
+내가 보낸 삭제되지 않은 텍스트 메시지는 수정할 수 있습니다.
+
+흐름:
+
+```text
+사용자가 내 메시지에서 수정 선택
+-> PATCH /api/chat/rooms/{roomId}/messages/{messageId}
+-> 백엔드가 작성자와 삭제 여부 검증
+-> MongoDB chat_messages.content, editedAt 갱신
+-> Elasticsearch chat-messages 색인 문서 갱신
+-> /topic/rooms/{roomId} WebSocket broadcast
+-> 프론트엔드가 같은 messageId를 교체하고 "수정됨" 표시
+```
+
+수정 API:
+
+```http
+PATCH /api/chat/rooms/{roomId}/messages/{messageId}
+Content-Type: application/json
+
+{
+  "content": "수정한 메시지 내용"
+}
+```
+
+답장 메시지의 `replyToContent`는 전송 시점 스냅샷이므로 원본 메시지를 나중에 수정해도 기존 답장 미리보기는 바뀌지 않습니다.
+
 확인 명령:
 
 ```bash

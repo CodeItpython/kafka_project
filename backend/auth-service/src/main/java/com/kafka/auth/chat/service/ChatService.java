@@ -8,6 +8,7 @@ import com.kafka.auth.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
+import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
@@ -406,6 +407,43 @@ public class ChatService {
     }
 
     @Transactional
+    public ChatMessageResponse editMessage(String roomId, String messageId, EditMessageRequest request, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
+        if (!message.getSenderEmail().equalsIgnoreCase(user.getEmail())) {
+            throw new IllegalArgumentException("내가 보낸 메시지만 수정할 수 있습니다.");
+        }
+        if (message.isDeletedForEveryone()) {
+            throw new IllegalArgumentException("삭제된 메시지는 수정할 수 없습니다.");
+        }
+        if (request.content() == null || request.content().isBlank()) {
+            throw new IllegalArgumentException("수정할 메시지 내용이 필요합니다.");
+        }
+        message.editContent(request.content().trim());
+        ChatMessageDocument saved = chatMessageRepository.save(message);
+        Timer.Sample indexSample = chatMetricsService.startTimer();
+        try {
+            chatMessageSearchRepository.save(new ChatMessageSearchDocument(
+                    saved.getId(),
+                    saved.getRoomId(),
+                    saved.getRoomName(),
+                    saved.getSenderEmail(),
+                    saved.getSenderName(),
+                    saved.getContent(),
+                    saved.getCreatedAt()
+            ));
+            chatMetricsService.recordElasticsearchIndexSuccess(indexSample);
+        } catch (RuntimeException exception) {
+            chatMetricsService.recordElasticsearchIndexFailure(indexSample);
+            log.warn("Unable to update chat message Elasticsearch index after edit.", exception);
+        }
+        Map<String, Instant> lastReadByEmail = chatReadReceiptService.lastReadByEmail(roomId);
+        ChatMessageResponse response = toMessageResponse(saved, lastReadByEmail, user.getEmail());
+        messagingTemplate.convertAndSend("/topic/rooms/" + roomId, toMessageResponse(saved, lastReadByEmail, null));
+        return response;
+    }
+
+    @Transactional
     public ChatMessageResponse toggleReaction(String roomId, String messageId, MessageReactionRequest request, UserAccount user) {
         ensureRoomAccess(roomId, user);
         ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
@@ -729,6 +767,7 @@ public class ChatService {
                 message.getAttachmentSize(),
                 message.isDeletedForEveryone(),
                 message.getCreatedAt(),
+                message.getEditedAt(),
                 readCount,
                 readCount > 0 ? "READ" : "SENT",
                 toReactionResponses(message, currentUserEmail),
@@ -766,6 +805,7 @@ public class ChatService {
                 null,
                 false,
                 message.getCreatedAt(),
+                null,
                 0,
                 "SENT",
                 List.of(),
