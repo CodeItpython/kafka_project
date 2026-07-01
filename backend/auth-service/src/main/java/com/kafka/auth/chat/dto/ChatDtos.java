@@ -137,6 +137,15 @@ public final class ChatDtos {
     ) {
     }
 
+    public record MessageDeliverySummaryResponse(
+            String roomId,
+            String messageId,
+            long deliveredCount,
+            long readCount,
+            String deliveryStatus
+    ) {
+    }
+
     public record ConversationSummaryResponse(
             String summary,
             String model,
@@ -168,6 +177,7 @@ public final class ChatDtos {
             Instant createdAt,
             Instant editedAt,
             long readCount,
+            long deliveredCount,
             String deliveryStatus,
             java.util.List<MessageReactionResponse> reactions,
             String replyToMessageId,

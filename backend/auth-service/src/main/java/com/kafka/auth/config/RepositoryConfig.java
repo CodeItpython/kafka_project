@@ -1,6 +1,7 @@
 package com.kafka.auth.config;
 
 import com.kafka.auth.chat.repository.ChatMessageRepository;
+import com.kafka.auth.chat.repository.ChatMessageDeliveryStateRepository;
 import com.kafka.auth.chat.repository.ChatRoomReadStateRepository;
 import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.chat.repository.ChatRoomUserPreferenceRepository;
@@ -22,6 +23,7 @@ import org.springframework.context.annotation.FilterType;
         basePackageClasses = {
                 UserAccountRepository.class,
                 EmailVerificationCodeRepository.class,
+                ChatMessageDeliveryStateRepository.class,
                 ChatRoomRepository.class,
                 ChatRoomReadStateRepository.class,
                 ChatRoomUserPreferenceRepository.class,
@@ -37,6 +39,7 @@ import org.springframework.context.annotation.FilterType;
                 type = FilterType.ASSIGNABLE_TYPE,
                 classes = {
                         ChatRoomRepository.class,
+                        ChatMessageDeliveryStateRepository.class,
                         ChatRoomReadStateRepository.class,
                         ChatRoomUserPreferenceRepository.class,
                         UserAccountRepository.class,
