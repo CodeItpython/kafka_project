@@ -247,6 +247,10 @@ function canUseFirebaseMessaging() {
   );
 }
 
+function canUseBrowserNotifications() {
+  return typeof window !== 'undefined' && 'Notification' in window;
+}
+
 function App() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState(SAMPLE_USERS[0].email);
@@ -291,11 +295,15 @@ function App() {
   const [notificationTopic, setNotificationTopic] = useState('');
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [pushStatus, setPushStatus] = useState('브라우저 알림 대기');
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => (
+    canUseBrowserNotifications() ? Notification.permission : 'default'
+  ));
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const readReceiptsRef = useRef<ReadReceipt[]>([]);
+  const openedNotificationRoomRef = useRef('');
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
@@ -533,6 +541,59 @@ function App() {
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
+  async function requestBrowserNotificationPermission() {
+    if (!canUseBrowserNotifications()) {
+      setNotificationPermission('denied');
+      setPushStatus('브라우저 알림 미지원');
+      return false;
+    }
+    if (Notification.permission === 'granted') {
+      setNotificationPermission('granted');
+      setPushStatus('브라우저 알림 켜짐');
+      return true;
+    }
+    if (Notification.permission === 'denied') {
+      setNotificationPermission('denied');
+      setPushStatus('브라우저 알림 차단됨');
+      return false;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === 'granted') {
+      setPushStatus('브라우저 알림 켜짐');
+      return true;
+    }
+    setPushStatus('브라우저 알림 꺼짐');
+    return false;
+  }
+
+  function shouldShowBrowserNotification(notification: UserNotification) {
+    const isCurrentRoom = Boolean(notification.targetRoomId && notification.targetRoomId === selectedRoomId);
+    return !isCurrentRoom || document.visibilityState !== 'visible';
+  }
+
+  function showBrowserNotification(notification: UserNotification) {
+    if (!canUseBrowserNotifications() || Notification.permission !== 'granted') {
+      return;
+    }
+    const browserNotification = new Notification(notification.title || 'Kafka Talk', {
+      body: notification.body || '새 알림이 도착했습니다.',
+      icon: '/vite.svg',
+      tag: `kafka-talk-${notification.id}`,
+      data: {
+        roomId: notification.targetRoomId ?? '',
+        messageId: notification.targetMessageId ?? ''
+      }
+    });
+    browserNotification.onclick = () => {
+      window.focus();
+      if (notification.targetRoomId) {
+        openRoom(notification.targetRoomId);
+      }
+      browserNotification.close();
+    };
+  }
+
   async function loadContacts(query = contactQuery) {
     if (!token) return;
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
@@ -699,23 +760,22 @@ function App() {
   }
 
   async function registerBrowserPush() {
+    const permissionGranted = await requestBrowserNotificationPermission();
+    if (!permissionGranted) {
+      return;
+    }
     if (!canUseFirebaseMessaging()) {
-      setPushStatus('Firebase 설정 없음');
+      setPushStatus('브라우저 알림 켜짐');
       return;
     }
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      setPushStatus('브라우저 알림 미지원');
-      return;
-    }
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      setPushStatus('브라우저 알림 꺼짐');
+    if (!('serviceWorker' in navigator)) {
+      setPushStatus('브라우저 알림 켜짐');
       return;
     }
     try {
       const supported = await isSupported();
       if (!supported) {
-        setPushStatus('FCM 미지원 브라우저');
+        setPushStatus('브라우저 알림 켜짐');
         return;
       }
       const app = getApps().length > 0 ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
@@ -735,7 +795,7 @@ function App() {
       });
       setPushStatus('브라우저 알림 켜짐');
     } catch {
-      setPushStatus('푸시 연결 실패');
+      setPushStatus('브라우저 알림 켜짐');
     }
   }
 
@@ -1042,6 +1102,17 @@ function App() {
   }, [token, user?.email]);
 
   useEffect(() => {
+    if (!user || rooms.length === 0) return;
+    const roomId = new URLSearchParams(window.location.search).get('roomId');
+    if (!roomId || openedNotificationRoomRef.current === roomId) return;
+    if (rooms.some((room) => room.id === roomId)) {
+      openedNotificationRoomRef.current = roomId;
+      openRoom(roomId);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [user?.email, rooms.length]);
+
+  useEffect(() => {
     if (!token || !user) return;
     const timer = window.setInterval(() => {
       heartbeat()
@@ -1162,6 +1233,9 @@ function App() {
           if (notification.targetRoomId !== selectedRoomId) {
             setRooms((current) => current.map((room) => room.id === notification.targetRoomId ? { ...room, unreadCount: room.unreadCount + 1 } : room));
           }
+          if (shouldShowBrowserNotification(notification)) {
+            showBrowserNotification(notification);
+          }
         });
       }
     });
@@ -1281,6 +1355,9 @@ function App() {
             <div className="push-status">
               {notificationUnreadCount > 0 ? <BellRing size={16} aria-hidden /> : <Bell size={16} aria-hidden />}
               <span>{pushStatus}</span>
+              {notificationPermission !== 'granted' && (
+                <button type="button" onClick={() => registerBrowserPush().catch(() => setPushStatus('푸시 연결 실패'))}>켜기</button>
+              )}
               <button type="button" onClick={markAllNotificationsRead} disabled={notificationUnreadCount === 0}>읽음</button>
             </div>
             <div className="notification-list">
