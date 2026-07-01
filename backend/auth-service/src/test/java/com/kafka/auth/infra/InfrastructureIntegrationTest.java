@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
 import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
+import com.kafka.auth.chat.dto.ChatDtos.InviteRoomParticipantsRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
 import com.kafka.auth.chat.dto.ChatDtos.SendMessageRequest;
@@ -32,6 +33,7 @@ import com.kafka.auth.repository.UserAccountRepository;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -235,11 +237,34 @@ class InfrastructureIntegrationTest {
                 "encoded-password",
                 AuthProvider.LOCAL
         ));
-        ChatRoom notificationRoom = chatRoomRepository.save(new ChatRoom(
+        ChatRoom notificationRoom = new ChatRoom(
                 "알림 테스트 방",
                 "알림 저장 검증",
                 savedUser.getEmail()
+        );
+        notificationRoom.addParticipant(recipient.getEmail());
+        notificationRoom = chatRoomRepository.save(notificationRoom);
+        String notificationRoomId = notificationRoom.getId();
+        assertThat(chatService.roomParticipants(notificationRoom.getId(), savedUser))
+                .extracting(participant -> participant.email())
+                .contains(savedUser.getEmail(), recipient.getEmail());
+        UserAccount invitedUser = userAccountRepository.save(new UserAccount(
+                "invited@example.com",
+                "초대유저",
+                "encoded-password",
+                AuthProvider.LOCAL
         ));
+        assertThat(chatService.inviteRoomParticipants(
+                notificationRoom.getId(),
+                new InviteRoomParticipantsRequest(List.of(invitedUser.getEmail())),
+                savedUser
+        ))
+                .extracting(participant -> participant.email())
+                .contains(invitedUser.getEmail());
+        chatService.leaveRoom(notificationRoom.getId(), invitedUser);
+        assertThat(chatService.roomParticipants(notificationRoom.getId(), savedUser))
+                .extracting(participant -> participant.email())
+                .doesNotContain(invitedUser.getEmail());
         ChatMessageEvent notificationEvent = new ChatMessageEvent(
                 "notification-" + UUID.randomUUID(),
                 notificationRoom.getId(),
@@ -263,7 +288,7 @@ class InfrastructureIntegrationTest {
         assertThat(notificationList.notifications())
                 .singleElement()
                 .satisfies(notification -> {
-                    assertThat(notification.targetRoomId()).isEqualTo(notificationRoom.getId());
+                    assertThat(notification.targetRoomId()).isEqualTo(notificationRoomId);
                     assertThat(notification.body()).isEqualTo("알림 저장 테스트 메시지");
                 });
 

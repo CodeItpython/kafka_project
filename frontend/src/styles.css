@@ -13,7 +13,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -779,7 +780,7 @@ input:focus {
 }
 
 .conversation {
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
 }
 
 .room-directory {
@@ -919,6 +920,99 @@ input:focus {
   background: #f2f4f6;
   font-size: 13px;
   font-weight: 900;
+}
+
+.participant-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+  border-right: 1px solid #e5e8eb;
+  border-left: 1px solid #e5e8eb;
+  background: #ffffff;
+}
+
+.participant-list {
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.participant-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 3px 9px 3px 4px;
+  color: #4e5968;
+  background: #f2f4f6;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.participant-chip.online {
+  color: #067647;
+  background: #e7f8ef;
+}
+
+.participant-chip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participant-chip small {
+  color: #0064ff;
+}
+
+.participant-more {
+  flex: 0 0 auto;
+  color: #8b95a1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tiny-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.invite-form {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.invite-form select {
+  width: min(240px, 36vw);
+  height: 34px;
+  border: 1px solid #e5e8eb;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #4e5968;
+  background: #f8fafb;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.invite-form button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  place-items: center;
+  color: #ffffff;
+  background: #0064ff;
 }
 
 .message-list {

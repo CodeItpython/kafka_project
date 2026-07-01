@@ -59,6 +59,7 @@ public class ChatRoom {
         this.description = description;
         this.createdBy = createdBy;
         this.type = ChatRoomType.GROUP;
+        this.participantEmails.add(createdBy);
     }
 
     public static ChatRoom direct(String directKey, String name, String createdBy, Set<String> participantEmails) {
@@ -81,7 +82,13 @@ public class ChatRoom {
     }
 
     public boolean isVisibleTo(String email) {
-        return !hiddenForEmails.contains(email) && (getType() == ChatRoomType.GROUP || participantEmails.contains(email));
+        if (containsEmail(hiddenForEmails, email)) {
+            return false;
+        }
+        if (getType() == ChatRoomType.DIRECT) {
+            return containsEmail(participantEmails, email);
+        }
+        return participantEmails.isEmpty() || containsEmail(participantEmails, email);
     }
 
     public void hideFor(String email) {
@@ -90,6 +97,31 @@ public class ChatRoom {
 
     public boolean isCreatedBy(String email) {
         return createdBy.equalsIgnoreCase(email);
+    }
+
+    public boolean isParticipant(String email) {
+        return containsEmail(participantEmails, email);
+    }
+
+    public void addParticipant(String email) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        participantEmails.add(email);
+        hiddenForEmails.removeIf(hiddenEmail -> hiddenEmail.equalsIgnoreCase(email));
+    }
+
+    public void removeParticipant(String email) {
+        participantEmails.removeIf(participantEmail -> participantEmail.equalsIgnoreCase(email));
+        hiddenForEmails.add(email);
+    }
+
+    public int participantCount() {
+        return participantEmails.size();
+    }
+
+    private boolean containsEmail(Set<String> emails, String email) {
+        return email != null && emails.stream().anyMatch(value -> value.equalsIgnoreCase(email));
     }
 
 }
