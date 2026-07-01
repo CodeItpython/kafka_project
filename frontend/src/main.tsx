@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserPlus,
   X,
   UserRound
 } from 'lucide-react';
@@ -80,6 +81,7 @@ type ChatRoom = {
   unreadCount: number;
   pinned: boolean;
   muted: boolean;
+  participantCount: number;
 };
 
 type ChatMessage = {
@@ -133,6 +135,17 @@ type Contact = {
   statusMessage: string;
   profileImageUrl: string | null;
   online: boolean;
+};
+
+type RoomParticipant = {
+  id: number;
+  email: string;
+  name: string;
+  provider: string;
+  statusMessage: string;
+  profileImageUrl: string | null;
+  online: boolean;
+  owner: boolean;
 };
 
 type ProfileHistory = {
@@ -255,6 +268,8 @@ function App() {
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [editingMessageId, setEditingMessageId] = useState('');
   const [editingDraft, setEditingDraft] = useState('');
+  const [roomParticipants, setRoomParticipants] = useState<RoomParticipant[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
   const [readReceipts, setReadReceipts] = useState<ReadReceipt[]>([]);
   const [roomName, setRoomName] = useState('프로젝트 채팅방');
   const [roomDescription, setRoomDescription] = useState('Kafka 이벤트로 메시지를 주고받는 공간');
@@ -285,6 +300,7 @@ function App() {
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
   const groupRooms = rooms.filter((room) => room.type === 'GROUP');
+  const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
 
   const title = useMemo(() => {
     if (mode === 'register') return '계정 만들기';
@@ -625,6 +641,43 @@ function App() {
     setPresence(data);
   }
 
+  async function loadRoomParticipants(roomId: string) {
+    if (!roomId) return;
+    const data = await request<RoomParticipant[]>(`/chat/rooms/${roomId}/participants`);
+    setRoomParticipants(data);
+  }
+
+  async function inviteParticipant(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedRoomId || !inviteEmail) return;
+    try {
+      const data = await request<RoomParticipant[]>(`/chat/rooms/${selectedRoomId}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({ emails: [inviteEmail] })
+      });
+      setRoomParticipants(data);
+      setInviteEmail('');
+      await loadRooms(roomQuery);
+      setStatus('친구를 채팅방에 초대했습니다.');
+    } catch (error) {
+      setStatus(readableError(error, '친구를 초대하지 못했습니다.'));
+    }
+  }
+
+  async function leaveSelectedRoom() {
+    if (!selectedRoomId || !selectedRoom) return;
+    try {
+      await request<void>(`/chat/rooms/${selectedRoomId}/participants/me`, { method: 'DELETE' });
+      setRooms((current) => current.filter((room) => room.id !== selectedRoomId));
+      setSelectedRoomId('');
+      setMessages([]);
+      setRoomParticipants([]);
+      setStatus(`${selectedRoom.name} 채팅방에서 나갔습니다.`);
+    } catch (error) {
+      setStatus(readableError(error, '채팅방에서 나가지 못했습니다.'));
+    }
+  }
+
   async function loadNotifications() {
     if (!token) return;
     const data = await request<NotificationListResponse>('/notifications');
@@ -936,6 +989,8 @@ function App() {
     setMessages([]);
     setReplyTarget(null);
     cancelEditingMessage();
+    setRoomParticipants([]);
+    setInviteEmail('');
     setReadReceipts([]);
     readReceiptsRef.current = [];
     setSearchResults([]);
@@ -1001,8 +1056,10 @@ function App() {
       setReadReceipts([]);
       readReceiptsRef.current = [];
       setReplyTarget(null);
+      setInviteEmail('');
       loadMessages(selectedRoomId);
       loadPresence(selectedRoomId);
+      loadRoomParticipants(selectedRoomId);
       setConversationSummary(null);
       setShowRefreshButton(false);
     }
@@ -1360,9 +1417,32 @@ function App() {
                   <Sparkles size={15} aria-hidden />{summaryLoading ? '요약 중' : 'GPT 요약'}
                 </button>
                 <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
+                {selectedRoom?.type === 'GROUP' && <button className="soft-action-button" onClick={leaveSelectedRoom} disabled={loading} type="button">나가기</button>}
                 <button className="ghost-icon-button" onClick={deleteRoom} disabled={!selectedRoomId || loading} title="채팅방 삭제"><Trash2 size={17} aria-hidden /></button>
               </div>
             </header>
+
+            <section className="participant-panel">
+              <div className="participant-list">
+                {roomParticipants.slice(0, 8).map((participant) => (
+                  <span key={participant.email} className={participant.online ? 'participant-chip online' : 'participant-chip'}>
+                    <ProfileAvatar className="tiny-avatar" name={participant.name} imageUrl={participant.profileImageUrl} />
+                    <strong>{participant.name}</strong>
+                    {participant.owner && <small>방장</small>}
+                  </span>
+                ))}
+                {roomParticipants.length > 8 && <span className="participant-more">+{roomParticipants.length - 8}</span>}
+              </div>
+              {selectedRoom?.type === 'GROUP' && (
+                <form className="invite-form" onSubmit={inviteParticipant}>
+                  <select value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} disabled={inviteOptions.length === 0}>
+                    <option value="">친구 초대</option>
+                    {inviteOptions.map((contact) => <option key={contact.email} value={contact.email}>{contact.name} · {contact.email}</option>)}
+                  </select>
+                  <button type="submit" disabled={!inviteEmail || loading} title="친구 초대"><UserPlus size={16} aria-hidden /></button>
+                </form>
+              )}
+            </section>
 
             <div className="message-list" ref={messageListRef} onScroll={handleMessageScroll}>
               {(showRefreshButton || messagesRefreshing) && (
@@ -1661,7 +1741,7 @@ function RoomList({
             {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
             <span>
               <strong>{room.name}</strong>
-              <small>{room.type === 'DIRECT' ? '개인 메시지' : room.description}</small>
+              <small>{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
             </span>
           </button>
           <div className="room-meta-actions">

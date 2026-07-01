@@ -7,8 +7,10 @@ import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
+import com.kafka.auth.chat.dto.ChatDtos.InviteRoomParticipantsRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
+import com.kafka.auth.chat.dto.ChatDtos.RoomParticipantResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.SearchSuggestionResponse;
@@ -86,6 +88,32 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.findOrCreateDirectRoom(request, user));
+    }
+
+    @GetMapping("/rooms/{roomId}/participants")
+    public ResponseEntity<List<RoomParticipantResponse>> roomParticipants(
+            @PathVariable String roomId,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.roomParticipants(roomId, user));
+    }
+
+    @PostMapping("/rooms/{roomId}/participants")
+    public ResponseEntity<List<RoomParticipantResponse>> inviteRoomParticipants(
+            @PathVariable String roomId,
+            @Valid @RequestBody InviteRoomParticipantsRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.inviteRoomParticipants(roomId, request, user));
+    }
+
+    @DeleteMapping("/rooms/{roomId}/participants/me")
+    public ResponseEntity<Void> leaveRoom(
+            @PathVariable String roomId,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        chatService.leaveRoom(roomId, user);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/contacts")

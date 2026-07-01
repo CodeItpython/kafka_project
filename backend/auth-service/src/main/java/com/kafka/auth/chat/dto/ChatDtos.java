@@ -1,8 +1,10 @@
 package com.kafka.auth.chat.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 
 public final class ChatDtos {
     private ChatDtos() {
@@ -48,6 +50,11 @@ public final class ChatDtos {
     ) {
     }
 
+    public record InviteRoomParticipantsRequest(
+            @NotEmpty List<@NotBlank String> emails
+    ) {
+    }
+
     public record ChatRoomResponse(
             String id,
             String name,
@@ -57,7 +64,8 @@ public final class ChatDtos {
             Instant createdAt,
             long unreadCount,
             boolean pinned,
-            boolean muted
+            boolean muted,
+            int participantCount
     ) {
     }
 
@@ -69,6 +77,18 @@ public final class ChatDtos {
             String statusMessage,
             String profileImageUrl,
             boolean online
+    ) {
+    }
+
+    public record RoomParticipantResponse(
+            Long id,
+            String email,
+            String name,
+            String provider,
+            String statusMessage,
+            String profileImageUrl,
+            boolean online,
+            boolean owner
     ) {
     }
 

@@ -9,8 +9,10 @@ import com.kafka.auth.chat.dto.ChatDtos.ConversationSummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
+import com.kafka.auth.chat.dto.ChatDtos.InviteRoomParticipantsRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionResponse;
+import com.kafka.auth.chat.dto.ChatDtos.RoomParticipantResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomReadSummaryResponse;
@@ -315,13 +317,71 @@ public class ChatService {
     public RoomPresenceResponse roomPresence(String roomId, UserAccount user) {
         ChatRoom room = ensureRoomAccess(roomId, user);
         chatStateService.markOnline(user);
-        Set<String> participants = room.getType() == ChatRoomType.DIRECT
-                ? room.getParticipantEmails()
-                : userAccountRepository.findTop30ByOrderByNameAsc()
-                .stream()
-                .map(UserAccount::getEmail)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<String> participants = participantEmailsForRoom(room);
         return chatStateService.roomPresence(roomId, participants, user.getEmail());
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomParticipantResponse> roomParticipants(String roomId, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        return participantResponses(room);
+    }
+
+    @Transactional
+    public List<RoomParticipantResponse> inviteRoomParticipants(String roomId, InviteRoomParticipantsRequest request, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        if (room.getType() != ChatRoomType.GROUP) {
+            throw new IllegalArgumentException("그룹 채팅방에만 친구를 초대할 수 있습니다.");
+        }
+        if (!room.isCreatedBy(user.getEmail()) && !room.isParticipant(user.getEmail())) {
+            throw new IllegalArgumentException("채팅방 참여자만 친구를 초대할 수 있습니다.");
+        }
+        List<String> emails = request.emails()
+                .stream()
+                .map(this::normalizeEmail)
+                .filter(email -> !email.isBlank())
+                .distinct()
+                .toList();
+        if (emails.isEmpty()) {
+            throw new IllegalArgumentException("초대할 사용자를 선택해주세요.");
+        }
+        List<UserAccount> invitees = userAccountRepository.findByEmailIn(emails);
+        Set<String> foundEmails = invitees.stream()
+                .map(UserAccount::getEmail)
+                .map(this::normalizeEmail)
+                .collect(java.util.stream.Collectors.toSet());
+        List<String> missingEmails = emails.stream()
+                .filter(email -> !foundEmails.contains(email))
+                .toList();
+        if (!missingEmails.isEmpty()) {
+            throw new IllegalArgumentException("초대할 사용자를 찾을 수 없습니다: " + String.join(", ", missingEmails));
+        }
+        if (room.getParticipantEmails().isEmpty()) {
+            room.addParticipant(room.getCreatedBy());
+        }
+        invitees.forEach(invitee -> room.addParticipant(invitee.getEmail()));
+        chatRoomRepository.save(room);
+        chatStateService.evictRoomCaches(user.getEmail());
+        invitees.forEach(invitee -> chatStateService.evictRoomCaches(invitee.getEmail()));
+        return participantResponses(room);
+    }
+
+    @Transactional
+    public void leaveRoom(String roomId, UserAccount user) {
+        ChatRoom room = ensureRoomAccess(roomId, user);
+        if (room.getType() != ChatRoomType.GROUP) {
+            throw new IllegalArgumentException("1:1 채팅방에서는 나가기를 사용할 수 없습니다.");
+        }
+        if (room.getParticipantEmails().isEmpty()) {
+            room.addParticipant(room.getCreatedBy());
+        }
+        if (!room.isParticipant(user.getEmail())) {
+            room.hideFor(user.getEmail());
+        } else {
+            room.removeParticipant(user.getEmail());
+        }
+        chatRoomRepository.save(room);
+        chatStateService.evictRoomCaches(user.getEmail());
     }
 
     @Transactional
@@ -569,12 +629,7 @@ public class ChatService {
     }
 
     private Set<String> notificationRecipients(ChatRoom room, String senderEmail) {
-        Set<String> recipients = room.getType() == ChatRoomType.DIRECT
-                ? new LinkedHashSet<>(room.getParticipantEmails())
-                : userAccountRepository.findAll()
-                .stream()
-                .map(UserAccount::getEmail)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<String> recipients = participantEmailsForRoom(room);
         recipients.removeIf(email -> email.equalsIgnoreCase(senderEmail));
         return recipients;
     }
@@ -698,6 +753,46 @@ public class ChatService {
                 .thenComparing(ChatRoomResponse::createdAt, Comparator.reverseOrder());
     }
 
+    private List<RoomParticipantResponse> participantResponses(ChatRoom room) {
+        Set<String> emails = participantEmailsForRoom(room);
+        if (emails.isEmpty()) {
+            return List.of();
+        }
+        Map<String, UserAccount> usersByEmail = userAccountRepository.findByEmailIn(emails)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        user -> normalizeEmail(user.getEmail()),
+                        user -> user,
+                        (first, second) -> first
+                ));
+        return emails.stream()
+                .map(this::normalizeEmail)
+                .map(usersByEmail::get)
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparing(UserAccount::getName))
+                .map(participant -> new RoomParticipantResponse(
+                        participant.getId(),
+                        participant.getEmail(),
+                        participant.getName(),
+                        participant.getProvider().name(),
+                        participant.getStatusMessage(),
+                        participant.getProfileImageUrl(),
+                        chatStateService.isOnline(participant.getEmail()),
+                        participant.getEmail().equalsIgnoreCase(room.getCreatedBy())
+                ))
+                .toList();
+    }
+
+    private Set<String> participantEmailsForRoom(ChatRoom room) {
+        if (room.getType() == ChatRoomType.GROUP && room.getParticipantEmails().isEmpty()) {
+            return userAccountRepository.findAll()
+                    .stream()
+                    .map(UserAccount::getEmail)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        }
+        return new LinkedHashSet<>(room.getParticipantEmails());
+    }
+
     private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail) {
         ChatRoomUserPreference preference = chatRoomUserPreferenceRepository
                 .findByRoomIdAndUserEmail(room.getId(), currentUserEmail)
@@ -715,7 +810,8 @@ public class ChatService {
                 room.getCreatedAt(),
                 chatStateService.unreadCount(room.getId(), currentUserEmail),
                 preference != null && preference.isPinned(),
-                preference != null && preference.isMuted()
+                preference != null && preference.isMuted(),
+                participantEmailsForRoom(room).size()
         );
     }
 
@@ -729,6 +825,10 @@ public class ChatService {
 
     private String directRoomName(UserAccount user, UserAccount partner) {
         return user.getName() + ", " + partner.getName();
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 
     private String extension(String fileName, String contentType) {

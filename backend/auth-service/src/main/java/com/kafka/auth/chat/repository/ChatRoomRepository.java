@@ -20,7 +20,8 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, String> {
             select distinct room
             from ChatRoom room
             left join room.participantEmails participant
-            where room.type = :groupType or room.type is null or participant = :email
+            where participant = :email
+               or ((room.type = :groupType or room.type is null) and room.participantEmails is empty)
             order by room.createdAt desc
             """)
     List<ChatRoom> findVisibleRooms(
@@ -33,7 +34,7 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, String> {
             select distinct room
             from ChatRoom room
             left join room.participantEmails participant
-            where (room.type = :groupType or room.type is null or participant = :email)
+            where (participant = :email or ((room.type = :groupType or room.type is null) and room.participantEmails is empty))
               and lower(room.name) like lower(concat('%', :query, '%'))
             order by room.createdAt desc
             """)

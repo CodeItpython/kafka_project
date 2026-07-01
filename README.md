@@ -214,6 +214,31 @@ Content-Type: application/json
 
 응답의 `ChatRoomResponse`에는 `pinned`, `muted`가 포함됩니다. 프론트엔드는 이 값을 기준으로 방 목록을 정렬하고, 알림 아이콘 상태를 표시합니다. unread count는 메시지를 놓치지 않도록 그대로 증가하고, 알림 생성만 끕니다.
 
+## 그룹방 참여자 관리
+
+새로 생성하는 그룹 채팅방은 만든 사람이 자동으로 참여자가 됩니다. 참여자는 친구를 그룹방에 초대할 수 있고, 그룹방에서 나갈 수 있습니다.
+
+사용 API:
+
+```http
+GET /api/chat/rooms/{roomId}/participants
+```
+
+```http
+POST /api/chat/rooms/{roomId}/participants
+Content-Type: application/json
+
+{
+  "emails": ["friend@example.com"]
+}
+```
+
+```http
+DELETE /api/chat/rooms/{roomId}/participants/me
+```
+
+참여자 목록이 비어 있는 기존 그룹방은 이전 버전 호환을 위해 공개 그룹방처럼 처리합니다. 새 그룹방부터는 `chat_room_participants` 기준으로 방 목록, presence, unread, 알림 수신자를 계산합니다.
+
 ## 메시지 리액션
 
 메시지 리액션은 채팅 메시지 원본인 MongoDB `chat_messages` 도큐먼트 안에 저장합니다. 리액션은 메시지와 생명주기가 같고, 메시지를 조회할 때 항상 같이 필요한 작은 부가 상태라 별도 PostgreSQL 테이블보다 MongoDB nested map이 현재 구조에 더 단순합니다.
