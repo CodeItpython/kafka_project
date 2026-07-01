@@ -516,6 +516,150 @@ input:focus {
   font-size: 12px;
 }
 
+.dlt-panel {
+  gap: 10px;
+}
+
+.dlt-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  gap: 8px;
+  align-items: end;
+}
+
+.dlt-toolbar label {
+  gap: 5px;
+  font-size: 12px;
+}
+
+.dlt-toolbar input {
+  min-height: 38px;
+  padding: 9px 10px;
+  background: #f8fafb;
+}
+
+.dlt-toolbar button,
+.dlt-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.dlt-toolbar button {
+  color: #0064ff;
+  background: #eef6ff;
+}
+
+.dlt-list {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.dlt-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid #e5e8eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.dlt-item.selected {
+  border-color: rgba(0, 100, 255, 0.28);
+  background: #f3f8ff;
+}
+
+.dlt-item input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: #0064ff;
+}
+
+.dlt-item span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dlt-item strong,
+.dlt-item small,
+.dlt-item em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dlt-item strong {
+  color: #191f28;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.dlt-item small {
+  color: #6b7684;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dlt-item em {
+  color: #8b95a1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.dlt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dlt-actions button:first-child {
+  color: #4e5968;
+  background: #f2f4f6;
+}
+
+.dlt-actions button:last-child {
+  color: #ffffff;
+  background: #191f28;
+}
+
+.dlt-result {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid #d8efe2;
+  border-radius: 8px;
+  color: #067647;
+  background: #f0fbf5;
+}
+
+.dlt-result strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dlt-result span,
+.dlt-result small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .profile-history-list article {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
