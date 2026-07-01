@@ -219,7 +219,7 @@ function App() {
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
