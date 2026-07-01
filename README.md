@@ -164,6 +164,37 @@ from outbox_events
 order by created_at desc;
 ```
 
+## Kafka Retry Topic / DLT
+
+채팅 메시지 consumer가 MongoDB 저장, Elasticsearch 색인, WebSocket broadcast, 알림 생성 중 복구 가능한 오류를 만나면 즉시 유실시키지 않고 Spring Kafka retry topic 흐름으로 재시도합니다.
+
+기본 설정:
+
+```properties
+app.chat.retry.max-attempts=3
+app.chat.retry.backoff-ms=2000
+app.chat.retry.backoff-multiplier=2.0
+```
+
+흐름:
+
+```text
+chat-messages consume
+-> 처리 성공: MongoDB 저장, Elasticsearch 색인, WebSocket broadcast
+-> 처리 실패: chat-messages 기반 retry topic으로 이동
+-> 설정된 횟수만큼 재시도
+-> 계속 실패: chat-messages-dlt 계열 DLT로 이동
+-> DLT handler가 kafka.talk.kafka.dlt.total metric과 서버 error log 기록
+```
+
+확인 명령:
+
+```bash
+docker exec kafka-kafka kafka-topics --bootstrap-server localhost:9092 --list | grep chat-messages
+```
+
+Prometheus에서는 `kafka_talk_kafka_consume_total`, `kafka_talk_kafka_dlt_total` metric으로 소비 실패와 DLT 이동 여부를 볼 수 있습니다. DLT에 쌓인 메시지는 원인을 고친 뒤 별도 replay 도구나 운영 스크립트로 원본 topic에 다시 넣는 방식으로 복구합니다.
+
 ## Redis 캐시와 상태 관리
 
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.

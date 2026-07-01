@@ -37,6 +37,10 @@ public class ChatMetricsService {
         count("kafka.talk.kafka.consume.total", "failure", "has_attachment", hasAttachment(event));
     }
 
+    public void recordKafkaDlt(ChatMessageEvent event) {
+        count("kafka.talk.kafka.dlt.total", "failure", "has_attachment", hasAttachment(event));
+    }
+
     public void recordElasticsearchIndexSuccess(Timer.Sample sample) {
         stop(sample, "kafka.talk.elasticsearch.index.duration", "success");
         count("kafka.talk.elasticsearch.index.total", "success");

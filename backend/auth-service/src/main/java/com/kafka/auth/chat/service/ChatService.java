@@ -51,8 +51,11 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -561,6 +564,18 @@ public class ChatService {
         return objectStorageService.load("chat/" + cleanName(fileName));
     }
 
+    @RetryableTopic(
+            attempts = "${app.chat.retry.max-attempts}",
+            backoff = @Backoff(
+                    delayExpression = "${app.chat.retry.backoff-ms}",
+                    multiplierExpression = "${app.chat.retry.backoff-multiplier}"
+            ),
+            retryTopicSuffix = "-retry",
+            dltTopicSuffix = "-dlt",
+            autoCreateTopics = "true",
+            numPartitions = "3",
+            replicationFactor = "1"
+    )
     @KafkaListener(topics = "${app.chat.topic}", groupId = "${spring.kafka.consumer.group-id}")
     @Transactional
     public void persistAndBroadcast(ChatMessageEvent event) {
@@ -620,6 +635,17 @@ public class ChatService {
             chatMetricsService.recordKafkaConsumeFailure(consumeSample, event);
             throw exception;
         }
+    }
+
+    @DltHandler
+    public void handleChatMessageDlt(ChatMessageEvent event) {
+        chatMetricsService.recordKafkaDlt(event);
+        log.error(
+                "Chat message event moved to Kafka DLT. messageId={}, roomId={}, senderEmail={}",
+                event.messageId(),
+                event.roomId(),
+                event.senderEmail()
+        );
     }
 
     private void incrementUnreadForRecipients(ChatMessageEvent event) {
