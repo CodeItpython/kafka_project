@@ -43,6 +43,7 @@ type User = {
   email: string;
   name: string;
   provider: string;
+  role: 'USER' | 'ADMIN';
   statusMessage: string;
   profileImageUrl: string | null;
 };
@@ -352,6 +353,7 @@ function App() {
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
   const groupRooms = rooms.filter((room) => room.type === 'GROUP');
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
+  const isAdmin = user?.role === 'ADMIN';
 
   const title = useMemo(() => {
     if (mode === 'register') return '계정 만들기';
@@ -1528,62 +1530,64 @@ function App() {
             </div>
           </section>
 
-          <section className="panel-section dlt-panel">
-            <div className="section-title">
-              <span>실패 메시지</span>
-              <small>{dltTopic || 'DLT'}</small>
-            </div>
-            <div className="dlt-toolbar">
-              <label>
-                조회 개수
-                <input
-                  value={dltLimit}
-                  type="number"
-                  min={1}
-                  max={100}
-                  onChange={(event) => setDltLimit(Number(event.target.value))}
-                />
-              </label>
-              <button type="button" onClick={loadDltMessages} disabled={dltLoading}>
-                <RefreshCcw size={15} aria-hidden />
-                조회
-              </button>
-            </div>
-            <div className="dlt-list">
-              {dltMessages.map((message) => (
-                <label key={`${message.topic}-${message.partition}-${message.offset}`} className={dltSelectedIds.includes(message.messageId) ? 'dlt-item selected' : 'dlt-item'}>
-                  <input
-                    type="checkbox"
-                    checked={dltSelectedIds.includes(message.messageId)}
-                    onChange={() => toggleDltMessage(message.messageId)}
-                  />
-                  <span>
-                    <strong>{message.roomName || message.roomId}</strong>
-                    <small>{message.senderName || message.senderEmail} · offset {message.offset}</small>
-                    <em>{message.messageId}</em>
-                  </span>
-                </label>
-              ))}
-              {dltMessages.length === 0 && <p className="empty-state">조회된 실패 메시지가 없습니다.</p>}
-            </div>
-            <div className="dlt-actions">
-              <button type="button" onClick={() => replayDltMessages(true)} disabled={dltLoading || dltMessages.length === 0}>
-                <CheckCircle2 size={15} aria-hidden />
-                미리 확인
-              </button>
-              <button type="button" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
-                <Send size={15} aria-hidden />
-                재처리
-              </button>
-            </div>
-            {dltResult && (
-              <div className="dlt-result">
-                <strong>{dltResult.dryRun ? '미리 확인 완료' : '재처리 완료'}</strong>
-                <span>{dltResult.scannedCount}개 스캔 · {dltResult.replayedCount}개 대상</span>
-                <small>{dltResult.sourceTopic} → {dltResult.targetTopic}</small>
+          {isAdmin && (
+            <section className="panel-section dlt-panel">
+              <div className="section-title">
+                <span>실패 메시지</span>
+                <small>{dltTopic || 'DLT'}</small>
               </div>
-            )}
-          </section>
+              <div className="dlt-toolbar">
+                <label>
+                  조회 개수
+                  <input
+                    value={dltLimit}
+                    type="number"
+                    min={1}
+                    max={100}
+                    onChange={(event) => setDltLimit(Number(event.target.value))}
+                  />
+                </label>
+                <button type="button" onClick={loadDltMessages} disabled={dltLoading}>
+                  <RefreshCcw size={15} aria-hidden />
+                  조회
+                </button>
+              </div>
+              <div className="dlt-list">
+                {dltMessages.map((message) => (
+                  <label key={`${message.topic}-${message.partition}-${message.offset}`} className={dltSelectedIds.includes(message.messageId) ? 'dlt-item selected' : 'dlt-item'}>
+                    <input
+                      type="checkbox"
+                      checked={dltSelectedIds.includes(message.messageId)}
+                      onChange={() => toggleDltMessage(message.messageId)}
+                    />
+                    <span>
+                      <strong>{message.roomName || message.roomId}</strong>
+                      <small>{message.senderName || message.senderEmail} · offset {message.offset}</small>
+                      <em>{message.messageId}</em>
+                    </span>
+                  </label>
+                ))}
+                {dltMessages.length === 0 && <p className="empty-state">조회된 실패 메시지가 없습니다.</p>}
+              </div>
+              <div className="dlt-actions">
+                <button type="button" onClick={() => replayDltMessages(true)} disabled={dltLoading || dltMessages.length === 0}>
+                  <CheckCircle2 size={15} aria-hidden />
+                  미리 확인
+                </button>
+                <button type="button" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
+                  <Send size={15} aria-hidden />
+                  재처리
+                </button>
+              </div>
+              {dltResult && (
+                <div className="dlt-result">
+                  <strong>{dltResult.dryRun ? '미리 확인 완료' : '재처리 완료'}</strong>
+                  <span>{dltResult.scannedCount}개 스캔 · {dltResult.replayedCount}개 대상</span>
+                  <small>{dltResult.sourceTopic} → {dltResult.targetTopic}</small>
+                </div>
+              )}
+            </section>
+          )}
 
           {myProfile && myProfile.history.length > 0 && (
             <section className="panel-section compact-history">

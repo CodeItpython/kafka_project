@@ -46,6 +46,7 @@ public final class AuthDtos {
             String email,
             String name,
             String provider,
+            String role,
             String statusMessage,
             String profileImageUrl
     ) {

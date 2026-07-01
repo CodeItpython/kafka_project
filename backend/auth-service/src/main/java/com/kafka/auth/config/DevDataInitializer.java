@@ -2,6 +2,7 @@ package com.kafka.auth.config;
 
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.model.UserRole;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -38,19 +39,28 @@ public class DevDataInitializer implements ApplicationRunner {
             return;
         }
         List<SeedUser> users = List.of(
-                new SeedUser("user@example.com", "건우"),
-                new SeedUser("minji@example.com", "민지"),
-                new SeedUser("junho@example.com", "준호"),
-                new SeedUser("seoyeon@example.com", "서연"),
-                new SeedUser("hyejin@example.com", "혜진")
+                new SeedUser("user@example.com", "건우", UserRole.ADMIN),
+                new SeedUser("minji@example.com", "민지", UserRole.USER),
+                new SeedUser("junho@example.com", "준호", UserRole.USER),
+                new SeedUser("seoyeon@example.com", "서연", UserRole.USER),
+                new SeedUser("hyejin@example.com", "혜진", UserRole.USER)
         );
-        users.stream()
-                .filter(user -> !userAccountRepository.existsByEmail(user.email()))
-                .map(user -> new UserAccount(user.email(), user.name(), passwordEncoder.encode(DEFAULT_PASSWORD), AuthProvider.LOCAL))
-                .forEach(userAccountRepository::save);
-        log.info("Development test users are ready. Password is {}.", DEFAULT_PASSWORD);
+        users.forEach(this::upsertSeedUser);
+        log.info("Development test users are ready. Password is {}. Admin user is user@example.com.", DEFAULT_PASSWORD);
     }
 
-    private record SeedUser(String email, String name) {
+    private void upsertSeedUser(SeedUser seedUser) {
+        UserAccount user = userAccountRepository.findByEmail(seedUser.email())
+                .orElseGet(() -> new UserAccount(
+                        seedUser.email(),
+                        seedUser.name(),
+                        passwordEncoder.encode(DEFAULT_PASSWORD),
+                        AuthProvider.LOCAL
+                ));
+        user.setRole(seedUser.role());
+        userAccountRepository.save(user);
+    }
+
+    private record SeedUser(String email, String name, UserRole role) {
     }
 }

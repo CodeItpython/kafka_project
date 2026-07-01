@@ -111,6 +111,7 @@ public class AuthService {
                 user.getEmail(),
                 user.getName(),
                 user.getProvider().name(),
+                user.getRole().name(),
                 user.getStatusMessage(),
                 user.getProfileImageUrl()
         );
