@@ -43,6 +43,7 @@ public class JwtService {
         payload.put("sub", user.getEmail());
         payload.put("uid", user.getId());
         payload.put("name", user.getName());
+        payload.put("role", user.getRole().name());
         payload.put("iat", now.getEpochSecond());
         payload.put("exp", now.plusSeconds(expirationMinutes * 60).getEpochSecond());
 

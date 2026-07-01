@@ -40,6 +40,11 @@ public class UserAccount {
     @Setter
     private String providerId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Setter
+    private UserRole role = UserRole.USER;
+
     @Column(length = 500)
     private String statusMessage = "";
 
