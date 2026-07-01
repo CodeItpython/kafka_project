@@ -454,7 +454,7 @@ input:focus {
 
 .push-status {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 18px 1fr auto auto;
   align-items: center;
   gap: 8px;
   padding: 10px;
