@@ -12,6 +12,7 @@ import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.InviteRoomParticipantsRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionResponse;
+import com.kafka.auth.chat.dto.ChatDtos.MessageDeliverySummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomParticipantResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPreferenceRequest;
@@ -29,6 +30,7 @@ import com.kafka.auth.chat.repository.ChatRoomUserPreferenceRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchDocument;
 import com.kafka.auth.chat.search.ChatMessageSearchRepository;
 import com.kafka.auth.chat.search.ChatMessageSearchService;
+import com.kafka.auth.chat.service.ChatMessageDeliveryService.DeliverySnapshot;
 import com.kafka.auth.chat.service.ChatStateService.UserProfileSnapshot;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.notification.NotificationService;
@@ -72,6 +74,7 @@ public class ChatService {
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatStateService chatStateService;
     private final ChatMetricsService chatMetricsService;
+    private final ChatMessageDeliveryService chatMessageDeliveryService;
     private final ChatReadReceiptService chatReadReceiptService;
     private final ChatSummaryService chatSummaryService;
     private final ObjectStorageService objectStorageService;
@@ -89,6 +92,7 @@ public class ChatService {
             SimpMessagingTemplate messagingTemplate,
             ChatStateService chatStateService,
             ChatMetricsService chatMetricsService,
+            ChatMessageDeliveryService chatMessageDeliveryService,
             ChatReadReceiptService chatReadReceiptService,
             ChatSummaryService chatSummaryService,
             ObjectStorageService objectStorageService,
@@ -105,6 +109,7 @@ public class ChatService {
         this.messagingTemplate = messagingTemplate;
         this.chatStateService = chatStateService;
         this.chatMetricsService = chatMetricsService;
+        this.chatMessageDeliveryService = chatMessageDeliveryService;
         this.chatReadReceiptService = chatReadReceiptService;
         this.chatSummaryService = chatSummaryService;
         this.objectStorageService = objectStorageService;
@@ -165,9 +170,10 @@ public class ChatService {
         RoomReadSummaryResponse readSummary = chatReadReceiptService.markRead(room, user, Instant.now());
         publishReadSummary(roomId, readSummary);
         Map<String, Instant> lastReadByEmail = chatReadReceiptService.lastReadByEmail(roomId);
+        Map<String, DeliverySnapshot> deliverySnapshots = chatMessageDeliveryService.summaries(messages, lastReadByEmail);
         return messages.stream()
                 .filter(message -> message.isVisibleTo(user.getEmail()))
-                .map(message -> toMessageResponse(message, lastReadByEmail, user.getEmail()))
+                .map(message -> toMessageResponse(message, deliverySnapshots.get(message.getId()), user.getEmail()))
                 .toList();
     }
 
@@ -183,6 +189,20 @@ public class ChatService {
         RoomReadSummaryResponse readSummary = chatReadReceiptService.markRead(room, user, Instant.now());
         publishReadSummary(roomId, readSummary);
         return readSummary;
+    }
+
+    @Transactional
+    public MessageDeliverySummaryResponse markMessageDelivered(String roomId, String messageId, UserAccount user) {
+        ensureRoomAccess(roomId, user);
+        ChatMessageDocument message = ensureMessageInRoom(roomId, messageId);
+        DeliverySnapshot snapshot = chatMessageDeliveryService.markDelivered(
+                message,
+                user,
+                chatReadReceiptService.lastReadByEmail(roomId)
+        );
+        MessageDeliverySummaryResponse response = toDeliverySummaryResponse(message, snapshot);
+        publishDeliverySummary(response);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -542,6 +562,7 @@ public class ChatService {
     }
 
     @KafkaListener(topics = "${app.chat.topic}", groupId = "${spring.kafka.consumer.group-id}")
+    @Transactional
     public void persistAndBroadcast(ChatMessageEvent event) {
         Timer.Sample consumeSample = chatMetricsService.startTimer();
         try {
@@ -566,6 +587,8 @@ public class ChatService {
                     event.replyToContent(),
                     event.createdAt()
             ));
+            ChatRoom room = ensureRoom(event.roomId());
+            chatMessageDeliveryService.createSentStates(savedMessage, notificationRecipients(room, event.senderEmail()));
             incrementUnreadForRecipients(event);
             Timer.Sample indexSample = chatMetricsService.startTimer();
             try {
@@ -625,6 +648,17 @@ public class ChatService {
             messagingTemplate.convertAndSend("/topic/rooms/" + roomId + "/read-receipts", readSummary);
         } catch (RuntimeException exception) {
             log.debug("Unable to publish read receipt update. roomId={}", roomId, exception);
+        }
+    }
+
+    private void publishDeliverySummary(MessageDeliverySummaryResponse deliverySummary) {
+        try {
+            messagingTemplate.convertAndSend("/topic/rooms/" + deliverySummary.roomId() + "/delivery-states", deliverySummary);
+        } catch (RuntimeException exception) {
+            log.debug("Unable to publish delivery state update. roomId={}, messageId={}",
+                    deliverySummary.roomId(),
+                    deliverySummary.messageId(),
+                    exception);
         }
     }
 
@@ -853,7 +887,10 @@ public class ChatService {
     }
 
     private ChatMessageResponse toMessageResponse(ChatMessageDocument message, Map<String, Instant> lastReadByEmail, String currentUserEmail) {
-        long readCount = chatReadReceiptService.readCount(message, lastReadByEmail);
+        return toMessageResponse(message, chatMessageDeliveryService.summary(message, lastReadByEmail), currentUserEmail);
+    }
+
+    private ChatMessageResponse toMessageResponse(ChatMessageDocument message, DeliverySnapshot deliverySnapshot, String currentUserEmail) {
         return new ChatMessageResponse(
                 message.getId(),
                 message.getRoomId(),
@@ -868,12 +905,23 @@ public class ChatService {
                 message.isDeletedForEveryone(),
                 message.getCreatedAt(),
                 message.getEditedAt(),
-                readCount,
-                readCount > 0 ? "READ" : "SENT",
+                deliverySnapshot == null ? 0 : deliverySnapshot.readCount(),
+                deliverySnapshot == null ? 0 : deliverySnapshot.deliveredCount(),
+                deliverySnapshot == null ? "SENT" : deliverySnapshot.deliveryStatus(),
                 toReactionResponses(message, currentUserEmail),
                 message.getReplyToMessageId(),
                 message.getReplyToSenderName(),
                 message.getReplyToContent()
+        );
+    }
+
+    private MessageDeliverySummaryResponse toDeliverySummaryResponse(ChatMessageDocument message, DeliverySnapshot deliverySnapshot) {
+        return new MessageDeliverySummaryResponse(
+                message.getRoomId(),
+                message.getId(),
+                deliverySnapshot.deliveredCount(),
+                deliverySnapshot.readCount(),
+                deliverySnapshot.deliveryStatus()
         );
     }
 
@@ -906,6 +954,7 @@ public class ChatService {
                 false,
                 message.getCreatedAt(),
                 null,
+                0,
                 0,
                 "SENT",
                 List.of(),

@@ -27,6 +27,7 @@ public class ChatReadReceiptService {
     private final ChatRoomReadStateRepository chatRoomReadStateRepository;
     private final UserAccountRepository userAccountRepository;
     private final ChatStateService chatStateService;
+    private final ChatMessageDeliveryService chatMessageDeliveryService;
 
     @Transactional
     public RoomReadSummaryResponse markRead(ChatRoom room, UserAccount user, Instant readAt) {
@@ -34,6 +35,7 @@ public class ChatReadReceiptService {
                 .orElseGet(() -> new ChatRoomReadState(room.getId(), user.getEmail(), readAt));
         state.markRead(readAt);
         chatRoomReadStateRepository.save(state);
+        chatMessageDeliveryService.markRoomRead(room.getId(), user.getEmail(), readAt);
         chatStateService.markRoomRead(room.getId(), user.getEmail());
         return summary(room, user);
     }

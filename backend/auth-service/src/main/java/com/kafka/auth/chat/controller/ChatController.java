@@ -8,6 +8,7 @@ import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.InviteRoomParticipantsRequest;
+import com.kafka.auth.chat.dto.ChatDtos.MessageDeliverySummaryResponse;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
 import com.kafka.auth.chat.dto.ChatDtos.RoomPresenceResponse;
 import com.kafka.auth.chat.dto.ChatDtos.RoomParticipantResponse;
@@ -179,6 +180,15 @@ public class ChatController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(chatService.markRead(roomId, user));
+    }
+
+    @PostMapping("/rooms/{roomId}/messages/{messageId}/delivered")
+    public ResponseEntity<MessageDeliverySummaryResponse> markMessageDelivered(
+            @PathVariable String roomId,
+            @PathVariable String messageId,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(chatService.markMessageDelivered(roomId, messageId, user));
     }
 
     @PostMapping("/rooms/{roomId}/summary")

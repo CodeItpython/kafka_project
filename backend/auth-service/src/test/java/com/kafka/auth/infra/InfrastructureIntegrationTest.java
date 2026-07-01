@@ -318,6 +318,13 @@ class InfrastructureIntegrationTest {
         );
         chatService.persistAndBroadcast(mutedNotificationEvent);
         assertThat(userNotificationRepository.countByRecipientEmailAndReadAtIsNull(recipient.getEmail())).isZero();
+        assertThat(chatService.markMessageDelivered(notificationRoom.getId(), mutedNotificationEvent.messageId(), recipient))
+                .satisfies(delivery -> {
+                    assertThat(delivery.messageId()).isEqualTo(mutedNotificationEvent.messageId());
+                    assertThat(delivery.deliveredCount()).isEqualTo(1);
+                    assertThat(delivery.readCount()).isZero();
+                    assertThat(delivery.deliveryStatus()).isEqualTo("DELIVERED");
+                });
 
         String unreadKey = "state:unread:" + recipient.getEmail().toLowerCase() + ":" + notificationRoom.getId();
         redisTemplate.opsForValue().set(unreadKey, "3");
@@ -329,6 +336,14 @@ class InfrastructureIntegrationTest {
                     assertThat(receipt.lastReadAt()).isNotNull();
                 });
         assertThat(redisTemplate.opsForValue().get(unreadKey)).isNull();
+        assertThat(chatService.messages(notificationRoom.getId(), savedUser))
+                .filteredOn(message -> message.id().equals(mutedNotificationEvent.messageId()))
+                .singleElement()
+                .satisfies(message -> {
+                    assertThat(message.readCount()).isEqualTo(1);
+                    assertThat(message.deliveredCount()).isEqualTo(1);
+                    assertThat(message.deliveryStatus()).isEqualTo("READ");
+                });
 
         ChatMessageDocument reactionMessage = chatMessageRepository.save(new ChatMessageDocument(
                 "reaction-" + UUID.randomUUID(),

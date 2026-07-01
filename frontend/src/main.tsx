@@ -99,7 +99,8 @@ type ChatMessage = {
   createdAt: string;
   editedAt: string | null;
   readCount: number;
-  deliveryStatus: 'SENT' | 'READ';
+  deliveredCount: number;
+  deliveryStatus: 'SENT' | 'DELIVERED' | 'READ';
   reactions: MessageReaction[];
   replyToMessageId: string | null;
   replyToSenderName: string | null;
@@ -125,6 +126,14 @@ type RoomReadSummary = {
   roomId: string;
   currentUserLastReadAt: string | null;
   receipts: ReadReceipt[];
+};
+
+type MessageDeliverySummary = {
+  roomId: string;
+  messageId: string;
+  deliveredCount: number;
+  readCount: number;
+  deliveryStatus: 'SENT' | 'DELIVERED' | 'READ';
 };
 
 type Contact = {
@@ -614,13 +623,30 @@ function App() {
         }
         return new Date(receipt.lastReadAt).getTime() >= new Date(message.createdAt).getTime();
       }).length;
+      const deliveredCount = message.deliveredCount ?? 0;
+      const deliveryStatus = readCount > 0
+        ? 'READ' as const
+        : deliveredCount > 0 || message.deliveryStatus === 'DELIVERED'
+          ? 'DELIVERED' as const
+          : 'SENT' as const;
       return {
         ...message,
         readCount,
-        deliveryStatus: readCount > 0 ? 'READ' as const : 'SENT' as const,
+        deliveredCount,
+        deliveryStatus,
         reactions: normalizeReactions(message.reactions ?? [])
       };
     });
+  }
+
+  function deliveryStatusLabel(message: ChatMessage) {
+    if (message.readCount > 0 || message.deliveryStatus === 'READ') {
+      return `읽음 ${Math.max(message.readCount, 1)}`;
+    }
+    if (message.deliveredCount > 0 || message.deliveryStatus === 'DELIVERED') {
+      return `전달됨 ${Math.max(message.deliveredCount, 1)}`;
+    }
+    return '전송됨';
   }
 
   function normalizeReactions(reactions: MessageReaction[]) {
@@ -650,6 +676,26 @@ function App() {
     const data = await request<RoomReadSummary>(`/chat/rooms/${roomId}/read`, { method: 'POST' });
     applyReadReceipts(data.receipts);
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
+  }
+
+  async function markMessageDelivered(roomId: string, messageId: string) {
+    if (!roomId || !messageId) return;
+    const data = await request<MessageDeliverySummary>(`/chat/rooms/${roomId}/messages/${messageId}/delivered`, { method: 'POST' });
+    applyDeliverySummary(data);
+  }
+
+  function applyDeliverySummary(summary: MessageDeliverySummary) {
+    setMessages((current) => current.map((message) => {
+      if (message.id !== summary.messageId) {
+        return message;
+      }
+      return {
+        ...message,
+        deliveredCount: summary.deliveredCount,
+        readCount: summary.readCount,
+        deliveryStatus: summary.deliveryStatus
+      };
+    }));
   }
 
   async function loadMessages(roomId: string) {
@@ -1207,6 +1253,10 @@ function App() {
           const summary = JSON.parse(frame.body) as RoomReadSummary;
           applyReadReceipts(summary.receipts);
         });
+        client.subscribe(`/topic/rooms/${selectedRoomId}/delivery-states`, (frame: IMessage) => {
+          const summary = JSON.parse(frame.body) as MessageDeliverySummary;
+          applyDeliverySummary(summary);
+        });
       },
       onDisconnect: () => setConnected(false),
       onWebSocketClose: () => setConnected(false)
@@ -1232,6 +1282,9 @@ function App() {
           setNotificationUnreadCount((current) => current + (notification.read ? 0 : 1));
           if (notification.targetRoomId !== selectedRoomId) {
             setRooms((current) => current.map((room) => room.id === notification.targetRoomId ? { ...room, unreadCount: room.unreadCount + 1 } : room));
+          }
+          if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== selectedRoomId) {
+            markMessageDelivered(notification.targetRoomId, notification.targetMessageId).catch(() => undefined);
           }
           if (shouldShowBrowserNotification(notification)) {
             showBrowserNotification(notification);
@@ -1605,7 +1658,7 @@ function App() {
                           ))}
                         </div>
                         {message.senderEmail === user.email && (
-                          <span className="read-state">{message.readCount > 0 ? `읽음 ${message.readCount}` : '전송됨'}</span>
+                          <span className="read-state">{deliveryStatusLabel(message)}</span>
                         )}
                         {message.senderEmail === user.email && message.content && (
                           <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
