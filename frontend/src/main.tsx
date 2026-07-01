@@ -227,6 +227,34 @@ type NotificationSubscriptionResponse = {
   unreadCount: number;
 };
 
+type DltMessage = {
+  topic: string;
+  partition: number;
+  offset: number;
+  key: string | null;
+  messageId: string;
+  roomId: string;
+  roomName: string;
+  senderEmail: string;
+  senderName: string;
+  createdAt: string;
+};
+
+type DltMessageListResponse = {
+  topic: string;
+  requestedLimit: number;
+  messages: DltMessage[];
+};
+
+type DltReplayResponse = {
+  sourceTopic: string;
+  targetTopic: string;
+  dryRun: boolean;
+  scannedCount: number;
+  replayedCount: number;
+  replayedMessages: DltMessage[];
+};
+
 const API_ROOT = '/api';
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
 const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '';
@@ -307,6 +335,12 @@ function App() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => (
     canUseBrowserNotifications() ? Notification.permission : 'default'
   ));
+  const [dltMessages, setDltMessages] = useState<DltMessage[]>([]);
+  const [dltTopic, setDltTopic] = useState('');
+  const [dltLimit, setDltLimit] = useState(20);
+  const [dltSelectedIds, setDltSelectedIds] = useState<string[]>([]);
+  const [dltLoading, setDltLoading] = useState(false);
+  const [dltResult, setDltResult] = useState<DltReplayResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
@@ -805,6 +839,62 @@ function App() {
     setNotificationUnreadCount(data.unreadCount);
   }
 
+  async function fetchDltMessages(limit: number) {
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const data = await request<DltMessageListResponse>(`/admin/kafka/dlt/messages?limit=${safeLimit}`);
+    setDltTopic(data.topic);
+    setDltMessages(data.messages);
+    setDltSelectedIds((current) => current.filter((messageId) => data.messages.some((message) => message.messageId === messageId)));
+    return data;
+  }
+
+  async function loadDltMessages() {
+    if (!token || dltLoading) return;
+    setDltLoading(true);
+    try {
+      const data = await fetchDltMessages(dltLimit);
+      setDltResult(null);
+      setStatus(data.messages.length > 0 ? `${data.messages.length}개의 실패 메시지를 불러왔습니다.` : 'DLT에 쌓인 메시지가 없습니다.');
+    } catch (error) {
+      setStatus(readableError(error, '실패 메시지를 불러오지 못했습니다.'));
+    } finally {
+      setDltLoading(false);
+    }
+  }
+
+  function toggleDltMessage(messageId: string) {
+    setDltSelectedIds((current) => current.includes(messageId)
+      ? current.filter((item) => item !== messageId)
+      : [...current, messageId]);
+  }
+
+  async function replayDltMessages(dryRun: boolean) {
+    if (!token || dltLoading) return;
+    setDltLoading(true);
+    try {
+      const safeLimit = Math.min(Math.max(dltLimit, 1), 100);
+      const data = await request<DltReplayResponse>('/admin/kafka/dlt/replay', {
+        method: 'POST',
+        body: JSON.stringify({
+          messageIds: dltSelectedIds,
+          limit: safeLimit,
+          dryRun
+        })
+      });
+      setDltResult(data);
+      setStatus(dryRun
+        ? `${data.replayedCount}개의 재처리 후보를 확인했습니다.`
+        : `${data.replayedCount}개의 실패 메시지를 원본 토픽으로 재발행했습니다.`);
+      if (!dryRun) {
+        await fetchDltMessages(safeLimit);
+      }
+    } catch (error) {
+      setStatus(readableError(error, dryRun ? '재처리 후보 확인에 실패했습니다.' : '실패 메시지 재처리에 실패했습니다.'));
+    } finally {
+      setDltLoading(false);
+    }
+  }
+
   async function registerBrowserPush() {
     const permissionGranted = await requestBrowserNotificationPermission();
     if (!permissionGranted) {
@@ -1109,6 +1199,10 @@ function App() {
     setNotificationTopic('');
     setNotificationUnreadCount(0);
     setPushStatus('브라우저 알림 대기');
+    setDltMessages([]);
+    setDltTopic('');
+    setDltSelectedIds([]);
+    setDltResult(null);
     setProfileName('');
     setProfileStatus('');
     setSelectedRoomId('');
@@ -1432,6 +1526,63 @@ function App() {
               ))}
               {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
             </div>
+          </section>
+
+          <section className="panel-section dlt-panel">
+            <div className="section-title">
+              <span>실패 메시지</span>
+              <small>{dltTopic || 'DLT'}</small>
+            </div>
+            <div className="dlt-toolbar">
+              <label>
+                조회 개수
+                <input
+                  value={dltLimit}
+                  type="number"
+                  min={1}
+                  max={100}
+                  onChange={(event) => setDltLimit(Number(event.target.value))}
+                />
+              </label>
+              <button type="button" onClick={loadDltMessages} disabled={dltLoading}>
+                <RefreshCcw size={15} aria-hidden />
+                조회
+              </button>
+            </div>
+            <div className="dlt-list">
+              {dltMessages.map((message) => (
+                <label key={`${message.topic}-${message.partition}-${message.offset}`} className={dltSelectedIds.includes(message.messageId) ? 'dlt-item selected' : 'dlt-item'}>
+                  <input
+                    type="checkbox"
+                    checked={dltSelectedIds.includes(message.messageId)}
+                    onChange={() => toggleDltMessage(message.messageId)}
+                  />
+                  <span>
+                    <strong>{message.roomName || message.roomId}</strong>
+                    <small>{message.senderName || message.senderEmail} · offset {message.offset}</small>
+                    <em>{message.messageId}</em>
+                  </span>
+                </label>
+              ))}
+              {dltMessages.length === 0 && <p className="empty-state">조회된 실패 메시지가 없습니다.</p>}
+            </div>
+            <div className="dlt-actions">
+              <button type="button" onClick={() => replayDltMessages(true)} disabled={dltLoading || dltMessages.length === 0}>
+                <CheckCircle2 size={15} aria-hidden />
+                미리 확인
+              </button>
+              <button type="button" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
+                <Send size={15} aria-hidden />
+                재처리
+              </button>
+            </div>
+            {dltResult && (
+              <div className="dlt-result">
+                <strong>{dltResult.dryRun ? '미리 확인 완료' : '재처리 완료'}</strong>
+                <span>{dltResult.scannedCount}개 스캔 · {dltResult.replayedCount}개 대상</span>
+                <small>{dltResult.sourceTopic} → {dltResult.targetTopic}</small>
+              </div>
+            )}
           </section>
 
           {myProfile && myProfile.history.length > 0 && (

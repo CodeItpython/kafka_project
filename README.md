@@ -218,6 +218,17 @@ Content-Type: application/json
 
 `dryRun=false`로 호출하면 DLT의 `ChatMessageEvent`를 원본 `chat-messages` topic으로 다시 발행합니다. replay 후에도 같은 원인이 남아 있으면 다시 retry topic과 DLT로 이동하므로, 먼저 로그와 metric으로 실패 원인을 제거해야 합니다.
 
+### DLT 운영 패널
+
+웹 화면의 친구 사이드바에는 `실패 메시지` 운영 패널이 있습니다.
+
+1. `조회`를 눌러 `chat-messages-dlt`에 격리된 메시지를 확인합니다.
+2. 필요한 메시지를 선택하거나 선택 없이 제한 개수 기준으로 처리 대상을 잡습니다.
+3. `미리 확인`으로 `dryRun=true` replay 결과를 먼저 확인합니다.
+4. 원인을 수정한 뒤 `재처리`를 누르면 선택한 메시지를 원본 `chat-messages` topic으로 재발행합니다.
+
+이 패널은 운영 편의를 위한 화면이며, 실제 운영 환경에서는 관리자 권한 검증을 별도 role로 분리하는 것이 좋습니다.
+
 ## Redis 캐시와 상태 관리
 
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.
