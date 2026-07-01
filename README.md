@@ -195,6 +195,29 @@ docker exec kafka-kafka kafka-topics --bootstrap-server localhost:9092 --list | 
 
 Prometheus에서는 `kafka_talk_kafka_consume_total`, `kafka_talk_kafka_dlt_total` metric으로 소비 실패와 DLT 이동 여부를 볼 수 있습니다. DLT에 쌓인 메시지는 원인을 고친 뒤 별도 replay 도구나 운영 스크립트로 원본 topic에 다시 넣는 방식으로 복구합니다.
 
+### DLT replay API
+
+DLT 메시지는 인증된 사용자만 관리자 API로 조회/재발행할 수 있습니다. 실제 재발행 전에는 `dryRun=true`로 대상 메시지를 먼저 확인합니다.
+
+```http
+GET /api/admin/kafka/dlt/messages?limit=20
+Authorization: Bearer ACCESS_TOKEN
+```
+
+```http
+POST /api/admin/kafka/dlt/replay
+Authorization: Bearer ACCESS_TOKEN
+Content-Type: application/json
+
+{
+  "messageIds": ["MESSAGE_ID"],
+  "limit": 20,
+  "dryRun": true
+}
+```
+
+`dryRun=false`로 호출하면 DLT의 `ChatMessageEvent`를 원본 `chat-messages` topic으로 다시 발행합니다. replay 후에도 같은 원인이 남아 있으면 다시 retry topic과 DLT로 이동하므로, 먼저 로그와 metric으로 실패 원인을 제거해야 합니다.
+
 ## Redis 캐시와 상태 관리
 
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.
