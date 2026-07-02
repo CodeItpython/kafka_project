@@ -240,6 +240,12 @@ Authorization: Bearer ADMIN_ACCESS_TOKEN
 
 감사 로그는 누가, 언제, 어떤 운영 명령을 실행했는지 추적하기 위한 데이터입니다. 장애 복구 작업 후에는 Grafana/Kibana 로그와 함께 이 API를 확인하면 DLT 재처리 흐름을 역추적할 수 있습니다.
 
+## Flyway DB 마이그레이션
+
+PostgreSQL 스키마는 `backend/auth-service/src/main/resources/db/migration` 아래의 Flyway SQL로 관리합니다. 새 DB는 `V1__baseline_postgresql_schema.sql`이 `users`, 채팅방, 읽음/전달 상태, 알림, Outbox, 관리자 감사 로그 테이블을 생성합니다.
+
+`spring.jpa.hibernate.ddl-auto=validate`로 변경했기 때문에 Hibernate는 테이블을 자동 변경하지 않고 엔티티와 DB 스키마 일치 여부만 검증합니다. 기존 로컬 DB는 `spring.flyway.baseline-on-migrate=true`로 Flyway 이력 테이블을 만들 수 있고, `V2__admin_audit_events.sql`이 최근 감사 로그 테이블을 보강합니다. 스키마를 처음부터 검증하고 싶으면 PostgreSQL 볼륨을 비우고 다시 실행하세요.
+
 ## Redis 캐시와 상태 관리
 
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.
