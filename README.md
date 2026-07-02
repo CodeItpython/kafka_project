@@ -255,9 +255,25 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 - 온라인 상태: `state:online:{email}`, TTL 75초
 - 입력 중 상태: `state:typing:{roomId}:{email}`, TTL 5초
 - 안 읽은 메시지 수: `state:unread:{email}:{roomId}`
+- API rate limit 카운터: `rate-limit:{bucket}:{window}`, 설정된 window 동안 유지
 
 메시지가 Kafka consumer를 통해 MongoDB에 저장되면, 백엔드는 수신자별 unread 카운터를 Redis에서 증가시킵니다.
 사용자가 채팅방을 열어 메시지 목록을 조회하면 해당 방의 unread 카운터를 삭제해서 읽음 처리합니다.
+
+## Redis API Rate Limit
+
+공개 인증 API와 전체 `/api/**` 요청에는 Redis 기반 fixed-window rate limit을 적용합니다. 로그인, 회원가입, 이메일 인증 코드 발급, 카카오 OAuth 시작 API는 기본 `20회/분/IP+path`로 제한하고, 나머지 API는 기본 `600회/분/IP+path`로 제한합니다.
+
+제한에 걸리면 HTTP `429 Too Many Requests`와 함께 `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` 헤더를 내려줍니다. Redis 장애가 발생하면 로그인 자체가 막히지 않도록 fail-open으로 요청을 계속 처리합니다.
+
+주요 설정:
+
+```properties
+app.security.rate-limit.enabled=true
+app.security.rate-limit.window=60s
+app.security.rate-limit.auth-limit=20
+app.security.rate-limit.api-limit=600
+```
 
 ## 채팅 읽음 상태
 
