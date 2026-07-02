@@ -1,9 +1,7 @@
-import React, { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
-import { initializeApp, getApps } from 'firebase/app';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
 import {
   ArrowLeft,
   AtSign,
@@ -228,6 +226,11 @@ type NotificationSubscriptionResponse = {
   unreadCount: number;
 };
 
+type AppToast = {
+  id: string;
+  notification: UserNotification;
+};
+
 type DltMessage = {
   topic: string;
   partition: number;
@@ -258,15 +261,6 @@ type DltReplayResponse = {
 
 const API_ROOT = '/api';
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
-const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '';
-const FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? ''
-};
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
   { email: 'minji@example.com', name: '민지' },
@@ -274,20 +268,6 @@ const SAMPLE_USERS = [
   { email: 'seoyeon@example.com', name: '서연' },
   { email: 'hyejin@example.com', name: '혜진' }
 ];
-
-function canUseFirebaseMessaging() {
-  return Boolean(
-    FIREBASE_VAPID_KEY
-    && FIREBASE_CONFIG.apiKey
-    && FIREBASE_CONFIG.projectId
-    && FIREBASE_CONFIG.messagingSenderId
-    && FIREBASE_CONFIG.appId
-  );
-}
-
-function canUseBrowserNotifications() {
-  return typeof window !== 'undefined' && 'Notification' in window;
-}
 
 function App() {
   const [mode, setMode] = useState<Mode>('login');
@@ -332,10 +312,8 @@ function App() {
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationTopic, setNotificationTopic] = useState('');
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
-  const [pushStatus, setPushStatus] = useState('브라우저 알림 대기');
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => (
-    canUseBrowserNotifications() ? Notification.permission : 'default'
-  ));
+  const [appToasts, setAppToasts] = useState<AppToast[]>([]);
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => localStorage.getItem('inAppNotificationsEnabled') !== 'false');
   const [dltMessages, setDltMessages] = useState<DltMessage[]>([]);
   const [dltTopic, setDltTopic] = useState('');
   const [dltLimit, setDltLimit] = useState(20);
@@ -346,8 +324,18 @@ function App() {
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const roomDirectoryRef = useRef<HTMLElement | null>(null);
   const readReceiptsRef = useRef<ReadReceipt[]>([]);
   const openedNotificationRoomRef = useRef('');
+  const shouldReduceMotion = useReducedMotion();
+  const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
+  const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
+    stiffness: 130,
+    damping: 28,
+    mass: 0.35
+  });
+  const directoryHeaderY = useTransform(directoryScrollYProgress, [0, 1], [0, -16]);
+  const directoryHeaderOpacity = useTransform(directoryScrollYProgress, [0, 0.35], [1, 0.94]);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
@@ -586,57 +574,43 @@ function App() {
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
-  async function requestBrowserNotificationPermission() {
-    if (!canUseBrowserNotifications()) {
-      setNotificationPermission('denied');
-      setPushStatus('브라우저 알림 미지원');
-      return false;
-    }
-    if (Notification.permission === 'granted') {
-      setNotificationPermission('granted');
-      setPushStatus('브라우저 알림 켜짐');
-      return true;
-    }
-    if (Notification.permission === 'denied') {
-      setNotificationPermission('denied');
-      setPushStatus('브라우저 알림 차단됨');
-      return false;
-    }
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
-    if (permission === 'granted') {
-      setPushStatus('브라우저 알림 켜짐');
-      return true;
-    }
-    setPushStatus('브라우저 알림 꺼짐');
-    return false;
-  }
-
-  function shouldShowBrowserNotification(notification: UserNotification) {
+  function shouldShowInAppNotification(notification: UserNotification) {
     const isCurrentRoom = Boolean(notification.targetRoomId && notification.targetRoomId === selectedRoomId);
     return !isCurrentRoom || document.visibilityState !== 'visible';
   }
 
-  function showBrowserNotification(notification: UserNotification) {
-    if (!canUseBrowserNotifications() || Notification.permission !== 'granted') {
+  const dismissAppToast = useCallback((toastId: string) => {
+    setAppToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }, []);
+
+  const showInAppNotification = useCallback((notification: UserNotification) => {
+    if (!inAppNotificationsEnabled || !shouldShowInAppNotification(notification)) {
       return;
     }
-    const browserNotification = new Notification(notification.title || 'Kafka Talk', {
-      body: notification.body || '새 알림이 도착했습니다.',
-      icon: '/vite.svg',
-      tag: `kafka-talk-${notification.id}`,
-      data: {
-        roomId: notification.targetRoomId ?? '',
-        messageId: notification.targetMessageId ?? ''
+    const toastId = `${notification.id}-${Date.now()}`;
+    setAppToasts((current) => [
+      { id: toastId, notification },
+      ...current.filter((toast) => toast.notification.id !== notification.id)
+    ].slice(0, 3));
+    window.setTimeout(() => dismissAppToast(toastId), 5200);
+  }, [dismissAppToast, inAppNotificationsEnabled, selectedRoomId]);
+
+  function openNotificationToast(toast: AppToast) {
+    if (toast.notification.targetRoomId) {
+      openRoom(toast.notification.targetRoomId);
+    }
+    dismissAppToast(toast.id);
+  }
+
+  function toggleInAppNotifications() {
+    setInAppNotificationsEnabled((current) => {
+      const next = !current;
+      localStorage.setItem('inAppNotificationsEnabled', String(next));
+      if (!next) {
+        setAppToasts([]);
       }
+      return next;
     });
-    browserNotification.onclick = () => {
-      window.focus();
-      if (notification.targetRoomId) {
-        openRoom(notification.targetRoomId);
-      }
-      browserNotification.close();
-    };
   }
 
   async function loadContacts(query = contactQuery) {
@@ -894,46 +868,6 @@ function App() {
       setStatus(readableError(error, dryRun ? '재처리 후보 확인에 실패했습니다.' : '실패 메시지 재처리에 실패했습니다.'));
     } finally {
       setDltLoading(false);
-    }
-  }
-
-  async function registerBrowserPush() {
-    const permissionGranted = await requestBrowserNotificationPermission();
-    if (!permissionGranted) {
-      return;
-    }
-    if (!canUseFirebaseMessaging()) {
-      setPushStatus('브라우저 알림 켜짐');
-      return;
-    }
-    if (!('serviceWorker' in navigator)) {
-      setPushStatus('브라우저 알림 켜짐');
-      return;
-    }
-    try {
-      const supported = await isSupported();
-      if (!supported) {
-        setPushStatus('브라우저 알림 켜짐');
-        return;
-      }
-      const app = getApps().length > 0 ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-      const messaging = getMessaging(app);
-      const pushToken = await getToken(messaging, {
-        vapidKey: FIREBASE_VAPID_KEY,
-        serviceWorkerRegistration: registration
-      });
-      if (!pushToken) {
-        setPushStatus('푸시 토큰 없음');
-        return;
-      }
-      await request<void>('/notifications/push-tokens', {
-        method: 'POST',
-        body: JSON.stringify({ token: pushToken, platform: 'WEB' })
-      });
-      setPushStatus('브라우저 알림 켜짐');
-    } catch {
-      setPushStatus('브라우저 알림 켜짐');
     }
   }
 
@@ -1200,7 +1134,7 @@ function App() {
     setNotifications([]);
     setNotificationTopic('');
     setNotificationUnreadCount(0);
-    setPushStatus('브라우저 알림 대기');
+    setAppToasts([]);
     setDltMessages([]);
     setDltTopic('');
     setDltSelectedIds([]);
@@ -1237,11 +1171,6 @@ function App() {
       heartbeat().catch(() => undefined);
     }
   }, [user?.email]);
-
-  useEffect(() => {
-    if (!token || !user) return;
-    registerBrowserPush().catch(() => setPushStatus('푸시 연결 실패'));
-  }, [token, user?.email]);
 
   useEffect(() => {
     if (!user || rooms.length === 0) return;
@@ -1382,9 +1311,7 @@ function App() {
           if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== selectedRoomId) {
             markMessageDelivered(notification.targetRoomId, notification.targetMessageId).catch(() => undefined);
           }
-          if (shouldShowBrowserNotification(notification)) {
-            showBrowserNotification(notification);
-          }
+          showInAppNotification(notification);
         });
       }
     });
@@ -1392,7 +1319,7 @@ function App() {
     return () => {
       client.deactivate();
     };
-  }, [notificationTopic, selectedRoomId, token]);
+  }, [notificationTopic, selectedRoomId, showInAppNotification, token]);
 
   if (!user) {
     return (
@@ -1460,6 +1387,11 @@ function App() {
       transition={{ layout: { type: 'spring', stiffness: 240, damping: 32 } }}
       className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}
     >
+      <NotificationToastStack
+        toasts={appToasts}
+        onOpen={openNotificationToast}
+        onDismiss={dismissAppToast}
+      />
       <motion.aside
         className="menu-pane"
         aria-hidden={!isMenuOpen}
@@ -1503,10 +1435,10 @@ function App() {
             </div>
             <div className="push-status">
               {notificationUnreadCount > 0 ? <BellRing size={16} aria-hidden /> : <Bell size={16} aria-hidden />}
-              <span>{pushStatus}</span>
-              {notificationPermission !== 'granted' && (
-                <button type="button" onClick={() => registerBrowserPush().catch(() => setPushStatus('푸시 연결 실패'))}>켜기</button>
-              )}
+              <span>{inAppNotificationsEnabled ? '앱내 알림 켜짐' : '앱내 알림 꺼짐'}</span>
+              <button type="button" onClick={toggleInAppNotifications}>
+                {inAppNotificationsEnabled ? '끄기' : '켜기'}
+              </button>
               <button type="button" onClick={markAllNotificationsRead} disabled={notificationUnreadCount === 0}>읽음</button>
             </div>
             <div className="notification-list">
@@ -1857,13 +1789,25 @@ function App() {
           <motion.section
             key="rooms"
             className="room-directory"
+            ref={roomDirectoryRef}
             layout
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -18 }}
             transition={{ type: 'spring', stiffness: 230, damping: 28 }}
           >
-            <header className="directory-header">
+            <motion.span
+              className="scroll-progress-bar"
+              style={{ scaleX: shouldReduceMotion ? directoryScrollYProgress : directoryProgressScaleX }}
+              aria-hidden
+            />
+            <motion.header
+              className="directory-header"
+              style={{
+                y: shouldReduceMotion ? 0 : directoryHeaderY,
+                opacity: shouldReduceMotion ? 1 : directoryHeaderOpacity
+              }}
+            >
               <div className="header-navigation">
                 <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
                   {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
@@ -1874,9 +1818,9 @@ function App() {
                 <h2>채팅방</h2>
                 <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
               </div>
-            </header>
+            </motion.header>
 
-            <section className="directory-section">
+            <ScrollRevealSection className="directory-section" disabled={Boolean(shouldReduceMotion)} delay={0}>
               <div className="section-title">
                 <span>그룹 채팅</span>
                 <small>{groupRooms.length}</small>
@@ -1898,9 +1842,9 @@ function App() {
                 onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
                 onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
               />
-            </section>
+            </ScrollRevealSection>
 
-            <section className="directory-section">
+            <ScrollRevealSection className="directory-section" disabled={Boolean(shouldReduceMotion)} delay={0.06}>
               <div className="section-title">
                 <span>최근 1:1 대화</span>
                 <small>{directRooms.length}</small>
@@ -1912,9 +1856,9 @@ function App() {
                 onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
                 onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
               />
-            </section>
+            </ScrollRevealSection>
 
-            <section className="directory-section">
+            <ScrollRevealSection className="directory-section" disabled={Boolean(shouldReduceMotion)} delay={0.12}>
               <div className="section-title">
                 <span>메시지 검색</span>
                 <small>Elastic</small>
@@ -1934,13 +1878,90 @@ function App() {
                 ))}
                 {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
               </div>
-            </section>
+            </ScrollRevealSection>
 
             {status && <p className="notice">{status}</p>}
           </motion.section>
         )}
       </AnimatePresence>
     </motion.main>
+  );
+}
+
+function NotificationToastStack({
+  toasts,
+  onOpen,
+  onDismiss
+}: {
+  toasts: AppToast[];
+  onOpen: (toast: AppToast) => void;
+  onDismiss: (toastId: string) => void;
+}) {
+  return (
+    <div className="app-toast-stack" aria-live="polite" aria-atomic="false">
+      <AnimatePresence initial={false}>
+        {toasts.map((toast) => (
+          <motion.article
+            key={toast.id}
+            className="app-toast"
+            layout
+            initial={{ opacity: 0, y: 34, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 30, mass: 0.8 }}
+          >
+            <button
+              type="button"
+              className="app-toast-content"
+              onClick={() => onOpen(toast)}
+              aria-label={`${toast.notification.title} 알림 열기`}
+            >
+              <span className="app-toast-icon"><BellRing size={18} aria-hidden /></span>
+              <span className="app-toast-copy">
+                <strong>{toast.notification.title || '새 알림'}</strong>
+                <small>{toast.notification.body || '새 메시지가 도착했습니다.'}</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="app-toast-close"
+              onClick={() => onDismiss(toast.id)}
+              title="알림 닫기"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </motion.article>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ScrollRevealSection({
+  children,
+  className,
+  delay,
+  disabled
+}: {
+  children: React.ReactNode;
+  className: string;
+  delay: number;
+  disabled: boolean;
+}) {
+  if (disabled) {
+    return <section className={className}>{children}</section>;
+  }
+
+  return (
+    <motion.section
+      className={className}
+      initial={{ opacity: 0, y: 22, scale: 0.985 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: false, amount: 0.22 }}
+      transition={{ type: 'spring', stiffness: 210, damping: 26, delay }}
+    >
+      {children}
+    </motion.section>
   );
 }
 
@@ -2015,13 +2036,50 @@ function RoomList({
   onTogglePinned: (room: ChatRoom) => void;
   onToggleMuted: (room: ChatRoom) => void;
 }) {
+  const shouldReduceMotion = useReducedMotion();
+
   if (rooms.length === 0) {
     return <p className="empty-state">아직 대화가 없습니다.</p>;
   }
+
+  if (shouldReduceMotion) {
+    return (
+      <div className="room-list">
+        {rooms.map((room) => (
+          <article key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}>
+            <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
+              {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
+              <span>
+                <strong>{room.name}</strong>
+                <small>{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
+              </span>
+            </button>
+            <div className="room-meta-actions">
+              {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
+              <button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'}>
+                <Pin size={14} aria-hidden />
+              </button>
+              <button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'}>
+                {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="room-list">
       {rooms.map((room) => (
-        <article key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}>
+        <motion.article
+          key={room.id}
+          className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: false, amount: 0.35 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+        >
           <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
             {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
             <span>
@@ -2038,7 +2096,7 @@ function RoomList({
               {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
             </button>
           </div>
-        </article>
+        </motion.article>
       ))}
     </div>
   );
