@@ -1,7 +1,7 @@
 import React, { FormEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
-import { AnimatePresence, motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
 import {
   ArrowLeft,
   AtSign,
@@ -17,6 +17,7 @@ import {
   Mail,
   Menu,
   MessageCircle,
+  MoreHorizontal,
   Paperclip,
   Pin,
   Plus,
@@ -574,17 +575,13 @@ function App() {
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
-  function shouldShowInAppNotification(notification: UserNotification) {
-    const isCurrentRoom = Boolean(notification.targetRoomId && notification.targetRoomId === selectedRoomId);
-    return !isCurrentRoom || document.visibilityState !== 'visible';
-  }
-
   const dismissAppToast = useCallback((toastId: string) => {
     setAppToasts((current) => current.filter((toast) => toast.id !== toastId));
   }, []);
 
   const showInAppNotification = useCallback((notification: UserNotification) => {
-    if (!inAppNotificationsEnabled || !shouldShowInAppNotification(notification)) {
+    const isCurrentRoom = Boolean(notification.targetRoomId && notification.targetRoomId === selectedRoomId);
+    if (!inAppNotificationsEnabled || isCurrentRoom) {
       return;
     }
     const toastId = `${notification.id}-${Date.now()}`;
@@ -1407,190 +1404,194 @@ function App() {
           <X size={18} aria-hidden />
         </button>
         <section className="sidebar">
-          <div className="profile-card">
-            <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
-            <div>
-              <h1>Kafka Talk</h1>
-              <p>{user.name} · {user.provider}</p>
-              {user.statusMessage && <small>{user.statusMessage}</small>}
+          <div className="sidebar-content">
+            <div className="profile-card">
+              <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
+              <div>
+                <h1>Kafka Talk</h1>
+                <p>{user.name} · {user.provider}</p>
+                {user.statusMessage && <small>{user.statusMessage}</small>}
+              </div>
             </div>
+
+            <form className="profile-editor" onSubmit={saveProfile}>
+              <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
+              <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
+              <div className="profile-actions">
+                <label className="profile-image-button" title="프로필 이미지 변경">
+                  <Camera size={16} aria-hidden />
+                  <input type="file" accept="image/*" onChange={(event) => uploadProfileImage(event.target.files?.[0] ?? null)} />
+                </label>
+                <button type="submit" disabled={loading}><Save size={16} aria-hidden />저장</button>
+              </div>
+            </form>
+
+            <section className="panel-section notification-panel">
+              <div className="section-title">
+                <span>알림</span>
+                <small>{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</small>
+              </div>
+              <div className="push-status">
+                {notificationUnreadCount > 0 ? <BellRing size={16} aria-hidden /> : <Bell size={16} aria-hidden />}
+                <span>{inAppNotificationsEnabled ? '앱내 알림 켜짐' : '앱내 알림 꺼짐'}</span>
+                <button type="button" onClick={toggleInAppNotifications}>
+                  {inAppNotificationsEnabled ? '끄기' : '켜기'}
+                </button>
+                <button type="button" onClick={markAllNotificationsRead} disabled={notificationUnreadCount === 0}>읽음</button>
+              </div>
+              <div className="notification-list">
+                {notifications.slice(0, 5).map((notification) => (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    className={notification.read ? '' : 'unread'}
+                    onClick={() => {
+                      if (notification.targetRoomId) {
+                        openRoom(notification.targetRoomId);
+                      }
+                    }}
+                  >
+                    <strong>{notification.title}</strong>
+                    <span>{notification.body}</span>
+                    <small>{new Date(notification.createdAt).toLocaleTimeString()}</small>
+                  </button>
+                ))}
+                {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
+              </div>
+            </section>
+
+            {isAdmin && (
+              <section className="panel-section dlt-panel">
+                <div className="section-title">
+                  <span>실패 메시지</span>
+                  <small>{dltTopic || 'DLT'}</small>
+                </div>
+                <div className="dlt-toolbar">
+                  <label>
+                    조회 개수
+                    <input
+                      value={dltLimit}
+                      type="number"
+                      min={1}
+                      max={100}
+                      onChange={(event) => setDltLimit(Number(event.target.value))}
+                    />
+                  </label>
+                  <button type="button" onClick={loadDltMessages} disabled={dltLoading}>
+                    <RefreshCcw size={15} aria-hidden />
+                    조회
+                  </button>
+                </div>
+                <div className="dlt-list">
+                  {dltMessages.map((message) => (
+                    <label key={`${message.topic}-${message.partition}-${message.offset}`} className={dltSelectedIds.includes(message.messageId) ? 'dlt-item selected' : 'dlt-item'}>
+                      <input
+                        type="checkbox"
+                        checked={dltSelectedIds.includes(message.messageId)}
+                        onChange={() => toggleDltMessage(message.messageId)}
+                      />
+                      <span>
+                        <strong>{message.roomName || message.roomId}</strong>
+                        <small>{message.senderName || message.senderEmail} · offset {message.offset}</small>
+                        <em>{message.messageId}</em>
+                      </span>
+                    </label>
+                  ))}
+                  {dltMessages.length === 0 && <p className="empty-state">조회된 실패 메시지가 없습니다.</p>}
+                </div>
+                <div className="dlt-actions">
+                  <button type="button" onClick={() => replayDltMessages(true)} disabled={dltLoading || dltMessages.length === 0}>
+                    <CheckCircle2 size={15} aria-hidden />
+                    미리 확인
+                  </button>
+                  <button type="button" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
+                    <Send size={15} aria-hidden />
+                    재처리
+                  </button>
+                </div>
+                {dltResult && (
+                  <div className="dlt-result">
+                    <strong>{dltResult.dryRun ? '미리 확인 완료' : '재처리 완료'}</strong>
+                    <span>{dltResult.scannedCount}개 스캔 · {dltResult.replayedCount}개 대상</span>
+                    <small>{dltResult.sourceTopic} → {dltResult.targetTopic}</small>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {myProfile && myProfile.history.length > 0 && (
+              <section className="panel-section compact-history">
+                <div className="section-title">
+                  <span>내 프로필 히스토리</span>
+                  <small>{myProfile.history.length}</small>
+                </div>
+                <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
+              </section>
+            )}
+
+            <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
+              <Search size={17} aria-hidden />
+              <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
+            </form>
+
+            <section className="panel-section">
+              <div className="section-title">
+                <span>친구</span>
+                <small>{contacts.length}</small>
+              </div>
+              <div className="contact-list">
+                {contacts.map((contact) => (
+                  <React.Fragment key={contact.email}>
+                    <button className={selectedProfile?.email === contact.email ? 'active' : ''} onClick={() => openContactProfile(contact)} disabled={loading}>
+                      <div className="presence-avatar">
+                        <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
+                        <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
+                      </div>
+                      <span>
+                        <strong>{contact.name}</strong>
+                        <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
+                      </span>
+                      <ChevronRight size={16} aria-hidden />
+                    </button>
+                    {selectedProfile?.email === contact.email && (
+                      <section className="contact-profile-inline">
+                        <div className="profile-card slim">
+                          <ProfileAvatar className="avatar" name={selectedProfile.name} imageUrl={selectedProfile.profileImageUrl} />
+                          <div>
+                            <h1>{selectedProfile.name}</h1>
+                            <p>{selectedProfile.email}</p>
+                            {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
+                          </div>
+                        </div>
+                        <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
+                          <MessageCircle size={17} aria-hidden />메시지
+                        </button>
+                        <ProfileHistoryList history={selectedProfile.history} />
+                      </section>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel-section">
+              <div className="section-title">
+                <span>1:1 대화</span>
+                <small>{directRooms.length}</small>
+              </div>
+              <RoomList
+                rooms={directRooms}
+                selectedRoomId={selectedRoomId}
+                onSelect={openRoom}
+                onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
+                onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
+              />
+            </section>
           </div>
 
-          <form className="profile-editor" onSubmit={saveProfile}>
-            <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
-            <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
-            <div className="profile-actions">
-              <label className="profile-image-button" title="프로필 이미지 변경">
-                <Camera size={16} aria-hidden />
-                <input type="file" accept="image/*" onChange={(event) => uploadProfileImage(event.target.files?.[0] ?? null)} />
-              </label>
-              <button type="submit" disabled={loading}><Save size={16} aria-hidden />저장</button>
-            </div>
-          </form>
-
-          <section className="panel-section notification-panel">
-            <div className="section-title">
-              <span>알림</span>
-              <small>{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</small>
-            </div>
-            <div className="push-status">
-              {notificationUnreadCount > 0 ? <BellRing size={16} aria-hidden /> : <Bell size={16} aria-hidden />}
-              <span>{inAppNotificationsEnabled ? '앱내 알림 켜짐' : '앱내 알림 꺼짐'}</span>
-              <button type="button" onClick={toggleInAppNotifications}>
-                {inAppNotificationsEnabled ? '끄기' : '켜기'}
-              </button>
-              <button type="button" onClick={markAllNotificationsRead} disabled={notificationUnreadCount === 0}>읽음</button>
-            </div>
-            <div className="notification-list">
-              {notifications.slice(0, 5).map((notification) => (
-                <button
-                  key={notification.id}
-                  type="button"
-                  className={notification.read ? '' : 'unread'}
-                  onClick={() => {
-                    if (notification.targetRoomId) {
-                      openRoom(notification.targetRoomId);
-                    }
-                  }}
-                >
-                  <strong>{notification.title}</strong>
-                  <span>{notification.body}</span>
-                  <small>{new Date(notification.createdAt).toLocaleTimeString()}</small>
-                </button>
-              ))}
-              {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
-            </div>
-          </section>
-
-          {isAdmin && (
-            <section className="panel-section dlt-panel">
-              <div className="section-title">
-                <span>실패 메시지</span>
-                <small>{dltTopic || 'DLT'}</small>
-              </div>
-              <div className="dlt-toolbar">
-                <label>
-                  조회 개수
-                  <input
-                    value={dltLimit}
-                    type="number"
-                    min={1}
-                    max={100}
-                    onChange={(event) => setDltLimit(Number(event.target.value))}
-                  />
-                </label>
-                <button type="button" onClick={loadDltMessages} disabled={dltLoading}>
-                  <RefreshCcw size={15} aria-hidden />
-                  조회
-                </button>
-              </div>
-              <div className="dlt-list">
-                {dltMessages.map((message) => (
-                  <label key={`${message.topic}-${message.partition}-${message.offset}`} className={dltSelectedIds.includes(message.messageId) ? 'dlt-item selected' : 'dlt-item'}>
-                    <input
-                      type="checkbox"
-                      checked={dltSelectedIds.includes(message.messageId)}
-                      onChange={() => toggleDltMessage(message.messageId)}
-                    />
-                    <span>
-                      <strong>{message.roomName || message.roomId}</strong>
-                      <small>{message.senderName || message.senderEmail} · offset {message.offset}</small>
-                      <em>{message.messageId}</em>
-                    </span>
-                  </label>
-                ))}
-                {dltMessages.length === 0 && <p className="empty-state">조회된 실패 메시지가 없습니다.</p>}
-              </div>
-              <div className="dlt-actions">
-                <button type="button" onClick={() => replayDltMessages(true)} disabled={dltLoading || dltMessages.length === 0}>
-                  <CheckCircle2 size={15} aria-hidden />
-                  미리 확인
-                </button>
-                <button type="button" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
-                  <Send size={15} aria-hidden />
-                  재처리
-                </button>
-              </div>
-              {dltResult && (
-                <div className="dlt-result">
-                  <strong>{dltResult.dryRun ? '미리 확인 완료' : '재처리 완료'}</strong>
-                  <span>{dltResult.scannedCount}개 스캔 · {dltResult.replayedCount}개 대상</span>
-                  <small>{dltResult.sourceTopic} → {dltResult.targetTopic}</small>
-                </div>
-              )}
-            </section>
-          )}
-
-          {myProfile && myProfile.history.length > 0 && (
-            <section className="panel-section compact-history">
-              <div className="section-title">
-                <span>내 프로필 히스토리</span>
-                <small>{myProfile.history.length}</small>
-              </div>
-              <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
-            </section>
-          )}
-
-          <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
-            <Search size={17} aria-hidden />
-            <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
-          </form>
-
-          <section className="panel-section">
-            <div className="section-title">
-              <span>친구</span>
-              <small>{contacts.length}</small>
-            </div>
-            <div className="contact-list">
-              {contacts.map((contact) => (
-                <React.Fragment key={contact.email}>
-                  <button className={selectedProfile?.email === contact.email ? 'active' : ''} onClick={() => openContactProfile(contact)} disabled={loading}>
-                    <div className="presence-avatar">
-                      <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
-                      <i className={contact.online ? 'presence-dot online' : 'presence-dot'} aria-hidden />
-                    </div>
-                    <span>
-                      <strong>{contact.name}</strong>
-                      <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
-                    </span>
-                    <ChevronRight size={16} aria-hidden />
-                  </button>
-                  {selectedProfile?.email === contact.email && (
-                    <section className="contact-profile-inline">
-                      <div className="profile-card slim">
-                        <ProfileAvatar className="avatar" name={selectedProfile.name} imageUrl={selectedProfile.profileImageUrl} />
-                        <div>
-                          <h1>{selectedProfile.name}</h1>
-                          <p>{selectedProfile.email}</p>
-                          {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
-                        </div>
-                      </div>
-                      <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
-                        <MessageCircle size={17} aria-hidden />메시지
-                      </button>
-                      <ProfileHistoryList history={selectedProfile.history} />
-                    </section>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel-section">
-            <div className="section-title">
-              <span>1:1 대화</span>
-              <small>{directRooms.length}</small>
-            </div>
-            <RoomList
-              rooms={directRooms}
-              selectedRoomId={selectedRoomId}
-              onSelect={openRoom}
-              onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
-              onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
-            />
-          </section>
-
-          <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+          <footer className="sidebar-footer">
+            <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+          </footer>
         </section>
       </motion.aside>
 
@@ -1686,7 +1687,7 @@ function App() {
                   animate={{ opacity: 1, y: 0 }}
                 >
                   <div className="bubble-meta">
-                    <strong>{message.senderName}</strong>
+                    {message.senderEmail !== user.email && <strong>{message.senderName}</strong>}
                     <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
                   </div>
                   {message.deletedForEveryone ? (
@@ -1731,28 +1732,35 @@ function App() {
                         </div>
                       )}
                       <div className="message-actions">
-                        <div className="quick-reactions" aria-label="빠른 반응">
-                          {QUICK_REACTIONS.map((emoji) => (
-                            <button
-                              key={`${message.id}-${emoji}`}
-                              type="button"
-                              className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
-                              onClick={() => toggleMessageReaction(message, emoji)}
-                              title={`${emoji} 반응`}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
+                        <button className="message-more-button" type="button" title="메시지 더보기" aria-label="메시지 더보기">
+                          <MoreHorizontal size={16} aria-hidden />
+                        </button>
+                        <div className="message-action-popover">
+                          <div className="quick-reactions" aria-label="빠른 반응">
+                            {QUICK_REACTIONS.map((emoji) => (
+                              <button
+                                key={`${message.id}-${emoji}`}
+                                type="button"
+                                className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
+                                onClick={() => toggleMessageReaction(message, emoji)}
+                                title={`${emoji} 반응`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="message-command-list">
+                            {message.senderEmail === user.email && (
+                              <span className="read-state">{deliveryStatusLabel(message)}</span>
+                            )}
+                            {message.senderEmail === user.email && message.content && (
+                              <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
+                            )}
+                            <button onClick={() => setReplyTarget(message)} type="button">답장</button>
+                            <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
+                            {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
+                          </div>
                         </div>
-                        {message.senderEmail === user.email && (
-                          <span className="read-state">{deliveryStatusLabel(message)}</span>
-                        )}
-                        {message.senderEmail === user.email && message.content && (
-                          <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
-                        )}
-                        <button onClick={() => setReplyTarget(message)} type="button">답장</button>
-                        <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
-                        {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
                       </div>
                     </>
                   )}
@@ -2070,18 +2078,32 @@ function RoomList({
   }
 
   return (
-    <div className="room-list">
+    <LayoutGroup>
+      <div className="room-list">
       {rooms.map((room) => (
         <motion.article
           key={room.id}
           className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}
           initial={{ opacity: 0, y: 10 }}
           whileInView={{ opacity: 1, y: 0 }}
+          whileHover={{ y: -2, scale: 1.012 }}
+          whileTap={{ scale: 0.988 }}
           viewport={{ once: false, amount: 0.35 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 24, mass: 0.72 }}
         >
+          {room.id === selectedRoomId && (
+            <motion.span
+              className="room-active-highlight"
+              layoutId="room-active-highlight"
+              transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.82 }}
+              aria-hidden
+            />
+          )}
+          <span className="room-hover-aura" aria-hidden />
           <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
-            {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
+            <span className="room-kind-icon">
+              {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
+            </span>
             <span>
               <strong>{room.name}</strong>
               <small>{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
@@ -2089,16 +2111,17 @@ function RoomList({
           </button>
           <div className="room-meta-actions">
             {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
-            <button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'}>
+            <motion.button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'} whileHover={{ rotate: -8, scale: 1.08 }} whileTap={{ scale: 0.9 }}>
               <Pin size={14} aria-hidden />
-            </button>
-            <button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'}>
+            </motion.button>
+            <motion.button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'} whileHover={{ rotate: 8, scale: 1.08 }} whileTap={{ scale: 0.9 }}>
               {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
-            </button>
+            </motion.button>
           </div>
         </motion.article>
       ))}
-    </div>
+      </div>
+    </LayoutGroup>
   );
 }
 

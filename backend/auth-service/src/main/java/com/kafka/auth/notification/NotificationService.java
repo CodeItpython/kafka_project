@@ -1,6 +1,8 @@
 package com.kafka.auth.notification;
 
 import com.kafka.auth.chat.dto.ChatMessageEvent;
+import com.kafka.auth.chat.model.ChatRoomType;
+import com.kafka.auth.chat.repository.ChatRoomRepository;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.notification.NotificationDtos.NotificationListResponse;
 import com.kafka.auth.notification.NotificationDtos.NotificationResponse;
@@ -28,6 +30,7 @@ public class NotificationService {
 
     private final UserNotificationRepository userNotificationRepository;
     private final PushDeviceTokenRepository pushDeviceTokenRepository;
+    private final ChatRoomRepository chatRoomRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final FcmPushSender fcmPushSender;
 
@@ -43,7 +46,7 @@ public class NotificationService {
                         event.senderEmail(),
                         event.senderName(),
                         NotificationType.CHAT_MESSAGE,
-                        event.roomName(),
+                        notificationTitle(event),
                         previewBody(event),
                         event.roomId(),
                         event.messageId()
@@ -135,6 +138,14 @@ public class NotificationService {
 
     private String topicFor(String email) {
         return "/topic/notifications/" + sha256(email.toLowerCase());
+    }
+
+    private String notificationTitle(ChatMessageEvent event) {
+        return chatRoomRepository.findById(event.roomId())
+                .filter(room -> room.getType() == ChatRoomType.DIRECT)
+                .map(room -> event.senderName())
+                .filter(senderName -> senderName != null && !senderName.isBlank())
+                .orElse(event.roomName());
     }
 
     private String previewBody(ChatMessageEvent event) {

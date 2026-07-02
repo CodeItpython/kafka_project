@@ -95,6 +95,16 @@ public class ChatRoom {
         hiddenForEmails.add(email);
     }
 
+    public void showFor(String email) {
+        hiddenForEmails.removeIf(hiddenEmail -> hiddenEmail.equalsIgnoreCase(email));
+    }
+
+    public void showForParticipantsExcept(String excludedEmail) {
+        participantEmails.stream()
+                .filter(email -> excludedEmail == null || !email.equalsIgnoreCase(excludedEmail))
+                .forEach(this::showFor);
+    }
+
     public boolean isCreatedBy(String email) {
         return createdBy.equalsIgnoreCase(email);
     }

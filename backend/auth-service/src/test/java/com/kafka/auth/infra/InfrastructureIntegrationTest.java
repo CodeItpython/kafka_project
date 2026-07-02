@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.auth.chat.dto.ChatDtos.ChatMessageResponse;
+import com.kafka.auth.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.auth.chat.dto.ChatDtos.EditMessageRequest;
 import com.kafka.auth.chat.dto.ChatDtos.InviteRoomParticipantsRequest;
 import com.kafka.auth.chat.dto.ChatDtos.MessageReactionRequest;
@@ -43,6 +44,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -71,7 +73,8 @@ class InfrastructureIntegrationTest {
             DockerImageName.parse("docker.elastic.co/elasticsearch/elasticsearch:8.15.5")
     )
             .withEnv("xpack.security.enabled", "false")
-            .withStartupTimeout(Duration.ofMinutes(2));
+            .withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
+            .withStartupTimeout(Duration.ofMinutes(4));
 
     @Container
     static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
@@ -80,7 +83,8 @@ class InfrastructureIntegrationTest {
     @Container
     static final ConfluentKafkaContainer kafka = new ConfluentKafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:7.6.1")
-    );
+    )
+            .withStartupTimeout(Duration.ofMinutes(3));
 
     @Autowired
     private UserAccountRepository userAccountRepository;
@@ -123,6 +127,9 @@ class InfrastructureIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
@@ -248,6 +255,55 @@ class InfrastructureIntegrationTest {
         assertThat(chatService.roomParticipants(notificationRoom.getId(), savedUser))
                 .extracting(participant -> participant.email())
                 .contains(savedUser.getEmail(), recipient.getEmail());
+        UserAccount directRecipient = userAccountRepository.save(new UserAccount(
+                "direct-recipient@example.com",
+                "직접대화수신자",
+                "encoded-password",
+                AuthProvider.LOCAL
+        ));
+        String directRoomId = chatService.findOrCreateDirectRoom(new CreateDirectRoomRequest(directRecipient.getEmail()), savedUser).id();
+        transactionTemplate.executeWithoutResult(status -> {
+            ChatRoom hiddenDirectRoom = chatRoomRepository.findById(directRoomId).orElseThrow();
+            hiddenDirectRoom.hideFor(savedUser.getEmail());
+            chatRoomRepository.save(hiddenDirectRoom);
+        });
+        assertThat(chatService.rooms("", savedUser))
+                .extracting(room -> room.id())
+                .doesNotContain(directRoomId);
+
+        var reopenedDirectRoom = chatService.findOrCreateDirectRoom(new CreateDirectRoomRequest(directRecipient.getEmail()), savedUser);
+        assertThat(reopenedDirectRoom.id()).isEqualTo(directRoomId);
+        assertThat(reopenedDirectRoom.name()).isEqualTo(directRecipient.getName());
+        assertThat(chatService.findOrCreateDirectRoom(new CreateDirectRoomRequest(savedUser.getEmail()), directRecipient).name())
+                .isEqualTo(savedUser.getName());
+        assertThat(chatService.rooms("", savedUser))
+                .extracting(room -> room.id())
+                .contains(directRoomId);
+        ChatRoom directRoom = chatRoomRepository.findById(directRoomId).orElseThrow();
+        ChatMessageEvent directNotificationEvent = new ChatMessageEvent(
+                "direct-notification-" + UUID.randomUUID(),
+                directRoom.getId(),
+                directRoom.getName(),
+                savedUser.getEmail(),
+                savedUser.getName(),
+                "1:1 알림 제목 테스트",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Instant.now()
+        );
+        notificationService.createChatMessageNotifications(directNotificationEvent, Set.of(directRecipient.getEmail()));
+        assertThat(notificationService.notifications(directRecipient).notifications())
+                .singleElement()
+                .satisfies(notification -> {
+                    assertThat(notification.title()).isEqualTo(savedUser.getName());
+                    assertThat(notification.body()).isEqualTo("1:1 알림 제목 테스트");
+                });
+
         UserAccount invitedUser = userAccountRepository.save(new UserAccount(
                 "invited@example.com",
                 "초대유저",
