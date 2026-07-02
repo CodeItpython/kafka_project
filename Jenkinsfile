@@ -34,4 +34,10 @@ pipeline {
             }
         }
     }
+
+    post {
+        success {
+            build job: 'kafka-chat-local-deploy', wait: false, propagate: false
+        }
+    }
 }
