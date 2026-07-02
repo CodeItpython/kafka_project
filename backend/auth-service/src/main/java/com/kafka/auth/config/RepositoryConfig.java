@@ -1,5 +1,6 @@
 package com.kafka.auth.config;
 
+import com.kafka.auth.admin.audit.AdminAuditEventRepository;
 import com.kafka.auth.chat.repository.ChatMessageRepository;
 import com.kafka.auth.chat.repository.ChatMessageDeliveryStateRepository;
 import com.kafka.auth.chat.repository.ChatRoomReadStateRepository;
@@ -29,7 +30,8 @@ import org.springframework.context.annotation.FilterType;
                 ChatRoomUserPreferenceRepository.class,
                 OutboxEventRepository.class,
                 UserNotificationRepository.class,
-                PushDeviceTokenRepository.class
+                PushDeviceTokenRepository.class,
+                AdminAuditEventRepository.class
         },
         excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = ChatMessageRepository.class)
 )

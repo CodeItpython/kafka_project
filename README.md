@@ -229,6 +229,17 @@ Content-Type: application/json
 
 이 패널은 `users.role=ADMIN` 사용자에게만 보이며, 백엔드도 `/api/admin/**` 요청을 `ROLE_ADMIN`으로 제한합니다.
 
+### 관리자 감사 로그
+
+DLT dry-run과 실제 replay 요청은 `admin_audit_events` 테이블에 감사 로그로 저장됩니다. 성공한 요청은 source topic, target topic, 스캔 개수, 재처리 대상 messageId를 남기고, 실패한 요청은 예외 타입과 메시지를 남깁니다.
+
+```http
+GET /api/admin/audit-events?limit=50
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+```
+
+감사 로그는 누가, 언제, 어떤 운영 명령을 실행했는지 추적하기 위한 데이터입니다. 장애 복구 작업 후에는 Grafana/Kibana 로그와 함께 이 API를 확인하면 DLT 재처리 흐름을 역추적할 수 있습니다.
+
 ## Redis 캐시와 상태 관리
 
 Redis는 빠르게 사라져도 되는 상태를 저장합니다.
