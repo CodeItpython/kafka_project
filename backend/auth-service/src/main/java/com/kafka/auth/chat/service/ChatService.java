@@ -46,6 +46,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -144,6 +145,10 @@ public class ChatService {
                         user.getEmail(),
                         new LinkedHashSet<>(List.of(user.getEmail(), partner.getEmail()))
                 )));
+        room.addParticipant(user.getEmail());
+        room.addParticipant(partner.getEmail());
+        room.showFor(user.getEmail());
+        chatRoomRepository.save(room);
         chatStateService.evictRoomCaches(user.getEmail());
         chatStateService.evictRoomCaches(partner.getEmail());
         return toRoomResponse(room, user.getEmail());
@@ -603,6 +608,9 @@ public class ChatService {
                     event.createdAt()
             ));
             ChatRoom room = ensureRoom(event.roomId());
+            room.showForParticipantsExcept(event.senderEmail());
+            chatRoomRepository.save(room);
+            notificationRecipients(room, event.senderEmail()).forEach(chatStateService::evictRoomCaches);
             chatMessageDeliveryService.createSentStates(savedMessage, notificationRecipients(room, event.senderEmail()));
             incrementUnreadForRecipients(event);
             Timer.Sample indexSample = chatMetricsService.startTimer();
@@ -863,7 +871,7 @@ public class ChatService {
     private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail, ChatRoomUserPreference preference) {
         return new ChatRoomResponse(
                 room.getId(),
-                room.getName(),
+                roomDisplayName(room, currentUserEmail),
                 room.getDescription(),
                 room.getCreatedBy(),
                 room.getType().name(),
@@ -873,6 +881,31 @@ public class ChatService {
                 preference != null && preference.isMuted(),
                 participantEmailsForRoom(room).size()
         );
+    }
+
+    private String roomDisplayName(ChatRoom room, String currentUserEmail) {
+        if (room.getType() != ChatRoomType.DIRECT) {
+            return room.getName();
+        }
+        List<String> partnerEmails = room.getParticipantEmails()
+                .stream()
+                .filter(email -> !email.equalsIgnoreCase(currentUserEmail))
+                .toList();
+        if (partnerEmails.isEmpty()) {
+            return room.getName();
+        }
+        Map<String, UserAccount> usersByEmail = userAccountRepository.findByEmailIn(partnerEmails)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        user -> user.getEmail().toLowerCase(Locale.ROOT),
+                        Function.identity()
+                ));
+        String displayName = partnerEmails.stream()
+                .map(email -> usersByEmail.get(email.toLowerCase(Locale.ROOT)))
+                .map(user -> user == null ? null : user.getName())
+                .filter(name -> name != null && !name.isBlank())
+                .collect(java.util.stream.Collectors.joining(", "));
+        return displayName.isBlank() ? room.getName() : displayName;
     }
 
     private String directKey(String firstEmail, String secondEmail) {
