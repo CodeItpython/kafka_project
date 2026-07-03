@@ -54,7 +54,32 @@ spec:
             - containerPort: 9600
           env:
             - name: LS_JAVA_OPTS
-              value: -Xms256m -Xmx256m
+              value: -Xms192m -Xmx192m
+            - name: pipeline.workers
+              value: "1"
+            - name: pipeline.batch.size
+              value: "64"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9600
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9600
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           volumeMounts:
             - name: logstash-pipeline
               mountPath: /usr/share/logstash/pipeline/logstash.conf

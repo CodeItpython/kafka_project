@@ -661,6 +661,8 @@ scripts/docker-build.sh
 scripts/k8s-apply.sh
 ```
 
+로컬 Docker Desktop Kubernetes는 단일 노드 메모리 압박이 자주 생기므로 Elasticsearch, Logstash, discovery-service에는 `resources.requests/limits`와 JVM heap 옵션을 명시합니다. Elasticsearch는 `ES_JAVA_OPTS=-Xms384m -Xmx384m`, Logstash는 `LS_JAVA_OPTS=-Xms192m -Xmx192m`로 시작해 관측 스택이 OOM으로 반복 재시작하지 않도록 조정합니다.
+
 배포 후 접속 주소:
 
 - 프론트엔드 NodePort: `http://localhost:30880`

@@ -19,12 +19,30 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8761
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:MaxRAMPercentage=65 -XX:InitialRAMPercentage=35
           readinessProbe:
             httpGet:
               path: /
               port: 8761
-            initialDelaySeconds: 20
+            initialDelaySeconds: 35
             periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8761
+            initialDelaySeconds: 75
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
