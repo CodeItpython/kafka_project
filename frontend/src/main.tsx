@@ -1,4 +1,4 @@
-import React, { FormEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, TouchEvent, UIEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
@@ -323,11 +323,17 @@ function App() {
   const [dltResult, setDltResult] = useState<DltReplayResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
-  const [showRefreshButton, setShowRefreshButton] = useState(false);
+  const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
+  const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
   const readReceiptsRef = useRef<ReadReceipt[]>([]);
   const openedNotificationRoomRef = useRef('');
+  const shouldStickToLatestMessageRef = useRef(true);
+  const forceLatestMessageScrollRef = useRef(false);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullDistanceRef = useRef(0);
+  const pullWheelReleaseTimerRef = useRef<number | null>(null);
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
   const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
@@ -343,6 +349,9 @@ function App() {
   const groupRooms = rooms.filter((room) => room.type === 'GROUP');
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
   const isAdmin = user?.role === 'ADMIN';
+  const latestMessageId = messages[messages.length - 1]?.id ?? '';
+  const pullRefreshProgress = messagesRefreshing ? 1 : Math.min(1, pullRefreshDistance / 58);
+  const pullRefreshVisible = messagesRefreshing || pullRefreshDistance > 0;
 
   const title = useMemo(() => {
     if (mode === 'register') return '계정 만들기';
@@ -726,8 +735,70 @@ function App() {
     }
   }
 
+  function updatePullRefreshDistance(distance: number) {
+    const nextDistance = Math.max(0, Math.min(82, distance));
+    pullDistanceRef.current = nextDistance;
+    setPullRefreshDistance(nextDistance);
+  }
+
+  function resetPullRefreshDistance() {
+    pullStartYRef.current = null;
+    pullDistanceRef.current = 0;
+    setPullRefreshDistance(0);
+  }
+
+  async function releasePullRefresh() {
+    if (pullDistanceRef.current >= 58 && selectedRoomId && !messagesRefreshing) {
+      setPullRefreshDistance(82);
+      await refreshMessages();
+    }
+    resetPullRefreshDistance();
+  }
+
   function handleMessageScroll(event: UIEvent<HTMLDivElement>) {
-    setShowRefreshButton(event.currentTarget.scrollTop < 28 && messages.length > 0);
+    const { scrollHeight, scrollTop, clientHeight } = event.currentTarget;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    shouldStickToLatestMessageRef.current = distanceFromBottom < 120;
+  }
+
+  function handleMessageWheel(event: WheelEvent<HTMLDivElement>) {
+    if (event.currentTarget.scrollTop > 0 || event.deltaY >= 0 || messagesRefreshing) return;
+    event.preventDefault();
+    updatePullRefreshDistance(pullDistanceRef.current + Math.abs(event.deltaY) * 0.28);
+    if (pullWheelReleaseTimerRef.current) {
+      window.clearTimeout(pullWheelReleaseTimerRef.current);
+    }
+    pullWheelReleaseTimerRef.current = window.setTimeout(() => {
+      releasePullRefresh().catch(() => undefined);
+    }, 160);
+  }
+
+  function handleMessageTouchStart(event: TouchEvent<HTMLDivElement>) {
+    if (event.currentTarget.scrollTop > 0 || messagesRefreshing) return;
+    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+  }
+
+  function handleMessageTouchMove(event: TouchEvent<HTMLDivElement>) {
+    if (pullStartYRef.current === null || event.currentTarget.scrollTop > 0 || messagesRefreshing) return;
+    const currentY = event.touches[0]?.clientY ?? pullStartYRef.current;
+    const distance = currentY - pullStartYRef.current;
+    if (distance <= 0) return;
+    event.preventDefault();
+    updatePullRefreshDistance(distance * 0.48);
+  }
+
+  function handleMessageTouchEnd() {
+    releasePullRefresh().catch(() => undefined);
+  }
+
+  function scrollLatestMessageIntoView(behavior: ScrollBehavior = 'smooth') {
+    const messageList = messageListRef.current;
+    if (!messageList) return;
+    messageList.scrollTo({
+      top: messageList.scrollHeight - messageList.clientHeight,
+      left: 0,
+      behavior
+    });
   }
 
   async function summarizeConversation() {
@@ -904,9 +975,10 @@ function App() {
       setRooms((current) => current.filter((room) => room.id !== selectedRoomId));
       setSelectedRoomId('');
       setMessages([]);
-      setStatus(`${selectedRoom.name} 채팅방을 내 목록에서 삭제했습니다.`);
+      setRoomDeleteConfirmOpen(false);
+      setStatus(`${selectedRoom.name} 채팅방을 나갔습니다.`);
     } catch (error) {
-      setStatus(readableError(error, '채팅방 삭제에 실패했습니다.'));
+      setStatus(readableError(error, '채팅방을 나가지 못했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -958,6 +1030,8 @@ function App() {
     if (!selectedRoomId || (!draft.trim() && !attachment)) return;
     const content = draft.trim();
     const replyToMessageId = replyTarget?.id ?? null;
+    forceLatestMessageScrollRef.current = true;
+    shouldStickToLatestMessageRef.current = true;
     setDraft('');
     setReplyTarget(null);
     try {
@@ -1192,17 +1266,39 @@ function App() {
 
   useEffect(() => {
     if (selectedRoomId) {
+      forceLatestMessageScrollRef.current = true;
+      shouldStickToLatestMessageRef.current = true;
       setReadReceipts([]);
       readReceiptsRef.current = [];
+      setMessages([]);
       setReplyTarget(null);
       setInviteEmail('');
       loadMessages(selectedRoomId);
       loadPresence(selectedRoomId);
       loadRoomParticipants(selectedRoomId);
       setConversationSummary(null);
-      setShowRefreshButton(false);
+      resetPullRefreshDistance();
     }
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    return () => {
+      if (pullWheelReleaseTimerRef.current) {
+        window.clearTimeout(pullWheelReleaseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    if (!forceLatestMessageScrollRef.current && !shouldStickToLatestMessageRef.current) return;
+    const behavior: ScrollBehavior = forceLatestMessageScrollRef.current ? 'auto' : 'smooth';
+    forceLatestMessageScrollRef.current = false;
+    window.requestAnimationFrame(() => {
+      scrollLatestMessageIntoView(behavior);
+      window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
+    });
+  }, [latestMessageId, selectedRoomId]);
 
   useEffect(() => {
     if (!selectedRoomId || !token) {
@@ -1389,6 +1485,43 @@ function App() {
         onOpen={openNotificationToast}
         onDismiss={dismissAppToast}
       />
+      <AnimatePresence>
+        {roomDeleteConfirmOpen && selectedRoom && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={() => setRoomDeleteConfirmOpen(false)}
+          >
+            <motion.section
+              className="confirm-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="room-exit-confirm-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={() => setRoomDeleteConfirmOpen(false)} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <span className="confirm-dialog-icon"><Trash2 size={20} aria-hidden /></span>
+              <div>
+                <strong id="room-exit-confirm-title">채팅방을 나가겠습니까?</strong>
+                <p>{selectedRoom.name} 채팅방이 목록에서 사라지고, 이 화면의 대화가 닫힙니다.</p>
+              </div>
+              <div className="confirm-dialog-actions">
+                <button type="button" onClick={() => setRoomDeleteConfirmOpen(false)} disabled={loading}>취소</button>
+                <button type="button" onClick={deleteRoom} disabled={loading}>{loading ? '나가는 중' : '나가기'}</button>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <motion.aside
         className="menu-pane"
         aria-hidden={!isMenuOpen}
@@ -1636,7 +1769,7 @@ function App() {
                 </button>
                 <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
                 {selectedRoom?.type === 'GROUP' && <button className="soft-action-button" onClick={leaveSelectedRoom} disabled={loading} type="button">나가기</button>}
-                <button className="ghost-icon-button" onClick={deleteRoom} disabled={!selectedRoomId || loading} title="채팅방 삭제"><Trash2 size={17} aria-hidden /></button>
+                <button className="ghost-icon-button" onClick={() => setRoomDeleteConfirmOpen(true)} disabled={!selectedRoomId || loading} title="채팅방 나가기"><Trash2 size={17} aria-hidden /></button>
               </div>
             </header>
 
@@ -1662,12 +1795,28 @@ function App() {
               )}
             </section>
 
-            <div className="message-list" ref={messageListRef} onScroll={handleMessageScroll}>
-              {(showRefreshButton || messagesRefreshing) && (
-                <button className="refresh-messages-button" type="button" onClick={refreshMessages} disabled={messagesRefreshing}>
-                  <RefreshCcw size={15} aria-hidden />
-                  {messagesRefreshing ? '불러오는 중' : '대화창 새로고침'}
-                </button>
+            <div
+              className="message-list"
+              ref={messageListRef}
+              onScroll={handleMessageScroll}
+              onWheel={handleMessageWheel}
+              onTouchStart={handleMessageTouchStart}
+              onTouchMove={handleMessageTouchMove}
+              onTouchEnd={handleMessageTouchEnd}
+              onTouchCancel={handleMessageTouchEnd}
+            >
+              {pullRefreshVisible && (
+                <div
+                  className={messagesRefreshing ? 'pull-refresh-indicator loading' : 'pull-refresh-indicator'}
+                  style={{
+                    '--pull-distance': `${messagesRefreshing ? 58 : pullRefreshDistance}px`,
+                    '--pull-progress': String(pullRefreshProgress)
+                  } as React.CSSProperties}
+                  aria-live="polite"
+                >
+                  <span><RefreshCcw size={15} aria-hidden /></span>
+                  <strong>{messagesRefreshing ? '새 대화 불러오는 중' : pullRefreshProgress >= 1 ? '놓으면 새로고침' : '아래로 당겨 새로고침'}</strong>
+                </div>
               )}
               {conversationSummary && (
                 <section className="summary-card">
