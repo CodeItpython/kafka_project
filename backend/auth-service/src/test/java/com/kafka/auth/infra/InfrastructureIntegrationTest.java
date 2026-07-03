@@ -53,6 +53,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
@@ -66,7 +67,9 @@ class InfrastructureIntegrationTest {
             .withPassword("kafka");
 
     @Container
-    static final MongoDBContainer mongodb = new MongoDBContainer(DockerImageName.parse("mongo:7"));
+    static final MongoDBContainer mongodb = new MongoDBContainer(DockerImageName.parse("mongo:7"))
+            .waitingFor(Wait.forListeningPort())
+            .withStartupTimeout(Duration.ofMinutes(4));
 
     @Container
     static final ElasticsearchContainer elasticsearch = new ElasticsearchContainer(

@@ -1,11 +1,13 @@
 package com.kafka.auth.controller;
 
 import com.kafka.auth.dto.ErrorResponse;
+import com.kafka.auth.ratelimit.TooManyRequestsException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,6 +25,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException exception, HttpServletRequest request) {
         return error(HttpStatus.CONFLICT, "INVALID_STATE", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException exception, HttpServletRequest request) {
+        long retryAfterSeconds = Math.max(1, exception.getRetryAfter().toSeconds());
+        ResponseEntity<ErrorResponse> response = error(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "RATE_LIMIT_EXCEEDED",
+                exception.getMessage(),
+                request,
+                List.of("retryAfterSeconds: " + retryAfterSeconds)
+        );
+        return ResponseEntity.status(response.getStatusCode())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds))
+                .body(response.getBody());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

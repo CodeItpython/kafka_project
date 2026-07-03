@@ -8,6 +8,7 @@ import com.kafka.auth.dto.AuthDtos.RegisterRequest;
 import com.kafka.auth.dto.AuthDtos.UserResponse;
 import com.kafka.auth.email.EmailVerificationMailService;
 import com.kafka.auth.email.EmailVerificationProperties;
+import com.kafka.auth.email.EmailVerificationThrottleService;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.EmailVerificationCode;
 import com.kafka.auth.model.UserAccount;
@@ -39,6 +40,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final EmailVerificationMailService emailVerificationMailService;
     private final EmailVerificationProperties emailVerificationProperties;
+    private final EmailVerificationThrottleService emailVerificationThrottleService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -67,25 +69,39 @@ public class AuthService {
     @Transactional
     public EmailCodeResponse createEmailCode(String email) {
         String normalizedEmail = normalizeEmail(email);
-        String code = "%04d".formatted(RANDOM.nextInt(10_000));
-        Instant expiresAt = Instant.now().plus(emailVerificationProperties.getTtl());
-        emailVerificationCodeRepository.markUnusedCodesAsUsed(normalizedEmail);
-        emailVerificationCodeRepository.save(new EmailVerificationCode(normalizedEmail, hashCode(normalizedEmail, code), expiresAt));
-        emailVerificationMailService.sendVerificationCode(normalizedEmail, code, expiresAt);
-        return new EmailCodeResponse(expiresAt, maskedEmail(normalizedEmail));
+        emailVerificationThrottleService.acquireSendPermit(normalizedEmail);
+        try {
+            String code = "%04d".formatted(RANDOM.nextInt(10_000));
+            Instant expiresAt = Instant.now().plus(emailVerificationProperties.getTtl());
+            emailVerificationCodeRepository.markUnusedCodesAsUsed(normalizedEmail);
+            emailVerificationCodeRepository.save(new EmailVerificationCode(normalizedEmail, hashCode(normalizedEmail, code), expiresAt));
+            emailVerificationMailService.sendVerificationCode(normalizedEmail, code, expiresAt);
+            emailVerificationThrottleService.clearVerifyFailures(normalizedEmail);
+            return new EmailCodeResponse(expiresAt, maskedEmail(normalizedEmail));
+        } catch (RuntimeException exception) {
+            emailVerificationThrottleService.releaseSendPermit(normalizedEmail);
+            throw exception;
+        }
     }
 
     @Transactional
     public AuthResponse loginWithEmailCode(EmailLoginRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
+        emailVerificationThrottleService.assertVerifyAllowed(normalizedEmail);
         String codeHash = hashCode(normalizedEmail, request.code());
         EmailVerificationCode verificationCode = emailVerificationCodeRepository
                 .findTopByEmailAndCodeAndUsedFalseOrderByExpiresAtDesc(normalizedEmail, codeHash)
-                .orElseThrow(() -> new IllegalArgumentException("인증코드가 올바르지 않습니다."));
+                .orElse(null);
+        if (verificationCode == null) {
+            emailVerificationThrottleService.recordVerifyFailure(normalizedEmail);
+            throw new IllegalArgumentException("인증코드가 올바르지 않습니다.");
+        }
         if (verificationCode.getExpiresAt().isBefore(Instant.now())) {
+            emailVerificationThrottleService.recordVerifyFailure(normalizedEmail);
             throw new IllegalArgumentException("인증코드가 만료되었습니다.");
         }
         verificationCode.markUsed();
+        emailVerificationThrottleService.clearVerifyFailures(normalizedEmail);
 
         UserAccount user = userAccountRepository.findByEmail(normalizedEmail)
                 .orElseGet(() -> userAccountRepository.save(new UserAccount(
