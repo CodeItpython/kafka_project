@@ -43,6 +43,60 @@ spec:
               value: gpt-5.2
             - name: OPENAI_RESPONSES_URL
               value: https://api.openai.com/v1/responses
+            - name: SPRING_MAIL_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-host
+                  optional: true
+            - name: SPRING_MAIL_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-port
+                  optional: true
+            - name: SPRING_MAIL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-username
+                  optional: true
+            - name: SPRING_MAIL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-password
+                  optional: true
+            - name: SPRING_MAIL_SMTP_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-auth
+                  optional: true
+            - name: SPRING_MAIL_SMTP_STARTTLS_ENABLE
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-starttls-enable
+                  optional: true
+            - name: SPRING_MAIL_SMTP_STARTTLS_REQUIRED
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: smtp-starttls-required
+                  optional: true
+            - name: APP_EMAIL_VERIFICATION_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: email-verification-from
+                  optional: true
+            - name: APP_EMAIL_VERIFICATION_SUBJECT
+              valueFrom:
+                secretKeyRef:
+                  name: auth-secrets
+                  key: email-verification-subject
+                  optional: true
             - name: APP_PUSH_FCM_ENABLED
               valueFrom:
                 secretKeyRef:

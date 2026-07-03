@@ -57,6 +57,35 @@ npm run dev -- --host 127.0.0.1
 | `seoyeon@example.com` | `password123` |
 | `hyejin@example.com` | `password123` |
 
+## 이메일 인증 로그인
+
+이메일 로그인은 `/api/auth/email/code`에서 4자리 인증코드를 실제 메일로 발송하고, `/api/auth/email/login`에서 사용자가 입력한 4자리 코드를 검증합니다. 인증코드는 프론트 응답이나 서버 로그에 노출하지 않고, PostgreSQL에는 이메일과 코드 조합의 SHA-256 해시만 저장합니다.
+
+로컬 IntelliJ 또는 `bootRun`에서 실제 메일 발송을 테스트하려면 SMTP 환경변수를 넣고 auth-service를 재시작합니다. Gmail을 쓰는 경우 일반 계정 비밀번호가 아니라 Google 계정의 앱 비밀번호를 사용해야 합니다.
+
+```bash
+export SPRING_MAIL_HOST=smtp.gmail.com
+export SPRING_MAIL_PORT=587
+export SPRING_MAIL_USERNAME='your-address@gmail.com'
+export SPRING_MAIL_PASSWORD='google-app-password'
+export APP_EMAIL_VERIFICATION_FROM='your-address@gmail.com'
+
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:bootRun
+```
+
+Docker Compose는 루트 `.env`에 같은 값을 넣으면 `auth-service` 컨테이너로 전달합니다.
+
+```properties
+SPRING_MAIL_HOST=smtp.gmail.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=your-address@gmail.com
+SPRING_MAIL_PASSWORD=google-app-password
+APP_EMAIL_VERIFICATION_FROM=your-address@gmail.com
+```
+
+Kubernetes는 `k8s/secrets.example.yaml`의 `auth-secrets`에 `smtp-host`, `smtp-username`, `smtp-password`, `email-verification-from` 값을 넣어 배포합니다. 실제 운영 Secret은 Git에 커밋하지 않습니다.
+
 ## Docker Compose
 
 전체 서비스를 Docker Compose로 실행하려면 아래 명령을 사용합니다.

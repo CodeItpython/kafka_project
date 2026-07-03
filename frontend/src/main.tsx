@@ -1,4 +1,4 @@
-import React, { FormEvent, TouchEvent, UIEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { ClipboardEvent, FormEvent, KeyboardEvent, TouchEvent, UIEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
@@ -276,7 +276,6 @@ function App() {
   const [name, setName] = useState(SAMPLE_USERS[0].name);
   const [password, setPassword] = useState('password123');
   const [code, setCode] = useState('');
-  const [debugCode, setDebugCode] = useState('');
   const [status, setStatus] = useState('');
   const [token, setToken] = useState(() => localStorage.getItem('accessToken') ?? '');
   const [user, setUser] = useState<User | null>(null);
@@ -314,6 +313,7 @@ function App() {
   const [notificationTopic, setNotificationTopic] = useState('');
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [appToasts, setAppToasts] = useState<AppToast[]>([]);
+  const [pendingEmailAuth, setPendingEmailAuth] = useState<AuthResponse | null>(null);
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => localStorage.getItem('inAppNotificationsEnabled') !== 'false');
   const [dltMessages, setDltMessages] = useState<DltMessage[]>([]);
   const [dltTopic, setDltTopic] = useState('');
@@ -326,6 +326,7 @@ function App() {
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
   const readReceiptsRef = useRef<ReadReceipt[]>([]);
   const openedNotificationRoomRef = useRef('');
@@ -334,6 +335,7 @@ function App() {
   const pullStartYRef = useRef<number | null>(null);
   const pullDistanceRef = useRef(0);
   const pullWheelReleaseTimerRef = useRef<number | null>(null);
+  const lastAutoSubmittedCodeRef = useRef('');
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
   const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
@@ -350,6 +352,7 @@ function App() {
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
+  const emailCodeDigits = Array.from({ length: 4 }, (_, index) => code[index] ?? '');
   const pullRefreshProgress = messagesRefreshing ? 1 : Math.min(1, pullRefreshDistance / 58);
   const pullRefreshVisible = messagesRefreshing || pullRefreshDistance > 0;
 
@@ -432,35 +435,89 @@ function App() {
     setLoading(true);
     setStatus('');
     try {
-      const data = await request<{ expiresAt: string; debugCode: string }>('/auth/email/code', {
+      const data = await request<{ expiresAt: string; sentTo: string }>('/auth/email/code', {
         method: 'POST',
         body: JSON.stringify({ email })
       });
-      setDebugCode(data.debugCode);
-      setCode(data.debugCode);
-      setStatus(`인증코드를 생성했습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
+      setCode('');
+      lastAutoSubmittedCodeRef.current = '';
+      requestAnimationFrame(() => codeInputRefs.current[0]?.focus());
+      setStatus(`${data.sentTo}로 4자리 인증코드를 보냈습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
     } catch (error) {
-      setStatus(readableError(error, '인증코드를 만들지 못했습니다.'));
+      setStatus(readableError(error, '인증코드를 보내지 못했습니다.'));
     } finally {
       setLoading(false);
     }
   }
 
-  async function submitEmailFlow(event: FormEvent) {
-    event.preventDefault();
+  async function submitEmailFlow(event?: FormEvent) {
+    event?.preventDefault();
+    const verificationCode = code.replace(/\D/g, '').slice(0, 4);
+    if (verificationCode.length !== 4) {
+      setStatus('4자리 인증코드를 입력해주세요.');
+      return;
+    }
     setLoading(true);
     setStatus('');
     try {
       const data = await request<AuthResponse>('/auth/email/login', {
         method: 'POST',
-        body: JSON.stringify({ email, code, name })
+        body: JSON.stringify({ email, code: verificationCode, name })
       });
-      saveSession(data);
+      setPendingEmailAuth(data);
     } catch (error) {
+      lastAutoSubmittedCodeRef.current = '';
       setStatus(readableError(error, '이메일 로그인에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
+  }
+
+  function focusCodeInput(index: number) {
+    requestAnimationFrame(() => codeInputRefs.current[index]?.focus());
+  }
+
+  function updateCode(nextCode: string, nextFocusIndex?: number) {
+    const sanitizedCode = nextCode.replace(/\D/g, '').slice(0, 4);
+    setCode(sanitizedCode);
+    if (nextFocusIndex !== undefined) {
+      focusCodeInput(Math.min(Math.max(nextFocusIndex, 0), 3));
+    }
+  }
+
+  function handleCodeDigitChange(index: number, value: string) {
+    const numericValue = value.replace(/\D/g, '');
+    if (!numericValue) {
+      updateCode(`${code.slice(0, index)}${code.slice(index + 1)}`, index);
+      return;
+    }
+    const nextDigits = code.split('');
+    numericValue.slice(0, 4 - index).split('').forEach((digit, offset) => {
+      nextDigits[index + offset] = digit;
+    });
+    const nextCode = nextDigits.join('').slice(0, 4);
+    updateCode(nextCode, Math.min(index + numericValue.length, 3));
+  }
+
+  function handleCodeKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Backspace' && !emailCodeDigits[index] && index > 0) {
+      event.preventDefault();
+      updateCode(`${code.slice(0, index - 1)}${code.slice(index)}`, index - 1);
+    }
+    if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      focusCodeInput(index - 1);
+    }
+    if (event.key === 'ArrowRight' && index < 3) {
+      event.preventDefault();
+      focusCodeInput(index + 1);
+    }
+  }
+
+  function handleCodePaste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    const pastedCode = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    updateCode(pastedCode, Math.min(pastedCode.length, 3));
   }
 
   async function loadMe() {
@@ -1244,6 +1301,18 @@ function App() {
   }, [user?.email]);
 
   useEffect(() => {
+    const verificationCode = code.replace(/\D/g, '').slice(0, 4);
+    if (mode !== 'email' || verificationCode.length !== 4 || loading || !email.trim() || !name.trim()) {
+      return;
+    }
+    if (lastAutoSubmittedCodeRef.current === verificationCode) {
+      return;
+    }
+    lastAutoSubmittedCodeRef.current = verificationCode;
+    submitEmailFlow().catch(() => undefined);
+  }, [code, mode, loading, email, name]);
+
+  useEffect(() => {
     if (!user || rooms.length === 0) return;
     const roomId = new URLSearchParams(window.location.search).get('roomId');
     if (!roomId || openedNotificationRoomRef.current === roomId) return;
@@ -1417,6 +1486,37 @@ function App() {
   if (!user) {
     return (
       <main className="auth-shell">
+        <AnimatePresence>
+          {pendingEmailAuth && (
+            <motion.div
+              className="confirm-dialog-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              role="presentation"
+            >
+              <motion.section
+                className="confirm-dialog success-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="email-auth-success-title"
+                initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.96 }}
+                transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+              >
+                <span className="confirm-dialog-icon success"><CheckCircle2 size={22} aria-hidden /></span>
+                <div>
+                  <strong id="email-auth-success-title">이메일 인증이 완료되었습니다</strong>
+                  <p>{pendingEmailAuth.user.name}님, 이제 Kafka Talk를 시작할 수 있어요.</p>
+                </div>
+                <div className="confirm-dialog-actions single">
+                  <button type="button" onClick={() => saveSession(pendingEmailAuth)}>채팅 시작하기</button>
+                </div>
+              </motion.section>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <motion.section
           className="auth-panel"
           initial={{ opacity: 0, y: 18 }}
@@ -1450,12 +1550,31 @@ function App() {
               <motion.form key="email" onSubmit={submitEmailFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
                 <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
                 <label>이름<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-                <div className="code-row">
-                  <label>인증코드<input value={code} onChange={(event) => setCode(event.target.value)} required /></label>
+                <div className="email-code-panel">
+                  <div className="email-code-title">
+                    <span>인증코드</span>
+                    <small>{loading && code.length === 4 ? '확인 중' : '4자리 숫자 입력 시 자동 확인'}</small>
+                  </div>
+                  <div className="otp-inputs" aria-label="4자리 이메일 인증코드">
+                    {emailCodeDigits.map((digit, index) => (
+                      <input
+                        key={`email-code-${index}`}
+                        ref={(element) => { codeInputRefs.current[index] = element; }}
+                        value={digit}
+                        onChange={(event) => handleCodeDigitChange(index, event.target.value)}
+                        onKeyDown={(event) => handleCodeKeyDown(index, event)}
+                        onPaste={handleCodePaste}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                        maxLength={1}
+                        aria-label={`인증코드 ${index + 1}번째 숫자`}
+                      />
+                    ))}
+                  </div>
                   <button type="button" className="icon-button" onClick={sendCode} disabled={loading} title="인증코드 발송"><Mail size={19} aria-hidden /></button>
                 </div>
-                {debugCode && <p className="hint">인증코드: {debugCode}</p>}
-                <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />인증 로그인</button>
+                <p className="hint">메일함에서 4자리 인증코드를 확인하세요.</p>
               </motion.form>
             ) : (
               <motion.form key={mode} onSubmit={submitPasswordFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
