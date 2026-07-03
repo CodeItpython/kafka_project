@@ -6,14 +6,21 @@ import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
 import com.kafka.auth.dto.AuthDtos.LoginRequest;
 import com.kafka.auth.dto.AuthDtos.RegisterRequest;
 import com.kafka.auth.dto.AuthDtos.UserResponse;
+import com.kafka.auth.email.EmailVerificationMailService;
+import com.kafka.auth.email.EmailVerificationProperties;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.EmailVerificationCode;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.EmailVerificationCodeRepository;
 import com.kafka.auth.repository.UserAccountRepository;
 import com.kafka.auth.security.JwtService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.HexFormat;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +37,8 @@ public class AuthService {
     private final EmailVerificationCodeRepository emailVerificationCodeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final EmailVerificationMailService emailVerificationMailService;
+    private final EmailVerificationProperties emailVerificationProperties;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -57,27 +66,31 @@ public class AuthService {
 
     @Transactional
     public EmailCodeResponse createEmailCode(String email) {
-        String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
-        Instant expiresAt = Instant.now().plusSeconds(300);
-        emailVerificationCodeRepository.save(new EmailVerificationCode(email, code, expiresAt));
-        log.info("Email verification code for {} is {}. It expires at {}.", email, code, expiresAt);
-        return new EmailCodeResponse(expiresAt, code);
+        String normalizedEmail = normalizeEmail(email);
+        String code = "%04d".formatted(RANDOM.nextInt(10_000));
+        Instant expiresAt = Instant.now().plus(emailVerificationProperties.getTtl());
+        emailVerificationCodeRepository.markUnusedCodesAsUsed(normalizedEmail);
+        emailVerificationCodeRepository.save(new EmailVerificationCode(normalizedEmail, hashCode(normalizedEmail, code), expiresAt));
+        emailVerificationMailService.sendVerificationCode(normalizedEmail, code, expiresAt);
+        return new EmailCodeResponse(expiresAt, maskedEmail(normalizedEmail));
     }
 
     @Transactional
     public AuthResponse loginWithEmailCode(EmailLoginRequest request) {
+        String normalizedEmail = normalizeEmail(request.email());
+        String codeHash = hashCode(normalizedEmail, request.code());
         EmailVerificationCode verificationCode = emailVerificationCodeRepository
-                .findTopByEmailAndCodeAndUsedFalseOrderByExpiresAtDesc(request.email(), request.code())
+                .findTopByEmailAndCodeAndUsedFalseOrderByExpiresAtDesc(normalizedEmail, codeHash)
                 .orElseThrow(() -> new IllegalArgumentException("인증코드가 올바르지 않습니다."));
         if (verificationCode.getExpiresAt().isBefore(Instant.now())) {
             throw new IllegalArgumentException("인증코드가 만료되었습니다.");
         }
         verificationCode.markUsed();
 
-        UserAccount user = userAccountRepository.findByEmail(request.email())
+        UserAccount user = userAccountRepository.findByEmail(normalizedEmail)
                 .orElseGet(() -> userAccountRepository.save(new UserAccount(
-                        request.email(),
-                        request.name() == null || request.name().isBlank() ? request.email() : request.name(),
+                        normalizedEmail,
+                        request.name() == null || request.name().isBlank() ? normalizedEmail : request.name(),
                         null,
                         AuthProvider.EMAIL
                 )));
@@ -119,5 +132,30 @@ public class AuthService {
 
     private AuthResponse issueToken(UserAccount user) {
         return new AuthResponse(jwtService.createToken(user), "Bearer", toUserResponse(user));
+    }
+
+    private String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String hashCode(String email, String code) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest((email + ":" + code).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 해시를 사용할 수 없습니다.", exception);
+        }
+    }
+
+    private String maskedEmail(String email) {
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return email;
+        }
+        String localPart = email.substring(0, atIndex);
+        String domain = email.substring(atIndex);
+        int visibleLength = Math.min(2, localPart.length());
+        return localPart.substring(0, visibleLength) + "*".repeat(Math.max(1, localPart.length() - visibleLength)) + domain;
     }
 }

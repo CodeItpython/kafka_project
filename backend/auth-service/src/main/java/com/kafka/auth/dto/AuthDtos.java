@@ -2,6 +2,7 @@ package com.kafka.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 
@@ -29,7 +30,7 @@ public final class AuthDtos {
 
     public record EmailLoginRequest(
             @Email @NotBlank String email,
-            @NotBlank String code,
+            @NotBlank @Pattern(regexp = "\\d{4}", message = "인증코드는 4자리 숫자입니다.") String code,
             String name
     ) {
     }
@@ -83,7 +84,7 @@ public final class AuthDtos {
 
     public record EmailCodeResponse(
             Instant expiresAt,
-            String debugCode
+            String sentTo
     ) {
     }
 
