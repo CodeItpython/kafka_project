@@ -97,6 +97,12 @@ spec:
                   name: auth-secrets
                   key: email-verification-subject
                   optional: true
+            - name: APP_EMAIL_VERIFICATION_RESEND_COOLDOWN
+              value: "60s"
+            - name: APP_EMAIL_VERIFICATION_MAX_VERIFY_ATTEMPTS
+              value: "5"
+            - name: APP_EMAIL_VERIFICATION_VERIFY_ATTEMPT_WINDOW
+              value: "10m"
             - name: APP_PUSH_FCM_ENABLED
               valueFrom:
                 secretKeyRef:

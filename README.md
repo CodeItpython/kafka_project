@@ -61,6 +61,8 @@ npm run dev -- --host 127.0.0.1
 
 이메일 로그인은 `/api/auth/email/code`에서 4자리 인증코드를 실제 메일로 발송하고, `/api/auth/email/login`에서 사용자가 입력한 4자리 코드를 검증합니다. 인증코드는 프론트 응답이나 서버 로그에 노출하지 않고, PostgreSQL에는 이메일과 코드 조합의 SHA-256 해시만 저장합니다.
 
+이메일 인증 API는 Redis로 이메일 주소 단위 abuse protection을 적용합니다. 같은 이메일로 인증코드를 다시 요청하면 기본 60초 쿨다운이 걸리고, 잘못된 인증코드 검증은 기본 10분 동안 5회까지 허용합니다. 제한에 걸리면 HTTP `429 Too Many Requests`와 `Retry-After` 헤더를 내려줍니다.
+
 로컬 IntelliJ 또는 `bootRun`에서 실제 메일 발송을 테스트하려면 SMTP 환경변수를 넣고 auth-service를 재시작합니다. Gmail을 쓰는 경우 일반 계정 비밀번호가 아니라 Google 계정의 앱 비밀번호를 사용해야 합니다.
 
 ```bash
@@ -69,6 +71,9 @@ export SPRING_MAIL_PORT=587
 export SPRING_MAIL_USERNAME='your-address@gmail.com'
 export SPRING_MAIL_PASSWORD='google-app-password'
 export APP_EMAIL_VERIFICATION_FROM='your-address@gmail.com'
+export APP_EMAIL_VERIFICATION_RESEND_COOLDOWN=60s
+export APP_EMAIL_VERIFICATION_MAX_VERIFY_ATTEMPTS=5
+export APP_EMAIL_VERIFICATION_VERIFY_ATTEMPT_WINDOW=10m
 
 cd /Users/gunwoo/Documents/KAFKA/backend
 ./gradlew :auth-service:bootRun
@@ -82,6 +87,9 @@ SPRING_MAIL_PORT=587
 SPRING_MAIL_USERNAME=your-address@gmail.com
 SPRING_MAIL_PASSWORD=google-app-password
 APP_EMAIL_VERIFICATION_FROM=your-address@gmail.com
+APP_EMAIL_VERIFICATION_RESEND_COOLDOWN=60s
+APP_EMAIL_VERIFICATION_MAX_VERIFY_ATTEMPTS=5
+APP_EMAIL_VERIFICATION_VERIFY_ATTEMPT_WINDOW=10m
 ```
 
 Kubernetes는 `k8s/secrets.example.yaml`의 `auth-secrets`에 `smtp-host`, `smtp-username`, `smtp-password`, `email-verification-from` 값을 넣어 배포합니다. 실제 운영 Secret은 Git에 커밋하지 않습니다.
@@ -285,6 +293,8 @@ Redis는 빠르게 사라져도 되는 상태를 저장합니다.
 - 입력 중 상태: `state:typing:{roomId}:{email}`, TTL 5초
 - 안 읽은 메시지 수: `state:unread:{email}:{roomId}`
 - API rate limit 카운터: `rate-limit:{bucket}:{window}`, 설정된 window 동안 유지
+- 이메일 인증 재발송 쿨다운: `email-verification:send-cooldown:{email}`, 기본 TTL 60초
+- 이메일 인증 실패 카운터: `email-verification:verify-failures:{email}`, 기본 TTL 10분
 
 메시지가 Kafka consumer를 통해 MongoDB에 저장되면, 백엔드는 수신자별 unread 카운터를 Redis에서 증가시킵니다.
 사용자가 채팅방을 열어 메시지 목록을 조회하면 해당 방의 unread 카운터를 삭제해서 읽음 처리합니다.
