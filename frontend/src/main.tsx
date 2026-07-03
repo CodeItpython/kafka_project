@@ -322,6 +322,7 @@ function App() {
   const [dltLoading, setDltLoading] = useState(false);
   const [dltResult, setDltResult] = useState<DltReplayResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [showRefreshButton, setShowRefreshButton] = useState(false);
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
@@ -1370,6 +1371,32 @@ function App() {
   }, [latestMessageId, selectedRoomId]);
 
   useEffect(() => {
+    const messageList = messageListRef.current;
+    if (!messageList || shouldReduceMotion) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          entry.target.classList.toggle('aos-animate', entry.isIntersecting);
+        });
+      },
+      {
+        root: messageList,
+        rootMargin: '0px 0px -12% 0px',
+        threshold: 0.08
+      }
+    );
+    const frameId = window.requestAnimationFrame(() => {
+      messageList.querySelectorAll<HTMLElement>('[data-aos-anchor-placement="top-bottom"]').forEach((element) => {
+        observer.observe(element);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [latestMessageId, selectedRoomId, shouldReduceMotion]);
+
+  useEffect(() => {
     if (!selectedRoomId || !token) {
       setPresence({ onlineUsers: [], typingUsers: [] });
       return;
@@ -1951,8 +1978,8 @@ function App() {
                 <motion.article
                   key={message.id}
                   className={message.senderEmail === user.email ? 'chat-bubble mine' : 'chat-bubble'}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  data-aos={message.senderEmail === user.email ? 'chat-slide-left' : 'chat-slide-right'}
+                  data-aos-anchor-placement="top-bottom"
                 >
                   <div className="bubble-meta">
                     {message.senderEmail !== user.email && <strong>{message.senderName}</strong>}
