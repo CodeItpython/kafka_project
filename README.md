@@ -802,6 +802,57 @@ docker exec kafka-jenkins kubectl config get-contexts
 
 context가 비어 있으면 Jenkins 문제가 아니라 로컬 Kubernetes 클러스터가 아직 준비되지 않은 상태입니다. Docker Desktop 설정에서 Kubernetes를 켜고 `docker-desktop` context가 생긴 뒤 다시 CD를 실행해야 합니다.
 
+## k6 부하 테스트
+
+k6는 로그인, 친구/채팅방 조회, 1:1 채팅방 생성, 메시지 전송, 읽음 처리, 타이핑 상태, 검색/자동완성 API를 반복 호출해 현재 백엔드가 어느 정도 트래픽까지 안정적으로 버티는지 확인합니다.
+
+먼저 로컬 인프라와 백엔드를 실행합니다.
+
+```bash
+docker compose up -d postgres mongodb redis elasticsearch kafka
+
+cd /Users/gunwoo/Documents/KAFKA/backend
+./gradlew :auth-service:bootRun
+```
+
+Docker 기반 k6 실행:
+
+```bash
+cd /Users/gunwoo/Documents/KAFKA
+scripts/k6-load-test.sh
+```
+
+로컬 PC에 k6가 설치되어 있으면 같은 스크립트가 로컬 k6 바이너리를 우선 사용합니다. Docker로 실행할 때 기본 백엔드 주소는 `http://host.docker.internal:8890`입니다. 로컬 k6 바이너리로 직접 실행하면서 주소를 바꾸려면 다음처럼 실행합니다.
+
+```bash
+BASE_URL=http://localhost:8890 PROFILE=smoke scripts/k6-load-test.sh
+```
+
+프로파일:
+
+- `PROFILE=smoke`: 1 VU로 빠른 정상성 확인
+- `PROFILE=load`: 10 VU 수준의 일반 부하 확인
+- `PROFILE=stress`: 40 VU까지 올려 병목과 실패율 확인
+
+테스트 계정을 바꾸려면 JSON 배열로 넘깁니다.
+
+```bash
+TEST_USERS='[
+  {"email":"user@example.com","password":"password123"},
+  {"email":"junho@example.com","password":"password123"}
+]' PROFILE=load scripts/k6-load-test.sh
+```
+
+결과 요약은 콘솔에 출력되고, 전체 JSON summary는 `performance/k6/results/summary.json`에 저장됩니다. 이 결과 파일은 실행 산출물이므로 Git에는 커밋하지 않습니다.
+
+기본 성공 기준:
+
+- `http_req_failed < 5%`
+- `http_req_duration p95 < 1200ms` for `smoke`
+- `checks > 95%`
+
+실패율이 높으면 먼저 `/actuator/prometheus`, Grafana, Kibana에서 같은 시간대의 HTTP latency, Kafka publish/consume duration, Elasticsearch search/index duration, Redis timeout 여부를 같이 봅니다.
+
 ## 작업 기록
 
 의미 있는 작업을 한 뒤에는 날짜별 로그에 기록합니다.
