@@ -1,5 +1,6 @@
 package com.kafka.auth.email;
 
+import com.kafka.auth.ratelimit.RedisAtomicCounter;
 import com.kafka.auth.ratelimit.TooManyRequestsException;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ public class EmailVerificationThrottleService {
     private static final String VERIFY_FAILURE_PREFIX = "email-verification:verify-failures:";
 
     private final StringRedisTemplate redisTemplate;
+    private final RedisAtomicCounter counter;
     private final EmailVerificationProperties properties;
 
     public void acquireSendPermit(String email) {
@@ -69,11 +71,9 @@ public class EmailVerificationThrottleService {
         Duration window = normalizedDuration(properties.getVerifyAttemptWindow(), Duration.ofMinutes(10));
         String key = verifyFailureKey(email);
         try {
-            Long count = redisTemplate.opsForValue().increment(key);
-            long failures = count == null ? 1 : count;
-            if (failures == 1) {
-                redisTemplate.expire(key, window);
-            }
+            // Atomic INCR + first-hit expire so the window can't be lost mid-way,
+            // which would otherwise leave the counter without a TTL forever.
+            long failures = counter.incrementWithTtl(key, window);
             if (failures >= maxVerifyAttempts()) {
                 throw new TooManyRequestsException(
                         "인증 실패 횟수가 너무 많습니다. 새 인증코드를 요청해주세요.",
