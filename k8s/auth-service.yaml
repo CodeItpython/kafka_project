@@ -20,8 +20,11 @@ spec:
           image: kafka-auth-service:local
           imagePullPolicy: IfNotPresent
           securityContext:
-            # Image runs as the non-root `spring` user (uid 100) from the Dockerfile.
+            # Image runs as the non-root `spring` user; pin the numeric uid/gid so
+            # kubelet can verify runAsNonRoot (a non-numeric image USER isn't verifiable).
             runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
@@ -189,17 +192,24 @@ spec:
               value: logstash
             - name: LOGSTASH_PORT
               value: "5000"
+          # Startup can take a while under load (JPA/Kafka/ES init + Flyway); the
+          # startup probe gives it room so liveness doesn't kill a still-booting app.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8890
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 48
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: 8890
-            initialDelaySeconds: 20
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: 8890
-            initialDelaySeconds: 40
             periodSeconds: 20
           resources:
             requests:
