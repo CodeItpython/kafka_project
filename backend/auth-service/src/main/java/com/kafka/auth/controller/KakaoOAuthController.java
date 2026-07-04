@@ -57,7 +57,8 @@ public class KakaoOAuthController {
             @RequestParam(required = false, name = "error_description") String errorDescription
     ) {
         if (error != null && !error.isBlank()) {
-            return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증이 취소되었거나 실패했습니다: " + errorDescription, frontendRedirectUri);
+            String detail = errorDescription == null ? error : errorDescription;
+            return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증이 취소되었거나 실패했습니다: " + detail, frontendRedirectUri);
         }
         if (code == null || code.isBlank()) {
             return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증 정보를 받지 못했습니다.", frontendRedirectUri);

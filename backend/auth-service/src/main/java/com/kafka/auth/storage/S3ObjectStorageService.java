@@ -50,11 +50,16 @@ public class S3ObjectStorageService implements ObjectStorageService {
                 .bucket(bucket)
                 .key(normalizedKey)
                 .build();
-        ResponseBytes<GetObjectResponse> response = s3Client.getObjectAsBytes(request);
-        return new StoredObject(
-                new ByteArrayResource(response.asByteArray()),
-                response.response().contentType()
-        );
+        try {
+            ResponseBytes<GetObjectResponse> response = s3Client.getObjectAsBytes(request);
+            return new StoredObject(
+                    new ByteArrayResource(response.asByteArray()),
+                    response.response().contentType()
+            );
+        } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException exception) {
+            log.warn("Object not found in S3. bucket={}, key={}", bucket, normalizedKey);
+            return null;
+        }
     }
 
     private void ensureBucket() {
