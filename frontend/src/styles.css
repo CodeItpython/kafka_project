@@ -621,7 +621,7 @@ input:focus {
   border-radius: 999px;
   color: #ffffff;
   background: #eef0fb;
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -648,7 +648,7 @@ input:focus {
 
 .profile-avatar.is-initial span {
   line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: -0.04em;
   text-shadow: 0 1px 1px rgba(30, 25, 60, 0.18);
 }
 
@@ -659,7 +659,7 @@ input:focus {
   border-radius: 999px;
   color: #5b53eb;
   background: #eeecfe;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 900;
 }
 
@@ -1794,7 +1794,7 @@ input:focus {
   border-radius: 999px;
   color: #5b53eb;
   background: #ffffff;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 900;
 }
 
