@@ -58,7 +58,7 @@ public class S3ObjectStorageService implements ObjectStorageService {
             );
         } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException exception) {
             log.warn("Object not found in S3. bucket={}, key={}", bucket, normalizedKey);
-            return null;
+            throw new ObjectNotFoundException("파일을 찾을 수 없습니다.");
         }
     }
 

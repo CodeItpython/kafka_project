@@ -2,6 +2,7 @@ package com.kafka.auth.controller;
 
 import com.kafka.auth.dto.ErrorResponse;
 import com.kafka.auth.ratelimit.TooManyRequestsException;
+import com.kafka.auth.storage.ObjectNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
@@ -20,6 +21,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException exception, HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, "BAD_REQUEST", exception.getMessage(), request, List.of());
+    }
+
+    @ExceptionHandler(ObjectNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleObjectNotFound(ObjectNotFoundException exception, HttpServletRequest request) {
+        return error(HttpStatus.NOT_FOUND, "NOT_FOUND", exception.getMessage(), request, List.of());
     }
 
     @ExceptionHandler(IllegalStateException.class)
