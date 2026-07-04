@@ -1,5 +1,7 @@
-# Horizontal scaling for the stateless auth-service.
-# Requires metrics-server in the cluster (see README > Kubernetes).
+# Horizontal scaling for the auth-service. Requires metrics-server (see README > Kubernetes).
+# CPU-only on purpose: a JVM holds heap near its ceiling, so memory-utilisation-vs-request
+# autoscaling would scale up perpetually. NOTE: real-time WebSocket delivery uses an in-memory
+# SimpleBroker, so scaling beyond 1 replica needs a shared STOMP broker first (backend follow-up).
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -19,12 +21,6 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 30
