@@ -2324,9 +2324,19 @@ function ProfileAvatar({
   name: string;
   imageUrl: string | null;
 }) {
+  const trimmed = name.trim();
+  const initial = (trimmed.slice(0, 1) || '?').toUpperCase();
+  // 이름에서 안정적인 색상(hue)을 만들어 사람마다 다른 그라데이션 아바타를 준다.
+  let hue = 0;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    hue = (hue * 31 + trimmed.charCodeAt(index)) % 360;
+  }
   return (
-    <div className={`${className} profile-avatar`}>
-      {imageUrl ? <img src={imageUrl} alt={`${name} 프로필`} /> : <span>{name.slice(0, 1)}</span>}
+    <div
+      className={`${className} profile-avatar${imageUrl ? '' : ' is-initial'}`}
+      style={imageUrl ? undefined : ({ '--avatar-hue': hue } as React.CSSProperties)}
+    >
+      {imageUrl ? <img src={imageUrl} alt={`${name} 프로필`} /> : <span aria-hidden>{initial}</span>}
     </div>
   );
 }
