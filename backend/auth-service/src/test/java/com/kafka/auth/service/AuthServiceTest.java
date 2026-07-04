@@ -52,7 +52,7 @@ class AuthServiceTest {
     private final EmailVerificationProperties emailVerificationProperties = new EmailVerificationProperties();
 
     @Test
-    void createEmailCodeSendsFourDigitCodeAndLoginVerifiesHashedCode() {
+    void createEmailCodeSendsSixDigitCodeAndLoginVerifiesHashedCode() {
         AuthService service = authService();
         ArgumentCaptor<EmailVerificationCode> verificationCodeCaptor = ArgumentCaptor.forClass(EmailVerificationCode.class);
         ArgumentCaptor<String> plainCodeCaptor = ArgumentCaptor.forClass(String.class);
@@ -67,7 +67,7 @@ class AuthServiceTest {
         verify(emailVerificationThrottleService).acquireSendPermit("user@example.com");
         String plainCode = plainCodeCaptor.getValue();
         EmailVerificationCode savedCode = verificationCodeCaptor.getValue();
-        assertThat(plainCode).matches("\\d{4}");
+        assertThat(plainCode).matches("\\d{6}");
         assertThat(savedCode.getEmail()).isEqualTo("user@example.com");
         assertThat(savedCode.getCode()).isNotEqualTo(plainCode);
         assertThat(savedCode.getCode()).hasSize(64);

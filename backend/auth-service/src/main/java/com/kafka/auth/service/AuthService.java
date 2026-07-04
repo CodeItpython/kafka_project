@@ -71,7 +71,7 @@ public class AuthService {
         String normalizedEmail = normalizeEmail(email);
         emailVerificationThrottleService.acquireSendPermit(normalizedEmail);
         try {
-            String code = "%04d".formatted(RANDOM.nextInt(10_000));
+            String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
             Instant expiresAt = Instant.now().plus(emailVerificationProperties.getTtl());
             emailVerificationCodeRepository.markUnusedCodesAsUsed(normalizedEmail);
             emailVerificationCodeRepository.save(new EmailVerificationCode(normalizedEmail, hashCode(normalizedEmail, code), expiresAt));
