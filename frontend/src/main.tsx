@@ -26,7 +26,6 @@ import {
   Save,
   Search,
   Send,
-  ShieldCheck,
   Sparkles,
   Trash2,
   UserPlus,
@@ -268,6 +267,27 @@ const SAMPLE_USERS = [
   { email: 'junho@example.com', name: '준호' },
   { email: 'seoyeon@example.com', name: '서연' },
   { email: 'hyejin@example.com', name: '혜진' }
+];
+
+// 웰컴 히어로에서 오브로부터 떠오르는 이리데센트 버블 (x: 가로 위치%, s: 지름 px,
+// d: 주기 s, delay: 시작 지연 s, hue: 색상 회전 deg, rise: 상승 거리 px, drift: 가로 흐름 px)
+const AURORA_BUBBLES = [
+  { x: 50, s: 34, d: 7.6, delay: 0.0, hue: 0, rise: 340, drift: -4 },
+  { x: 42, s: 22, d: 8.4, delay: 0.9, hue: 40, rise: 360, drift: -26 },
+  { x: 58, s: 26, d: 8.0, delay: 1.6, hue: 80, rise: 350, drift: 30 },
+  { x: 46, s: 44, d: 9.2, delay: 2.3, hue: 130, rise: 330, drift: -14 },
+  { x: 55, s: 18, d: 7.0, delay: 0.4, hue: 200, rise: 370, drift: 18 },
+  { x: 38, s: 30, d: 9.8, delay: 3.1, hue: 260, rise: 340, drift: -40 },
+  { x: 62, s: 38, d: 9.0, delay: 1.1, hue: 300, rise: 335, drift: 44 },
+  { x: 50, s: 16, d: 6.6, delay: 2.7, hue: 20, rise: 380, drift: 6 },
+  { x: 44, s: 24, d: 8.6, delay: 4.0, hue: 160, rise: 355, drift: -20 },
+  { x: 57, s: 28, d: 8.2, delay: 3.5, hue: 100, rise: 345, drift: 24 },
+  { x: 48, s: 20, d: 7.4, delay: 5.0, hue: 320, rise: 365, drift: -10 },
+  { x: 53, s: 40, d: 9.6, delay: 4.6, hue: 220, rise: 325, drift: 34 },
+  { x: 40, s: 15, d: 6.8, delay: 5.6, hue: 60, rise: 375, drift: -30 },
+  { x: 60, s: 21, d: 8.8, delay: 6.2, hue: 280, rise: 350, drift: 40 },
+  { x: 51, s: 32, d: 9.4, delay: 5.9, hue: 180, rise: 335, drift: -6 },
+  { x: 45, s: 19, d: 7.2, delay: 6.8, hue: 340, rise: 370, drift: 14 }
 ];
 
 function App() {
@@ -1517,20 +1537,50 @@ function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        <motion.section
-          className="auth-panel"
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-        >
-          <div className="auth-copy">
-            <div className="brand-mark"><ShieldCheck size={25} aria-hidden /></div>
-            <p className="eyebrow">Kafka Talk</p>
-            <h1>{title}</h1>
-            <p className="muted">친구와의 대화를 가볍게 이어가세요.</p>
+        <div className="auth-stage">
+          <div className="auth-hero">
+            <div className="bubble-field" aria-hidden="true">
+              {AURORA_BUBBLES.map((bubble, index) => (
+                <span
+                  key={index}
+                  className="bubble"
+                  style={{
+                    '--x': `${bubble.x}%`,
+                    '--s': `${bubble.s}px`,
+                    '--d': `${bubble.d}s`,
+                    '--delay': `${bubble.delay}s`,
+                    '--hue': `${bubble.hue}deg`,
+                    '--rise': `${bubble.rise}px`,
+                    '--drift': `${bubble.drift}px`
+                  } as React.CSSProperties}
+                />
+              ))}
+            </div>
+            <div className="hero-orb" aria-hidden="true"><span className="hero-orb-core" /></div>
+            <motion.div
+              className="hero-copy"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: 'easeOut', delay: 0.12 }}
+            >
+              <p className="eyebrow">Kafka Talk</p>
+              <h1>대화가<br />시작되는 곳.</h1>
+              <p className="hero-sub">친구와의 순간을 가볍게, 끊김 없이 이어가세요.</p>
+            </motion.div>
           </div>
 
-          <div className="sample-grid" aria-label="테스트 계정">
+          <motion.section
+            className="auth-panel"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut', delay: 0.18 }}
+          >
+            <div className="auth-panel-head">
+              <h2>{title}</h2>
+              <p className="muted">테스트 계정으로 바로 체험하거나 로그인하세요.</p>
+            </div>
+
+            <div className="sample-grid" aria-label="테스트 계정">
             {SAMPLE_USERS.map((sample) => (
               <button key={sample.email} type="button" onClick={() => chooseSample(sample)}>
                 <UserRound size={16} aria-hidden />
@@ -1588,7 +1638,8 @@ function App() {
 
           <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
           {status && <p className="notice">{status}</p>}
-        </motion.section>
+          </motion.section>
+        </div>
       </main>
     );
   }
