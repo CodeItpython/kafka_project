@@ -884,6 +884,17 @@ function App() {
     });
   }
 
+  // 대화창 진입 애니메이션(AnimatePresence mode="wait")이 끝나 목록이 확실히
+  // 마운트된 시점에, 방 열기로 예약된 강제 스크롤을 최신 메시지로 반영한다.
+  // 메시지가 아직 로드 전이면 소비하지 않고 latestMessageId 이펙트가 처리하게 둔다.
+  function handleConversationEntered() {
+    if (!forceLatestMessageScrollRef.current) return;
+    if (!messageListRef.current || messages.length === 0) return;
+    scrollLatestMessageIntoView('auto');
+    window.requestAnimationFrame(() => scrollLatestMessageIntoView('auto'));
+    forceLatestMessageScrollRef.current = false;
+  }
+
   async function summarizeConversation() {
     if (!selectedRoomId || summaryLoading) return;
     setSummaryLoading(true);
@@ -1937,6 +1948,7 @@ function App() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -18 }}
             transition={{ type: 'spring', stiffness: 230, damping: 28 }}
+            onAnimationComplete={handleConversationEntered}
           >
             <header className="conversation-header">
               <div className="header-navigation">
