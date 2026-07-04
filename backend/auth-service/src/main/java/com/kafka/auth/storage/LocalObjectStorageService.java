@@ -38,12 +38,15 @@ public class LocalObjectStorageService implements ObjectStorageService {
         String normalizedKey = StorageKeyValidator.normalize(objectKey);
         try {
             Path target = rootPath.resolve(normalizedKey).normalize();
-            if (!target.startsWith(rootPath) || !Files.exists(target)) {
-                throw new IllegalArgumentException("파일을 찾을 수 없습니다.");
+            if (!target.startsWith(rootPath)) {
+                throw new IllegalArgumentException("파일 경로가 올바르지 않습니다.");
+            }
+            if (!Files.exists(target)) {
+                throw new ObjectNotFoundException("파일을 찾을 수 없습니다.");
             }
             Resource resource = new UrlResource(target.toUri());
             if (!resource.isReadable()) {
-                throw new IllegalArgumentException("파일을 읽을 수 없습니다.");
+                throw new ObjectNotFoundException("파일을 읽을 수 없습니다.");
             }
             String contentType = Files.probeContentType(target);
             return new StoredObject(resource, contentType);

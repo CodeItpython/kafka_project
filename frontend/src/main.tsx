@@ -81,6 +81,7 @@ type ChatRoom = {
   pinned: boolean;
   muted: boolean;
   participantCount: number;
+  lastMessageAt: string | null;
 };
 
 type ChatMessage = {
@@ -620,7 +621,7 @@ function App() {
     if (!token) return;
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
     const data = await request<ChatRoom[]>(`/chat/rooms${suffix}`);
-    setRooms(data);
+    setRooms(sortRooms(data));
   }
 
   async function updateRoomPreference(room: ChatRoom, preference: { pinned?: boolean; muted?: boolean }) {
@@ -642,12 +643,17 @@ function App() {
     }
   }
 
+  function roomActivityTime(room: ChatRoom) {
+    return new Date(room.lastMessageAt ?? room.createdAt).getTime();
+  }
+
   function sortRooms(items: ChatRoom[]) {
     return [...items].sort((first, second) => {
       if (first.pinned !== second.pinned) {
         return first.pinned ? -1 : 1;
       }
-      return new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
+      // 최근 대화(마지막 메시지 시각)가 위로. 메시지 없으면 방 생성 시각으로 대체.
+      return roomActivityTime(second) - roomActivityTime(first);
     });
   }
 
@@ -876,6 +882,17 @@ function App() {
       left: 0,
       behavior
     });
+  }
+
+  // 대화창 진입 애니메이션(AnimatePresence mode="wait")이 끝나 목록이 확실히
+  // 마운트된 시점에, 방 열기로 예약된 강제 스크롤을 최신 메시지로 반영한다.
+  // 메시지가 아직 로드 전이면 소비하지 않고 latestMessageId 이펙트가 처리하게 둔다.
+  function handleConversationEntered() {
+    if (!forceLatestMessageScrollRef.current) return;
+    if (!messageListRef.current || messages.length === 0) return;
+    scrollLatestMessageIntoView('auto');
+    window.requestAnimationFrame(() => scrollLatestMessageIntoView('auto'));
+    forceLatestMessageScrollRef.current = false;
   }
 
   async function summarizeConversation() {
@@ -1381,12 +1398,35 @@ function App() {
   useEffect(() => {
     if (messages.length === 0) return;
     if (!forceLatestMessageScrollRef.current && !shouldStickToLatestMessageRef.current) return;
-    const behavior: ScrollBehavior = forceLatestMessageScrollRef.current ? 'auto' : 'smooth';
-    forceLatestMessageScrollRef.current = false;
-    window.requestAnimationFrame(() => {
+    const force = forceLatestMessageScrollRef.current;
+    const behavior: ScrollBehavior = force ? 'auto' : 'smooth';
+    let attempts = 0;
+    const runScroll = () => {
+      const messageList = messageListRef.current;
+      // 방 전환은 AnimatePresence mode="wait"라 이전 화면이 빠져나간 뒤에야
+      // 대화창이 마운트된다. 강제 스크롤(방 열기)일 때는 목록이 마운트될
+      // 때까지 재시도해, force 플래그가 헛되이 소비돼 첫 메시지에 머무는 것을 막는다.
+      if (!messageList) {
+        if (force && attempts < 40) {
+          attempts += 1;
+          window.requestAnimationFrame(runScroll);
+        }
+        return;
+      }
       scrollLatestMessageIntoView(behavior);
       window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
-    });
+      if (force) {
+        forceLatestMessageScrollRef.current = false;
+        // 첨부 이미지 로딩 등으로 뒤늦게 높이가 늘어나는 경우 대비(사용자가
+        // 위로 스크롤하지 않았을 때만 다시 맨 아래로 고정).
+        window.setTimeout(() => {
+          if (shouldStickToLatestMessageRef.current) {
+            scrollLatestMessageIntoView('auto');
+          }
+        }, 160);
+      }
+    };
+    window.requestAnimationFrame(runScroll);
   }, [latestMessageId, selectedRoomId]);
 
   useEffect(() => {
@@ -1908,6 +1948,7 @@ function App() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -18 }}
             transition={{ type: 'spring', stiffness: 230, damping: 28 }}
+            onAnimationComplete={handleConversationEntered}
           >
             <header className="conversation-header">
               <div className="header-navigation">
@@ -2324,9 +2365,19 @@ function ProfileAvatar({
   name: string;
   imageUrl: string | null;
 }) {
+  const trimmed = name.trim();
+  const initials = (trimmed.slice(0, 2) || '?').toUpperCase();
+  // 이름에서 안정적인 색상(hue)을 만들어 사람마다 다른 그라데이션 아바타를 준다.
+  let hue = 0;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    hue = (hue * 31 + trimmed.charCodeAt(index)) % 360;
+  }
   return (
-    <div className={`${className} profile-avatar`}>
-      {imageUrl ? <img src={imageUrl} alt={`${name} 프로필`} /> : <span>{name.slice(0, 1)}</span>}
+    <div
+      className={`${className} profile-avatar${imageUrl ? '' : ' is-initial'}`}
+      style={imageUrl ? undefined : ({ '--avatar-hue': hue } as React.CSSProperties)}
+    >
+      {imageUrl ? <img src={imageUrl} alt={`${name} 프로필`} /> : <span aria-hidden>{initials}</span>}
     </div>
   );
 }

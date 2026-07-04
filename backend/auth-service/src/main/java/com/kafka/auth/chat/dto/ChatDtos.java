@@ -65,7 +65,8 @@ public final class ChatDtos {
             long unreadCount,
             boolean pinned,
             boolean muted,
-            int participantCount
+            int participantCount,
+            Instant lastMessageAt
     ) {
     }
 
