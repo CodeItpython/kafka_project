@@ -81,6 +81,7 @@ type ChatRoom = {
   pinned: boolean;
   muted: boolean;
   participantCount: number;
+  lastMessageAt: string | null;
 };
 
 type ChatMessage = {
@@ -620,7 +621,7 @@ function App() {
     if (!token) return;
     const suffix = query.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
     const data = await request<ChatRoom[]>(`/chat/rooms${suffix}`);
-    setRooms(data);
+    setRooms(sortRooms(data));
   }
 
   async function updateRoomPreference(room: ChatRoom, preference: { pinned?: boolean; muted?: boolean }) {
@@ -642,12 +643,17 @@ function App() {
     }
   }
 
+  function roomActivityTime(room: ChatRoom) {
+    return new Date(room.lastMessageAt ?? room.createdAt).getTime();
+  }
+
   function sortRooms(items: ChatRoom[]) {
     return [...items].sort((first, second) => {
       if (first.pinned !== second.pinned) {
         return first.pinned ? -1 : 1;
       }
-      return new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime();
+      // 최근 대화(마지막 메시지 시각)가 위로. 메시지 없으면 방 생성 시각으로 대체.
+      return roomActivityTime(second) - roomActivityTime(first);
     });
   }
 
