@@ -1,5 +1,6 @@
 package com.kafka.auth.outbox;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,18 @@ public class OutboxRelayScheduler {
             return;
         }
         try {
-            int published = outboxRelayService.publishReadyEvents();
+            List<String> readyIds = outboxRelayService.findReadyEventIds();
+            int published = 0;
+            for (String id : readyIds) {
+                try {
+                    if (outboxRelayService.publishOne(id)) {
+                        published++;
+                    }
+                } catch (RuntimeException exception) {
+                    // Isolate per-event failures so one bad event never stops the batch.
+                    log.warn("Failed to relay outbox event. id={}", id, exception);
+                }
+            }
             if (published > 0) {
                 log.debug("Processed outbox events. count={}", published);
             }

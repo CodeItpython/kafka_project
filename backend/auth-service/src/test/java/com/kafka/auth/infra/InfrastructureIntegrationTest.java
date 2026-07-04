@@ -237,7 +237,15 @@ class InfrastructureIntegrationTest {
                 .orElseThrow();
         assertThat(pendingEvent.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
 
-        assertThat(outboxRelayService.publishReadyEvents()).isGreaterThanOrEqualTo(1);
+        List<String> readyIds = outboxRelayService.findReadyEventIds();
+        assertThat(readyIds).contains(pendingEvent.getId());
+        int published = 0;
+        for (String readyId : readyIds) {
+            if (outboxRelayService.publishOne(readyId)) {
+                published++;
+            }
+        }
+        assertThat(published).isGreaterThanOrEqualTo(1);
         OutboxEvent publishedEvent = outboxEventRepository.findById(pendingEvent.getId()).orElseThrow();
         assertThat(publishedEvent.getStatus()).isEqualTo(OutboxEventStatus.PUBLISHED);
 

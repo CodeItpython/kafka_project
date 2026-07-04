@@ -5,14 +5,13 @@ import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class RateLimitService {
-    private final StringRedisTemplate redisTemplate;
+    private final RedisAtomicCounter counter;
     private final RateLimitProperties properties;
     private final Clock clock = Clock.systemUTC();
 
@@ -24,11 +23,8 @@ public class RateLimitService {
         Instant resetAt = Instant.ofEpochSecond((windowId + 1) * windowSeconds);
         String key = "rate-limit:" + bucket + ":" + windowId;
 
-        Long used = redisTemplate.opsForValue().increment(key);
-        long normalizedUsed = used == null ? 1 : used;
-        if (normalizedUsed == 1) {
-            redisTemplate.expire(key, window.plusSeconds(5));
-        }
+        // Atomic INCR + first-hit PEXPIRE so a lost expire can't leave the bucket stuck.
+        long normalizedUsed = counter.incrementWithTtl(key, window.plusSeconds(5));
 
         long remaining = Math.max(0, limit - normalizedUsed);
         return new RateLimitResult(normalizedUsed <= limit, limit, normalizedUsed, remaining, resetAt);
@@ -36,6 +32,10 @@ public class RateLimitService {
 
     public boolean isEnabled() {
         return properties.isEnabled();
+    }
+
+    public boolean trustForwardedFor() {
+        return properties.isTrustForwardedFor();
     }
 
     public int authLimit() {

@@ -15,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -30,15 +31,35 @@ public class OutboxRelayService {
     private final ChatMetricsService chatMetricsService;
     private final OutboxRelayProperties properties;
 
-    @Transactional
-    public int publishReadyEvents() {
-        List<OutboxEvent> events = outboxEventRepository.findReadyEvents(
+    /** Unlocked read of candidate event ids; each is then relayed in its own transaction. */
+    @Transactional(readOnly = true)
+    public List<String> findReadyEventIds() {
+        return outboxEventRepository.findReadyEventIds(
                 READY_STATUSES,
                 Instant.now(),
                 PageRequest.of(0, properties.batchSize())
         );
-        events.forEach(this::publish);
-        return events.size();
+    }
+
+    /**
+     * Relays a single event in its own transaction. The row is claimed with
+     * SKIP LOCKED so a second worker (or a second instance) skips it rather than
+     * blocking, and a failure here is isolated to this one event — it can never
+     * roll back sibling events' status. Returns true if this worker published it.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean publishOne(String id) {
+        OutboxEvent event = outboxEventRepository.lockForRelay(id).orElse(null);
+        if (event == null) {
+            return false;
+        }
+        // Re-check under the lock: another worker may have already handled it,
+        // or its backoff may not be due yet.
+        if (!READY_STATUSES.contains(event.getStatus()) || event.getNextAttemptAt().isAfter(Instant.now())) {
+            return false;
+        }
+        publish(event);
+        return event.getStatus() == OutboxEventStatus.PUBLISHED;
     }
 
     private void publish(OutboxEvent event) {
