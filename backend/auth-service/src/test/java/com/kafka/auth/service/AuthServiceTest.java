@@ -20,6 +20,7 @@ import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.EmailVerificationCodeRepository;
 import com.kafka.auth.repository.UserAccountRepository;
 import com.kafka.auth.security.JwtService;
+import com.kafka.auth.storage.StorageUrlSigner;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -110,7 +111,8 @@ class AuthServiceTest {
                 jwtService,
                 emailVerificationMailService,
                 emailVerificationProperties,
-                emailVerificationThrottleService
+                emailVerificationThrottleService,
+                new StorageUrlSigner("test-signing-secret-please-change", java.time.Duration.ofHours(12))
         );
     }
 }

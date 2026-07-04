@@ -62,6 +62,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.kafka.auth.storage.ObjectStorageService;
+import com.kafka.auth.storage.StorageUrlSigner;
 import com.kafka.auth.storage.StoredObject;
 import io.micrometer.core.instrument.Timer;
 
@@ -85,6 +86,7 @@ public class ChatService {
     private final ObjectStorageService objectStorageService;
     private final ChatMessageOutboxService chatMessageOutboxService;
     private final NotificationService notificationService;
+    private final StorageUrlSigner storageUrlSigner;
     private final String chatTopic;
 
     public ChatService(
@@ -103,6 +105,7 @@ public class ChatService {
             ObjectStorageService objectStorageService,
             ChatMessageOutboxService chatMessageOutboxService,
             NotificationService notificationService,
+            StorageUrlSigner storageUrlSigner,
             @Value("${app.chat.topic}") String chatTopic
     ) {
         this.chatRoomRepository = chatRoomRepository;
@@ -120,6 +123,7 @@ public class ChatService {
         this.objectStorageService = objectStorageService;
         this.chatMessageOutboxService = chatMessageOutboxService;
         this.notificationService = notificationService;
+        this.storageUrlSigner = storageUrlSigner;
         this.chatTopic = chatTopic;
     }
 
@@ -325,7 +329,7 @@ public class ChatService {
                         profile.name(),
                         profile.provider(),
                         profile.statusMessage(),
-                        profile.profileImageUrl(),
+                        storageUrlSigner.sign(profile.profileImageUrl()),
                         chatStateService.isOnline(profile.email())
                 ))
                 .toList();
@@ -428,7 +432,7 @@ public class ChatService {
                 user.getEmail(),
                 user.getName(),
                 request.content() == null ? "" : request.content().trim(),
-                attachment == null ? null : attachment.url(),
+                attachment == null ? null : storageUrlSigner.rawPath(attachment.url()),
                 attachment == null ? null : attachment.type(),
                 attachment == null ? null : attachment.name(),
                 attachment == null ? null : attachment.size(),
@@ -563,7 +567,7 @@ public class ChatService {
         String extension = extension(file.getOriginalFilename(), contentType);
         String storedName = UUID.randomUUID() + extension;
         objectStorageService.store("chat/" + storedName, file, contentType);
-        return new AttachmentResponse("/api/chat/attachments/" + storedName, contentType, cleanName(file.getOriginalFilename()), file.getSize());
+        return new AttachmentResponse(storageUrlSigner.sign("/api/chat/attachments/" + storedName), contentType, cleanName(file.getOriginalFilename()), file.getSize());
     }
 
     public StoredObject loadAttachment(String fileName) {
@@ -845,7 +849,7 @@ public class ChatService {
                         participant.getName(),
                         participant.getProvider().name(),
                         participant.getStatusMessage(),
-                        participant.getProfileImageUrl(),
+                        storageUrlSigner.sign(participant.getProfileImageUrl()),
                         chatStateService.isOnline(participant.getEmail()),
                         participant.getEmail().equalsIgnoreCase(room.getCreatedBy())
                 ))
@@ -958,7 +962,7 @@ public class ChatService {
                 message.getSenderEmail(),
                 message.getSenderName(),
                 message.getContent(),
-                message.getAttachmentUrl(),
+                storageUrlSigner.sign(message.getAttachmentUrl()),
                 message.getAttachmentType(),
                 message.getAttachmentName(),
                 message.getAttachmentSize(),
