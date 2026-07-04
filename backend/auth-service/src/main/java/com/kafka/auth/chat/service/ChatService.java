@@ -38,6 +38,7 @@ import com.kafka.auth.outbox.ChatMessageOutboxService;
 import com.kafka.auth.repository.UserAccountRepository;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -173,7 +174,7 @@ public class ChatService {
     @Transactional
     public List<ChatMessageResponse> messages(String roomId, UserAccount user) {
         ChatRoom room = ensureRoomAccess(roomId, user);
-        List<ChatMessageDocument> messages = chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 50));
+        List<ChatMessageDocument> messages = new ArrayList<>(chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 50)));
         Collections.reverse(messages);
         RoomReadSummaryResponse readSummary = chatReadReceiptService.markRead(room, user, Instant.now());
         publishReadSummary(roomId, readSummary);
@@ -216,7 +217,7 @@ public class ChatService {
     @Transactional(readOnly = true)
     public ConversationSummaryResponse summarizeRoom(String roomId, UserAccount user) {
         ensureRoomAccess(roomId, user);
-        List<ChatMessageDocument> messages = chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 80));
+        List<ChatMessageDocument> messages = new ArrayList<>(chatMessageRepository.findByRoomIdOrderByCreatedAtDesc(roomId, PageRequest.of(0, 80)));
         Collections.reverse(messages);
         List<ChatMessageDocument> visibleMessages = messages.stream()
                 .filter(message -> message.isVisibleTo(user.getEmail()))
