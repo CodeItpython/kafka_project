@@ -9,16 +9,18 @@ FRONTEND_IMAGE_MODE="${FRONTEND_IMAGE_MODE:-local-dist}"
 build_backend_jvm_image() {
   service="$1"
   image_name="$2"
+  app_port="${3:-8890}"
+  health_path="${4:-/actuator/health}"
 
   case "$BACKEND_IMAGE_MODE" in
     local-jar)
       if ! ls "backend/${service}/build/libs/"*.jar >/dev/null 2>&1; then
         (cd backend && ./gradlew ":${service}:bootJar")
       fi
-      docker build -f backend/Dockerfile.runtime --build-arg SERVICE="$service" -t "${image_name}:${IMAGE_TAG}" -t "${image_name}:local" backend
+      docker build -f backend/Dockerfile.runtime --build-arg SERVICE="$service" --build-arg APP_PORT="$app_port" --build-arg HEALTH_PATH="$health_path" -t "${image_name}:${IMAGE_TAG}" -t "${image_name}:local" backend
       ;;
     source-docker)
-      docker build -f backend/Dockerfile --build-arg SERVICE="$service" -t "${image_name}:${IMAGE_TAG}" -t "${image_name}:local" backend
+      docker build -f backend/Dockerfile --build-arg SERVICE="$service" --build-arg APP_PORT="$app_port" --build-arg HEALTH_PATH="$health_path" -t "${image_name}:${IMAGE_TAG}" -t "${image_name}:local" backend
       ;;
     *)
       echo "BACKEND_IMAGE_MODE must be either 'local-jar' or 'source-docker'." >&2
@@ -45,7 +47,7 @@ build_frontend_image() {
   esac
 }
 
-build_backend_jvm_image discovery-service kafka-discovery-service
+build_backend_jvm_image discovery-service kafka-discovery-service 8761 /
 
 case "$AUTH_IMAGE_MODE" in
   native)

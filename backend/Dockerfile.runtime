@@ -1,8 +1,30 @@
+# syntax=docker/dockerfile:1
+# Packages a pre-built (host gradle) bootable jar into a slim, non-root,
+# layered runtime image. Used by the local-jar build path and Jenkins CD.
 ARG SERVICE=auth-service
 
-FROM eclipse-temurin:21-jre-alpine
+# --- 1. Explode the Spring Boot layered jar --------------------------------
+FROM eclipse-temurin:21-jre-alpine AS layers
 ARG SERVICE
-WORKDIR /app
+WORKDIR /layers
 COPY ${SERVICE}/build/libs/*.jar app.jar
+RUN java -Djarmode=layertools -jar app.jar extract
+
+# --- 2. Slim runtime image (non-root, container-aware JVM) -----------------
+FROM eclipse-temurin:21-jre-alpine
+ARG APP_PORT=8890
+ARG HEALTH_PATH=/actuator/health
+ENV APP_PORT=${APP_PORT} \
+    HEALTH_PATH=${HEALTH_PATH} \
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+RUN addgroup -S spring && adduser -S spring -G spring
+WORKDIR /app
+COPY --from=layers /layers/dependencies/ ./
+COPY --from=layers /layers/spring-boot-loader/ ./
+COPY --from=layers /layers/snapshot-dependencies/ ./
+COPY --from=layers /layers/application/ ./
+USER spring:spring
 EXPOSE 8890 8761
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=10 \
+  CMD wget -qO- "http://localhost:${APP_PORT}${HEALTH_PATH}" >/dev/null 2>&1 || exit 1
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

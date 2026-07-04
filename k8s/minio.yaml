@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: minio
   namespace: kafka-project
   labels:
     app: minio
 spec:
+  serviceName: minio-headless
   replicas: 1
   selector:
     matchLabels:
@@ -56,11 +57,36 @@ spec:
               cpu: 500m
               memory: 512Mi
           volumeMounts:
-            - name: minio-data
+            - name: data
               mountPath: /data
-      volumes:
-        - name: minio-data
-          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 3Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-headless
+  namespace: kafka-project
+  labels:
+    app: minio
+spec:
+  # Governing headless service required by the StatefulSet.
+  clusterIP: None
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
 ---
 apiVersion: v1
 kind: Service

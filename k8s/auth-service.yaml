@@ -13,12 +13,28 @@ spec:
       labels:
         app: auth-service
     spec:
+      # Allow in-flight requests / Kafka work to drain on SIGTERM.
+      terminationGracePeriodSeconds: 45
       containers:
         - name: auth-service
           image: kafka-auth-service:local
           imagePullPolicy: IfNotPresent
+          securityContext:
+            # Image runs as the non-root `spring` user (uid 100) from the Dockerfile.
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: 8890
+          lifecycle:
+            preStop:
+              # Give kube-proxy time to drop this pod from Service endpoints
+              # before the JVM receives SIGTERM, avoiding dropped requests.
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           env:
             - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
               value: http://discovery-service:8761/eureka/
