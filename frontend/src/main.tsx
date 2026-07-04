@@ -1381,12 +1381,35 @@ function App() {
   useEffect(() => {
     if (messages.length === 0) return;
     if (!forceLatestMessageScrollRef.current && !shouldStickToLatestMessageRef.current) return;
-    const behavior: ScrollBehavior = forceLatestMessageScrollRef.current ? 'auto' : 'smooth';
-    forceLatestMessageScrollRef.current = false;
-    window.requestAnimationFrame(() => {
+    const force = forceLatestMessageScrollRef.current;
+    const behavior: ScrollBehavior = force ? 'auto' : 'smooth';
+    let attempts = 0;
+    const runScroll = () => {
+      const messageList = messageListRef.current;
+      // 방 전환은 AnimatePresence mode="wait"라 이전 화면이 빠져나간 뒤에야
+      // 대화창이 마운트된다. 강제 스크롤(방 열기)일 때는 목록이 마운트될
+      // 때까지 재시도해, force 플래그가 헛되이 소비돼 첫 메시지에 머무는 것을 막는다.
+      if (!messageList) {
+        if (force && attempts < 40) {
+          attempts += 1;
+          window.requestAnimationFrame(runScroll);
+        }
+        return;
+      }
       scrollLatestMessageIntoView(behavior);
       window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
-    });
+      if (force) {
+        forceLatestMessageScrollRef.current = false;
+        // 첨부 이미지 로딩 등으로 뒤늦게 높이가 늘어나는 경우 대비(사용자가
+        // 위로 스크롤하지 않았을 때만 다시 맨 아래로 고정).
+        window.setTimeout(() => {
+          if (shouldStickToLatestMessageRef.current) {
+            scrollLatestMessageIntoView('auto');
+          }
+        }, 160);
+      }
+    };
+    window.requestAnimationFrame(runScroll);
   }, [latestMessageId, selectedRoomId]);
 
   useEffect(() => {
