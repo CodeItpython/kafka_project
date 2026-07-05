@@ -1,6 +1,5 @@
 package com.kafka.auth.service;
 
-import com.kafka.auth.chat.service.ChatStateService;
 import com.kafka.auth.dto.AuthDtos.UpdateProfileRequest;
 import com.kafka.auth.dto.AuthDtos.UserProfileHistoryResponse;
 import com.kafka.auth.dto.AuthDtos.UserProfileResponse;
@@ -26,20 +25,17 @@ public class UserProfileService {
 
     private final UserAccountRepository userAccountRepository;
     private final UserProfileHistoryRepository userProfileHistoryRepository;
-    private final ChatStateService chatStateService;
     private final ObjectStorageService objectStorageService;
     private final StorageUrlSigner storageUrlSigner;
 
     public UserProfileService(
             UserAccountRepository userAccountRepository,
             UserProfileHistoryRepository userProfileHistoryRepository,
-            ChatStateService chatStateService,
             ObjectStorageService objectStorageService,
             StorageUrlSigner storageUrlSigner
     ) {
         this.userAccountRepository = userAccountRepository;
         this.userProfileHistoryRepository = userProfileHistoryRepository;
-        this.chatStateService = chatStateService;
         this.objectStorageService = objectStorageService;
         this.storageUrlSigner = storageUrlSigner;
     }
@@ -61,7 +57,6 @@ public class UserProfileService {
         user.updateProfile(request.name().trim(), normalizeStatusMessage(request.statusMessage()));
         UserAccount saved = userAccountRepository.save(user);
         appendHistory(saved, "PROFILE_UPDATED");
-        chatStateService.evictProfileCaches();
         return toProfileResponse(saved);
     }
 
@@ -71,7 +66,6 @@ public class UserProfileService {
         user.updateProfileImage(imageUrl);
         UserAccount saved = userAccountRepository.save(user);
         appendHistory(saved, "PROFILE_IMAGE_UPDATED");
-        chatStateService.evictProfileCaches();
         return toProfileResponse(saved);
     }
 

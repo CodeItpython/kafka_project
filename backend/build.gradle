@@ -29,6 +29,11 @@ subprojects {
         }
     }
 
+    dependencies {
+        // Gradle no longer auto-adds the JUnit Platform launcher to the test runtime classpath.
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
     }
