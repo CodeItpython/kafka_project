@@ -83,7 +83,9 @@ p {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(58% 48% at 50% 52%, rgba(6, 6, 22, 0.62), transparent 72%);
+  background:
+    linear-gradient(180deg, rgba(6, 6, 22, 0.78) 0%, rgba(6, 6, 22, 0.42) 24%, rgba(6, 6, 22, 0) 46%),
+    radial-gradient(62% 52% at 50% 56%, rgba(6, 6, 22, 0.62), transparent 74%);
 }
 
 .auth-shell--3d .auth-stage {
@@ -113,16 +115,18 @@ p {
 
 /* ── 3D 웰컴: 다크 배경 위 헤드라인/글래스 패널 오버라이드 ── */
 .auth-shell--3d .hero-copy .eyebrow {
-  color: #a5b4fc;
+  color: #c7d0ff;
+  text-shadow: 0 1px 8px rgba(6, 6, 22, 0.8);
 }
 
 .auth-shell--3d .hero-copy h1 {
   color: #ffffff;
-  text-shadow: 0 6px 40px rgba(91, 83, 235, 0.55);
+  text-shadow: 0 2px 14px rgba(6, 6, 22, 0.7), 0 6px 40px rgba(91, 83, 235, 0.5);
 }
 
 .auth-shell--3d .hero-sub {
-  color: rgba(226, 232, 255, 0.72);
+  color: rgba(233, 238, 255, 0.9);
+  text-shadow: 0 1px 10px rgba(6, 6, 22, 0.85);
 }
 
 .auth-shell--3d .auth-panel {
