@@ -823,7 +823,12 @@ public class ChatService {
     private Comparator<ChatRoomResponse> roomResponseComparator() {
         return Comparator.comparing(ChatRoomResponse::pinned)
                 .reversed()
-                .thenComparing(ChatRoomResponse::createdAt, Comparator.reverseOrder());
+                .thenComparing(this::roomLastActivityAt, Comparator.reverseOrder());
+    }
+
+    // 정렬 기준: 마지막 메시지 시각(없으면 방 생성 시각). 최근 대화가 위로 오도록.
+    private Instant roomLastActivityAt(ChatRoomResponse room) {
+        return room.lastMessageAt() != null ? room.lastMessageAt() : room.createdAt();
     }
 
     private List<RoomParticipantResponse> participantResponses(ChatRoom room) {
@@ -874,6 +879,9 @@ public class ChatService {
     }
 
     private ChatRoomResponse toRoomResponse(ChatRoom room, String currentUserEmail, ChatRoomUserPreference preference) {
+        Instant lastMessageAt = chatMessageRepository.findFirstByRoomIdOrderByCreatedAtDesc(room.getId())
+                .map(ChatMessageDocument::getCreatedAt)
+                .orElse(null);
         return new ChatRoomResponse(
                 room.getId(),
                 roomDisplayName(room, currentUserEmail),
@@ -884,7 +892,8 @@ public class ChatService {
                 chatStateService.unreadCount(room.getId(), currentUserEmail),
                 preference != null && preference.isPinned(),
                 preference != null && preference.isMuted(),
-                participantEmailsForRoom(room).size()
+                participantEmailsForRoom(room).size(),
+                lastMessageAt
         );
     }
 
