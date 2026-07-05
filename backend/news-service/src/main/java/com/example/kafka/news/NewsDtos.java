@@ -28,4 +28,19 @@ public final class NewsDtos {
             List<NewsItem> items
     ) {
     }
+
+    /** 링크 미리보기 (Open Graph). 필드는 없을 수 있어 null 허용. */
+    public record LinkPreview(
+            String url,
+            String title,
+            String description,
+            String image,
+            String siteName
+    ) {
+        public boolean isEmpty() {
+            return (title == null || title.isBlank())
+                    && (description == null || description.isBlank())
+                    && (image == null || image.isBlank());
+        }
+    }
 }

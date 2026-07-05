@@ -2896,3 +2896,59 @@ input:focus {
 
 .confirm-dialog-icon.danger { color: #e0304a; background: rgba(224, 48, 74, 0.12); }
 .confirm-dialog-actions button.danger { color: #ffffff; background: #e0304a; }
+
+/* ===================== 채팅 링크 미리보기 카드 ===================== */
+.link-card {
+  display: block;
+  margin-top: 8px;
+  max-width: 300px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(66, 71, 130, 0.12);
+  text-decoration: none;
+  color: inherit;
+}
+.link-card-thumb { width: 100%; aspect-ratio: 1.9 / 1; background: #eef0f8; overflow: hidden; }
+.link-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.link-card-body { display: grid; gap: 4px; padding: 10px 12px; }
+.link-card-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #20233f;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b7280;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9aa0c2;
+  text-transform: lowercase;
+}
+
+/* 내가 보낸(딥네이비) 말풍선 위에서의 카드 */
+.chat-bubble.mine .link-card {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.chat-bubble.mine .link-card-title { color: #ffffff; }
+.chat-bubble.mine .link-card-desc { color: rgba(226, 232, 255, 0.72); }
+.chat-bubble.mine .link-card-host { color: rgba(226, 232, 255, 0.6); }
+.chat-bubble.mine .link-card-thumb { background: rgba(255, 255, 255, 0.1); }

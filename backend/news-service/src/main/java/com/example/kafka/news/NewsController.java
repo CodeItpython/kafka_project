@@ -2,9 +2,11 @@ package com.example.kafka.news;
 
 import com.example.kafka.news.NewsDtos.CategoryResponse;
 import com.example.kafka.news.NewsDtos.FeedResponse;
+import com.example.kafka.news.NewsDtos.LinkPreview;
 import com.example.kafka.news.NewsDtos.NewsItem;
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -15,9 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class NewsController {
 
     private final NewsService newsService;
+    private final LinkPreviewService linkPreviewService;
 
-    public NewsController(NewsService newsService) {
+    public NewsController(NewsService newsService, LinkPreviewService linkPreviewService) {
         this.newsService = newsService;
+        this.linkPreviewService = linkPreviewService;
     }
 
     /** 카테고리 탭 목록 */
@@ -34,5 +38,13 @@ public class NewsController {
         NewsCategory resolved = NewsCategory.fromCode(category);
         List<NewsItem> items = newsService.feed(resolved);
         return new FeedResponse(resolved.code(), resolved.label(), items.size(), items);
+    }
+
+    /** 채팅 링크 공유용 Open Graph 미리보기. 미리보기를 만들 수 없으면 204. */
+    @GetMapping("/link-preview")
+    public ResponseEntity<LinkPreview> linkPreview(@RequestParam(name = "url") String url) {
+        return linkPreviewService.preview(url)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }
