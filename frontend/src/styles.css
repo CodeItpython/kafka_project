@@ -3238,3 +3238,36 @@ input:focus {
 .create-chat-contacts button span { display: grid; gap: 2px; min-width: 0; }
 .create-chat-contacts button strong { font-size: 14px; font-weight: 800; color: #20233f; }
 .create-chat-contacts button small { font-size: 12px; color: #8b92b5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 채팅 헤더 아이콘(검색/생성) */
+.chat-head-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.chat-icon-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(150, 155, 190, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #59608a;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chat-icon-button:hover { background: #ffffff; }
+.chat-icon-button.active { color: #5b53eb; background: #eeecfe; border-color: transparent; }
+
+/* 검색 오버레이 */
+.chat-search-panel { display: grid; gap: 10px; }
+.chat-search-input { position: relative; }
+.chat-search-input input { flex: 1; }
+.search-clear {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(150, 155, 190, 0.22);
+  color: #59608a;
+}
+.chat-search-panel .section-title { margin-top: 4px; }
