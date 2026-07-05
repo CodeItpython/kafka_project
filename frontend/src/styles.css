@@ -3119,3 +3119,122 @@ input:focus {
   font-weight: 800;
 }
 .auth-back:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* ===================== 채팅 탭: + 버튼 / 필터 / 생성 모달 ===================== */
+.directory-header.chat-head {
+  align-items: center;
+  justify-content: space-between;
+}
+.chat-create-button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  background: linear-gradient(150deg, #6d66ef 0%, #5b53eb 100%);
+  box-shadow: 0 8px 20px rgba(91, 83, 235, 0.34);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.chat-create-button:hover { transform: translateY(-1px) rotate(90deg); box-shadow: 0 12px 26px rgba(91, 83, 235, 0.45); }
+
+.chat-filterbar {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0 4px;
+}
+.chat-filterbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(150, 155, 190, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #59608a;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.chat-filterbar button.active {
+  color: #ffffff;
+  background: linear-gradient(150deg, #6d66ef 0%, #5b53eb 100%);
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(91, 83, 235, 0.24);
+}
+.chat-filterbar button small {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.8;
+}
+.chat-filterbar button small.count {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #fb5c6c;
+  color: #ffffff;
+  opacity: 1;
+}
+.chat-filterbar button.active small.count { background: rgba(255, 255, 255, 0.9); color: #5b53eb; }
+
+.chat-room-list { min-height: 40px; }
+.chat-message-search { margin-top: 6px; opacity: 0.92; }
+
+/* 생성 모달 */
+.create-chat-dialog { text-align: left; align-items: stretch; max-width: 420px; }
+.create-chat-heading { font-size: 19px; font-weight: 800; color: #20233f; }
+.create-chat-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 14px 0 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(140, 146, 181, 0.12);
+}
+.create-chat-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #8b92b5;
+  font-weight: 800;
+  font-size: 14px;
+}
+.create-chat-tabs button.active {
+  color: #20233f;
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(70, 80, 140, 0.14);
+}
+.create-chat-form { display: grid; gap: 12px; margin-top: 14px; }
+.create-chat-contacts {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.create-chat-contacts button {
+  display: grid;
+  grid-template-columns: 38px 1fr 18px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  text-align: left;
+}
+.create-chat-contacts button:hover { background: rgba(140, 146, 181, 0.12); }
+.create-chat-contacts button span { display: grid; gap: 2px; min-width: 0; }
+.create-chat-contacts button strong { font-size: 14px; font-weight: 800; color: #20233f; }
+.create-chat-contacts button small { font-size: 12px; color: #8b92b5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
