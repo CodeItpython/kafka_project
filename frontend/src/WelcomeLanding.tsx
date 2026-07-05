@@ -1,8 +1,20 @@
-import { Suspense, lazy, useRef } from 'react';
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import { Component, ReactNode, Suspense, lazy, useRef } from 'react';
+import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { ArrowRight, ChevronDown, Link2, MessageCircle, Newspaper } from 'lucide-react';
+import { landingScroll } from './LandingScene';
 
-const WelcomeScene = lazy(() => import('./WelcomeScene'));
+const LandingScene = lazy(() => import('./LandingScene'));
+
+// WebGL 미지원/초기화 실패 시에도 랜딩이 깨지지 않도록 방어 (배경만 생략).
+class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 
 const FEATURES = [
   {
@@ -33,26 +45,32 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const reduce = useReducedMotion();
 
   const { scrollYProgress } = useScroll({ container: containerRef });
+  // 스크롤 진행도를 3D 씬으로 전달 → 파티클 형태가 스크롤에 맞춰 스크러빙된다.
+  useMotionValueEvent(scrollYProgress, 'change', (value) => {
+    landingScroll.target = value;
+  });
+
   const { scrollYProgress: heroProgress } = useScroll({
     container: containerRef,
     target: heroRef,
     offset: ['start start', 'end start']
   });
-  const heroY = useTransform(heroProgress, [0, 1], [0, reduce ? 0 : -140]);
-  const heroOpacity = useTransform(heroProgress, [0, 0.75], [1, 0]);
-  const heroScale = useTransform(heroProgress, [0, 1], [1, reduce ? 1 : 1.18]);
-  const hintOpacity = useTransform(heroProgress, [0, 0.25], [1, 0]);
+  const heroY = useTransform(heroProgress, [0, 1], [0, reduce ? 0 : -120]);
+  const heroOpacity = useTransform(heroProgress, [0, 0.7], [1, 0]);
+  const hintOpacity = useTransform(heroProgress, [0, 0.3], [1, 0]);
 
   return (
     <div className="landing" ref={containerRef}>
-      <Suspense fallback={null}>
-        <WelcomeScene />
-      </Suspense>
+      <SceneBoundary>
+        <Suspense fallback={null}>
+          <LandingScene />
+        </Suspense>
+      </SceneBoundary>
       <div className="landing-scrim" aria-hidden />
       <motion.span className="landing-progress" style={{ scaleX: scrollYProgress }} aria-hidden />
 
       <section className="landing-section landing-hero" ref={heroRef}>
-        <motion.div className="landing-hero-inner" style={{ y: heroY, opacity: heroOpacity, scale: heroScale }}>
+        <motion.div className="landing-hero-inner" style={{ y: heroY, opacity: heroOpacity }}>
           <p className="landing-eyebrow">KAFKA TALK</p>
           <h1 className="landing-title">대화가<br />시작되는 곳</h1>
           <p className="landing-lead">친구와의 순간을 가볍게, 끊김 없이.</p>
@@ -75,7 +93,7 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
           <section className="landing-section landing-feature" key={feature.eyebrow}>
             <motion.div
               className="landing-feature-inner"
-              initial={{ y: 56 }}
+              initial={{ y: 48 }}
               whileInView={{ y: 0 }}
               viewport={{ root: containerRef, amount: 0.5, once: false }}
               transition={{ duration: 0.8, ease: EASE }}
