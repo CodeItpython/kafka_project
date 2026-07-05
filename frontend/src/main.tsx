@@ -15,7 +15,6 @@ import {
   KeyRound,
   LogOut,
   Mail,
-  Menu,
   MessageCircle,
   MoreHorizontal,
   Paperclip,
@@ -26,9 +25,12 @@ import {
   Save,
   Search,
   Send,
+  Settings,
   Sparkles,
   Trash2,
   UserPlus,
+  Users,
+  Newspaper,
   X,
   UserRound
 } from 'lucide-react';
@@ -36,8 +38,10 @@ import './styles.css';
 
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
 const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
+import NewsFeed from './NewsFeed';
 
 type Mode = 'login' | 'register' | 'email';
+type HomeTab = 'friends' | 'chats' | 'news' | 'settings';
 
 type User = {
   id: number;
@@ -311,7 +315,7 @@ function App() {
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<HomeTab>('chats');
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationTopic, setNotificationTopic] = useState('');
@@ -353,6 +357,7 @@ function App() {
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
   const groupRooms = rooms.filter((room) => room.type === 'GROUP');
+  const totalUnread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
@@ -646,7 +651,6 @@ function App() {
     setShowRefreshButton(false);
     cancelEditingMessage();
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
-    setIsMenuOpen(false);
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
@@ -1290,7 +1294,7 @@ function App() {
     setProfileName('');
     setProfileStatus('');
     setSelectedRoomId('');
-    setIsMenuOpen(false);
+    setActiveTab('chats');
     clearAttachment();
     setStatus('로그아웃되었습니다.');
   }
@@ -1653,11 +1657,7 @@ function App() {
   }
 
   return (
-    <motion.main
-      layout
-      transition={{ layout: { type: 'spring', stiffness: 240, damping: 32 } }}
-      className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}
-    >
+    <div className={['app-shell', `tab-${activeTab}`, selectedRoomId ? 'in-conversation' : ''].filter(Boolean).join(' ')}>
       <NotificationToastStack
         toasts={appToasts}
         onOpen={openNotificationToast}
@@ -1700,31 +1700,21 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <motion.aside
-        className="menu-pane"
-        aria-hidden={!isMenuOpen}
-        animate={{
-          opacity: isMenuOpen ? 1 : 0,
-          x: isMenuOpen ? 0 : -34,
-          scale: isMenuOpen ? 1 : 0.985
-        }}
-        transition={{ type: 'spring', stiffness: 260, damping: 34, mass: 0.85 }}
-        style={{ pointerEvents: isMenuOpen ? 'auto' : 'none' }}
-      >
-        <button className="menu-close-button" type="button" onClick={() => setIsMenuOpen(false)} title="친구 닫기">
-          <X size={18} aria-hidden />
-        </button>
+      {(activeTab === 'friends' || activeTab === 'settings') && (
+      <aside className="side-pane">
         <section className="sidebar">
           <div className="sidebar-content">
+            <header className="panel-header"><h2>{activeTab === 'friends' ? '친구' : '설정'}</h2></header>
             <div className="profile-card">
               <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
               <div>
-                <h1>Kafka Talk</h1>
-                <p>{user.name} · {user.provider}</p>
+                <h1>{user.name}</h1>
+                <p>{user.email} · {user.provider}</p>
                 {user.statusMessage && <small>{user.statusMessage}</small>}
               </div>
             </div>
 
+            {activeTab === 'settings' && (<>
             <form className="profile-editor" onSubmit={saveProfile}>
               <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
               <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
@@ -1839,7 +1829,9 @@ function App() {
                 <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
               </section>
             )}
+            </>)}
 
+            {activeTab === 'friends' && (<>
             <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
               <Search size={17} aria-hidden />
               <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
@@ -1898,13 +1890,23 @@ function App() {
                 onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
               />
             </section>
-          </div>
+            </>)}
 
-          <footer className="sidebar-footer">
-            <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
-          </footer>
+            {activeTab === 'settings' && (
+            <footer className="sidebar-footer">
+              <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
+            </footer>
+            )}
+          </div>
         </section>
-      </motion.aside>
+      </aside>
+      )}
+
+      {activeTab === 'news' && (
+        <section className="tab-panel news-panel">
+          <NewsFeed />
+        </section>
+      )}
 
       <AnimatePresence mode="wait">
         {selectedRoomId ? (
@@ -1920,9 +1922,6 @@ function App() {
           >
             <header className="conversation-header">
               <div className="header-navigation">
-                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-                </button>
                 <button className="back-button" type="button" onClick={() => setSelectedRoomId('')} title="채팅방 목록으로 돌아가기">
                   <ArrowLeft size={19} aria-hidden />
                   <span>채팅방 목록</span>
@@ -2121,7 +2120,7 @@ function App() {
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
           </motion.section>
-        ) : (
+        ) : activeTab === 'chats' ? (
           <motion.section
             key="rooms"
             className="room-directory"
@@ -2144,14 +2143,9 @@ function App() {
                 opacity: shouldReduceMotion ? 1 : directoryHeaderOpacity
               }}
             >
-              <div className="header-navigation">
-                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-                </button>
-              </div>
               <div>
                 <p className="eyebrow">Kafka Talk</p>
-                <h2>채팅방</h2>
+                <h2>채팅</h2>
                 <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
               </div>
             </motion.header>
@@ -2218,9 +2212,31 @@ function App() {
 
             {status && <p className="notice">{status}</p>}
           </motion.section>
-        )}
+        ) : null}
       </AnimatePresence>
-    </motion.main>
+
+      {!selectedRoomId && (
+        <nav className="tab-bar" aria-label="주요 탭">
+          <button type="button" className={activeTab === 'friends' ? 'active' : ''} onClick={() => setActiveTab('friends')}>
+            <Users size={22} aria-hidden />
+            <span>친구</span>
+          </button>
+          <button type="button" className={activeTab === 'chats' ? 'active' : ''} onClick={() => setActiveTab('chats')}>
+            <MessageCircle size={22} aria-hidden />
+            <span>채팅</span>
+            {totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}
+          </button>
+          <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => setActiveTab('news')}>
+            <Newspaper size={22} aria-hidden />
+            <span>뉴스</span>
+          </button>
+          <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
+            <Settings size={22} aria-hidden />
+            <span>설정</span>
+          </button>
+        </nav>
+      )}
+    </div>
   );
 }
 
