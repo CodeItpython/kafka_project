@@ -40,6 +40,7 @@ import './styles.css';
 const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
 import NewsFeed from './NewsFeed';
 import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
+import WelcomeLanding from './WelcomeLanding';
 
 type Mode = 'login' | 'register' | 'email';
 type HomeTab = 'friends' | 'chats' | 'news' | 'settings';
@@ -317,6 +318,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>('chats');
+  const [authStage, setAuthStage] = useState<'landing' | 'login'>('landing');
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationTopic, setNotificationTopic] = useState('');
@@ -1297,6 +1299,7 @@ function App() {
     setProfileStatus('');
     setSelectedRoomId('');
     setActiveTab('chats');
+    setAuthStage('landing');
     clearAttachment();
     setStatus('로그아웃되었습니다.');
   }
@@ -1549,6 +1552,9 @@ function App() {
   }, [notificationTopic, selectedRoomId, showInAppNotification, token]);
 
   if (!user) {
+    if (authStage === 'landing') {
+      return <WelcomeLanding onStart={() => setAuthStage('login')} />;
+    }
     return (
       <main className="auth-shell auth-shell--3d">
         <React.Suspense fallback={null}>
@@ -1588,20 +1594,23 @@ function App() {
         <div className="auth-stage">
           <motion.div
             className="hero-copy"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: 'easeOut', delay: 0.15 }}
+            initial={{ y: 16 }}
+            animate={{ y: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
           >
+            <button type="button" className="auth-back" onClick={() => setAuthStage('landing')}>
+              <ArrowLeft size={16} aria-hidden /> 돌아가기
+            </button>
             <p className="eyebrow">Kafka Talk</p>
-            <h1>대화가<br />시작되는 곳.</h1>
-            <p className="hero-sub">친구와의 순간을 가볍게, 끊김 없이 이어가세요.</p>
+            <h1>반가워요 👋</h1>
+            <p className="hero-sub">테스트 계정으로 바로 체험하거나 로그인하세요.</p>
           </motion.div>
 
           <motion.section
             className="auth-panel"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: 'easeOut', delay: 0.18 }}
+            initial={{ y: 18 }}
+            animate={{ y: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
           >
             <div className="auth-panel-head">
               <h2>{title}</h2>
