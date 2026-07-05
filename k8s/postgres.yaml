@@ -56,6 +56,13 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            # Creates the chat-service database on first init (empty PVC only).
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -64,6 +71,17 @@ spec:
         resources:
           requests:
             storage: 2Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: kafka-project
+data:
+  01-create-chat-db.sql: |
+    -- DB-per-service: chat-service owns its own relational database on the same
+    -- Postgres instance. Runs only on first initialization of an empty data volume.
+    CREATE DATABASE kafka_chat OWNER kafka;
 ---
 apiVersion: v1
 kind: Service
