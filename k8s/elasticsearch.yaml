@@ -1,9 +1,10 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: elasticsearch
   namespace: kafka-project
 spec:
+  serviceName: elasticsearch-headless
   replicas: 1
   selector:
     matchLabels:
@@ -13,6 +14,9 @@ spec:
       labels:
         app: elasticsearch
     spec:
+      securityContext:
+        # Elasticsearch image runs as uid/gid 1000; fsGroup makes the PVC writable.
+        fsGroup: 1000
       containers:
         - name: elasticsearch
           image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
@@ -26,6 +30,38 @@ spec:
               value: "false"
             - name: ES_JAVA_OPTS
               value: -Xms512m -Xmx512m
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health?local=true
+              port: 9200
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9200
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 3Gi
 ---
 apiVersion: v1
 kind: Service
@@ -34,6 +70,20 @@ metadata:
   namespace: kafka-project
 spec:
   type: ClusterIP
+  selector:
+    app: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: kafka-project
+spec:
+  clusterIP: None
   selector:
     app: elasticsearch
   ports:

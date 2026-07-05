@@ -682,6 +682,30 @@ Bucket: kafka-talk-files
 백엔드는 `APP_STORAGE_TYPE=s3`일 때 MinIO/S3에 파일을 저장합니다. 브라우저에는 여전히 `/api/chat/attachments/{fileName}`, `/api/users/profile-images/{fileName}` URL을 내려주고, 백엔드가 내부에서 MinIO 객체를 읽어 응답합니다.
 IDE에서 `:auth-service:bootRun`으로만 실행하면 기본값은 `APP_STORAGE_TYPE=local`이므로 기존처럼 `/Users/gunwoo/Documents/KAFKA/backend/uploads` 아래에 저장됩니다.
 
+### 데이터 영속성 (StatefulSet + PVC)
+
+PostgreSQL, MongoDB, Redis, Elasticsearch, MinIO는 `StatefulSet` + `volumeClaimTemplates`(Kafka는 `Deployment` + `PersistentVolumeClaim`)로 배포되어 파드가 재시작·재스케줄되어도 데이터가 보존됩니다. 이전에는 볼륨이 없어 재시작 시 전체 데이터가 사라졌습니다.
+
+각 StatefulSet은 안정적인 파드 DNS를 위한 헤드리스 서비스(`<name>-headless`)를 거버닝 서비스로 사용하고, 애플리케이션 클라이언트는 기존 `ClusterIP` 서비스명(`postgres`, `mongodb`, `redis`, `elasticsearch`)으로 그대로 접속합니다.
+
+> 마이그레이션: 위 서비스들은 기존에 `Deployment`였습니다. `scripts/k8s-apply.sh` / `scripts/deploy-local-k8s.sh`는 apply 전에 같은 이름의 구 `Deployment`를 자동으로 삭제해 중복 파드를 방지합니다(구 파드는 휘발성이라 손실 없음). PVC를 완전히 비우려면 `kubectl -n kafka-project delete pvc --all` 후 재배포하세요.
+
+### 오토스케일링 (HPA) 와 무중단 배포
+
+`k8s/autoscaling.yaml`에 auth-service용 `HorizontalPodAutoscaler`(CPU 70% / 메모리 80%, 1~4 레플리카)와 `PodDisruptionBudget`(minAvailable: 1)이 있습니다. HPA는 `metrics-server`가 필요하며 Docker Desktop에는 기본 포함되지 않으므로 아래로 설치합니다.
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+# Docker Desktop(단일 노드): kubelet 인증서가 self-signed라 --kubelet-insecure-tls 플래그가 필요합니다.
+kubectl -n kube-system patch deployment metrics-server --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+kubectl -n kafka-project get hpa
+```
+
+auth-service 컨테이너는 비root(`spring` uid 100)로 실행되고 `securityContext`(privilege escalation 금지, 모든 capability drop, `RuntimeDefault` seccomp)가 적용됩니다. 종료 시에는 `server.shutdown=graceful` + preStop 훅 + `terminationGracePeriodSeconds`로 진행 중 요청을 드레인합니다.
+
+> 알려진 제약: 현재 WebSocket 브로커가 인메모리 `SimpleBroker`라 auth-service를 2개 이상으로 스케일하면 인스턴스 간 실시간 브로드캐스트가 전달되지 않습니다. HPA를 2 레플리카 이상으로 활용하려면 공유 STOMP 브로커(Redis/RabbitMQ relay) 도입이 선행되어야 합니다(백엔드 후속 과제).
+
 ## Observability
 
 백엔드는 Spring Boot Actuator, Micrometer Prometheus, Micrometer Tracing, OpenTelemetry OTLP exporter를 사용합니다. ELK는 로그와 검색 확인, Prometheus/Grafana/Tempo는 metrics와 trace 확인에 사용합니다.

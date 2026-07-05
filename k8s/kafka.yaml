@@ -1,3 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-data
+  namespace: kafka-project
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 3Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +17,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
+    # RWO volume: the old pod must fully release the PVC before the new one starts.
     type: Recreate
   selector:
     matchLabels:
@@ -45,6 +57,9 @@ spec:
               value: "1"
             - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
               value: "1"
+            # Persist commit logs, consumer offsets and KRaft metadata to the PVC.
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
           readinessProbe:
             tcpSocket:
               port: 9092
@@ -62,6 +77,13 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kafka-data
 ---
 apiVersion: v1
 kind: Service

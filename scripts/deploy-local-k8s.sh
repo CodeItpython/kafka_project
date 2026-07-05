@@ -16,6 +16,13 @@ echo "==> Verifying frontend"
 echo "==> Building local Docker images"
 IMAGE_TAG="$IMAGE_TAG" scripts/docker-build.sh
 
+echo "==> Migrating superseded stateful Deployments to StatefulSets (if any)"
+# postgres/mongodb/redis/elasticsearch/minio are now StatefulSets backed by PVCs.
+# Drop any old same-named Deployment so duplicate pods don't linger.
+for svc in postgres mongodb redis elasticsearch minio; do
+  kubectl -n "$NAMESPACE" delete deployment "$svc" --ignore-not-found
+done
+
 echo "==> Applying Kubernetes manifests"
 kubectl apply -k k8s
 

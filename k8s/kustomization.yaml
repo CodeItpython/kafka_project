@@ -14,5 +14,6 @@ resources:
   - grafana.yaml
   - discovery-service.yaml
   - auth-service.yaml
+  - autoscaling.yaml
   - news-service.yaml
   - frontend.yaml

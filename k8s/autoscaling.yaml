@@ -1,0 +1,49 @@
+# Horizontal scaling for the auth-service. Requires metrics-server (see README > Kubernetes).
+# CPU-only on purpose: a JVM holds heap near its ceiling, so memory-utilisation-vs-request
+# autoscaling would scale up perpetually. NOTE: real-time WebSocket delivery uses an in-memory
+# SimpleBroker, so scaling beyond 1 replica needs a shared STOMP broker first (backend follow-up).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service
+  namespace: kafka-project
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+---
+# Keep at least one auth-service pod during voluntary disruptions
+# (node drain, rollout). Effective once the HPA scales beyond one replica.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service
+  namespace: kafka-project
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: auth-service
