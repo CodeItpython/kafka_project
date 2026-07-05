@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: news-service
+  namespace: kafka-project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: news-service
+  template:
+    metadata:
+      labels:
+        app: news-service
+    spec:
+      containers:
+        - name: news-service
+          image: kafka-news-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8891
+          env:
+            - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+              value: http://discovery-service:8761/eureka/
+            - name: EUREKA_CLIENT_ENABLED
+              value: "true"
+            - name: APP_CORS_ALLOWED_ORIGINS
+              value: http://localhost:8880,http://127.0.0.1:8880
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8891
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8891
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: news-service
+  namespace: kafka-project
+spec:
+  type: ClusterIP
+  selector:
+    app: news-service
+  ports:
+    - name: http
+      port: 8891
+      targetPort: 8891

@@ -9,6 +9,7 @@ import com.kafka.auth.chat.model.ChatRoomType;
 import com.kafka.auth.chat.repository.ChatRoomReadStateRepository;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.UserAccountRepository;
+import com.kafka.auth.storage.StorageUrlSigner;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -28,6 +29,7 @@ public class ChatReadReceiptService {
     private final UserAccountRepository userAccountRepository;
     private final ChatStateService chatStateService;
     private final ChatMessageDeliveryService chatMessageDeliveryService;
+    private final StorageUrlSigner storageUrlSigner;
 
     @Transactional
     public RoomReadSummaryResponse markRead(ChatRoom room, UserAccount user, Instant readAt) {
@@ -62,7 +64,7 @@ public class ChatReadReceiptService {
                 .map(user -> new ReadReceiptResponse(
                         user.getEmail(),
                         user.getName(),
-                        user.getProfileImageUrl(),
+                        storageUrlSigner.sign(user.getProfileImageUrl()),
                         chatStateService.isOnline(user.getEmail()),
                         lastReadByEmail.get(user.getEmail().toLowerCase())
                 ))

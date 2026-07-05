@@ -15,7 +15,6 @@ import {
   KeyRound,
   LogOut,
   Mail,
-  Menu,
   MessageCircle,
   MoreHorizontal,
   Paperclip,
@@ -26,15 +25,24 @@ import {
   Save,
   Search,
   Send,
+  Settings,
   Sparkles,
   Trash2,
   UserPlus,
+  Users,
+  Newspaper,
   X,
   UserRound
 } from 'lucide-react';
 import './styles.css';
 
+// 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
+const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
+import NewsFeed from './NewsFeed';
+import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
+
 type Mode = 'login' | 'register' | 'email';
+type HomeTab = 'friends' | 'chats' | 'news' | 'settings';
 
 type User = {
   id: number;
@@ -261,6 +269,7 @@ type DltReplayResponse = {
 };
 
 const API_ROOT = '/api';
+const EMAIL_CODE_LENGTH = 6;
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
@@ -268,27 +277,6 @@ const SAMPLE_USERS = [
   { email: 'junho@example.com', name: '준호' },
   { email: 'seoyeon@example.com', name: '서연' },
   { email: 'hyejin@example.com', name: '혜진' }
-];
-
-// 웰컴 히어로에서 오브로부터 떠오르는 이리데센트 버블 (x: 가로 위치%, s: 지름 px,
-// d: 주기 s, delay: 시작 지연 s, hue: 색상 회전 deg, rise: 상승 거리 px, drift: 가로 흐름 px)
-const AURORA_BUBBLES = [
-  { x: 50, s: 34, d: 7.6, delay: 0.0, hue: 0, rise: 340, drift: -4 },
-  { x: 42, s: 22, d: 8.4, delay: 0.9, hue: 40, rise: 360, drift: -26 },
-  { x: 58, s: 26, d: 8.0, delay: 1.6, hue: 80, rise: 350, drift: 30 },
-  { x: 46, s: 44, d: 9.2, delay: 2.3, hue: 130, rise: 330, drift: -14 },
-  { x: 55, s: 18, d: 7.0, delay: 0.4, hue: 200, rise: 370, drift: 18 },
-  { x: 38, s: 30, d: 9.8, delay: 3.1, hue: 260, rise: 340, drift: -40 },
-  { x: 62, s: 38, d: 9.0, delay: 1.1, hue: 300, rise: 335, drift: 44 },
-  { x: 50, s: 16, d: 6.6, delay: 2.7, hue: 20, rise: 380, drift: 6 },
-  { x: 44, s: 24, d: 8.6, delay: 4.0, hue: 160, rise: 355, drift: -20 },
-  { x: 57, s: 28, d: 8.2, delay: 3.5, hue: 100, rise: 345, drift: 24 },
-  { x: 48, s: 20, d: 7.4, delay: 5.0, hue: 320, rise: 365, drift: -10 },
-  { x: 53, s: 40, d: 9.6, delay: 4.6, hue: 220, rise: 325, drift: 34 },
-  { x: 40, s: 15, d: 6.8, delay: 5.6, hue: 60, rise: 375, drift: -30 },
-  { x: 60, s: 21, d: 8.8, delay: 6.2, hue: 280, rise: 350, drift: 40 },
-  { x: 51, s: 32, d: 9.4, delay: 5.9, hue: 180, rise: 335, drift: -6 },
-  { x: 45, s: 19, d: 7.2, delay: 6.8, hue: 340, rise: 370, drift: 14 }
 ];
 
 function App() {
@@ -328,7 +316,7 @@ function App() {
   const [attachmentPreview, setAttachmentPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<HomeTab>('chats');
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationTopic, setNotificationTopic] = useState('');
@@ -346,6 +334,7 @@ function App() {
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
+  const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
@@ -370,10 +359,11 @@ function App() {
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
   const groupRooms = rooms.filter((room) => room.type === 'GROUP');
+  const totalUnread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
-  const emailCodeDigits = Array.from({ length: 4 }, (_, index) => code[index] ?? '');
+  const emailCodeDigits = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? '');
   const pullRefreshProgress = messagesRefreshing ? 1 : Math.min(1, pullRefreshDistance / 58);
   const pullRefreshVisible = messagesRefreshing || pullRefreshDistance > 0;
 
@@ -463,7 +453,7 @@ function App() {
       setCode('');
       lastAutoSubmittedCodeRef.current = '';
       requestAnimationFrame(() => codeInputRefs.current[0]?.focus());
-      setStatus(`${data.sentTo}로 4자리 인증코드를 보냈습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
+      setStatus(`${data.sentTo}로 6자리 인증코드를 보냈습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
     } catch (error) {
       setStatus(readableError(error, '인증코드를 보내지 못했습니다.'));
     } finally {
@@ -473,9 +463,9 @@ function App() {
 
   async function submitEmailFlow(event?: FormEvent) {
     event?.preventDefault();
-    const verificationCode = code.replace(/\D/g, '').slice(0, 4);
-    if (verificationCode.length !== 4) {
-      setStatus('4자리 인증코드를 입력해주세요.');
+    const verificationCode = code.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (verificationCode.length !== EMAIL_CODE_LENGTH) {
+      setStatus('6자리 인증코드를 입력해주세요.');
       return;
     }
     setLoading(true);
@@ -499,10 +489,10 @@ function App() {
   }
 
   function updateCode(nextCode: string, nextFocusIndex?: number) {
-    const sanitizedCode = nextCode.replace(/\D/g, '').slice(0, 4);
+    const sanitizedCode = nextCode.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
     setCode(sanitizedCode);
     if (nextFocusIndex !== undefined) {
-      focusCodeInput(Math.min(Math.max(nextFocusIndex, 0), 3));
+      focusCodeInput(Math.min(Math.max(nextFocusIndex, 0), EMAIL_CODE_LENGTH - 1));
     }
   }
 
@@ -513,11 +503,11 @@ function App() {
       return;
     }
     const nextDigits = code.split('');
-    numericValue.slice(0, 4 - index).split('').forEach((digit, offset) => {
+    numericValue.slice(0, EMAIL_CODE_LENGTH - index).split('').forEach((digit, offset) => {
       nextDigits[index + offset] = digit;
     });
-    const nextCode = nextDigits.join('').slice(0, 4);
-    updateCode(nextCode, Math.min(index + numericValue.length, 3));
+    const nextCode = nextDigits.join('').slice(0, EMAIL_CODE_LENGTH);
+    updateCode(nextCode, Math.min(index + numericValue.length, EMAIL_CODE_LENGTH - 1));
   }
 
   function handleCodeKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
@@ -529,7 +519,7 @@ function App() {
       event.preventDefault();
       focusCodeInput(index - 1);
     }
-    if (event.key === 'ArrowRight' && index < 3) {
+    if (event.key === 'ArrowRight' && index < EMAIL_CODE_LENGTH - 1) {
       event.preventDefault();
       focusCodeInput(index + 1);
     }
@@ -537,8 +527,8 @@ function App() {
 
   function handleCodePaste(event: ClipboardEvent<HTMLInputElement>) {
     event.preventDefault();
-    const pastedCode = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
-    updateCode(pastedCode, Math.min(pastedCode.length, 3));
+    const pastedCode = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    updateCode(pastedCode, Math.min(pastedCode.length, EMAIL_CODE_LENGTH - 1));
   }
 
   async function loadMe() {
@@ -663,7 +653,6 @@ function App() {
     setShowRefreshButton(false);
     cancelEditingMessage();
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
-    setIsMenuOpen(false);
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
   }
 
@@ -1307,9 +1296,23 @@ function App() {
     setProfileName('');
     setProfileStatus('');
     setSelectedRoomId('');
-    setIsMenuOpen(false);
+    setActiveTab('chats');
     clearAttachment();
     setStatus('로그아웃되었습니다.');
+  }
+
+  async function deleteAccount() {
+    setLoading(true);
+    try {
+      await request<void>('/auth/me', { method: 'DELETE' });
+      setWithdrawConfirmOpen(false);
+      logout();
+      setStatus('회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.');
+    } catch (error) {
+      setStatus(readableError(error, '회원 탈퇴에 실패했습니다.'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -1338,8 +1341,8 @@ function App() {
   }, [user?.email]);
 
   useEffect(() => {
-    const verificationCode = code.replace(/\D/g, '').slice(0, 4);
-    if (mode !== 'email' || verificationCode.length !== 4 || loading || !email.trim() || !name.trim()) {
+    const verificationCode = code.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (mode !== 'email' || verificationCode.length !== EMAIL_CODE_LENGTH || loading || !email.trim() || !name.trim()) {
       return;
     }
     if (lastAutoSubmittedCodeRef.current === verificationCode) {
@@ -1478,11 +1481,12 @@ function App() {
   }, [messageQuery, token]);
 
   useEffect(() => {
-    if (!selectedRoomId) return;
+    if (!selectedRoomId || !token) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const client = new Client({
       brokerURL: `${protocol}//${window.location.host}/ws/websocket`,
+      connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 3000,
       onConnect: () => {
         setConnected(true);
@@ -1514,13 +1518,14 @@ function App() {
       setConnected(false);
       client.deactivate();
     };
-  }, [selectedRoomId, user?.email]);
+  }, [selectedRoomId, user?.email, token]);
 
   useEffect(() => {
     if (!notificationTopic || !token) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const client = new Client({
       brokerURL: `${protocol}//${window.location.host}/ws/websocket`,
+      connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 3000,
       onConnect: () => {
         client.subscribe(notificationTopic, (frame: IMessage) => {
@@ -1545,7 +1550,10 @@ function App() {
 
   if (!user) {
     return (
-      <main className="auth-shell">
+      <main className="auth-shell auth-shell--3d">
+        <React.Suspense fallback={null}>
+          <WelcomeScene />
+        </React.Suspense>
         <AnimatePresence>
           {pendingEmailAuth && (
             <motion.div
@@ -1578,36 +1586,16 @@ function App() {
           )}
         </AnimatePresence>
         <div className="auth-stage">
-          <div className="auth-hero">
-            <div className="bubble-field" aria-hidden="true">
-              {AURORA_BUBBLES.map((bubble, index) => (
-                <span
-                  key={index}
-                  className="bubble"
-                  style={{
-                    '--x': `${bubble.x}%`,
-                    '--s': `${bubble.s}px`,
-                    '--d': `${bubble.d}s`,
-                    '--delay': `${bubble.delay}s`,
-                    '--hue': `${bubble.hue}deg`,
-                    '--rise': `${bubble.rise}px`,
-                    '--drift': `${bubble.drift}px`
-                  } as React.CSSProperties}
-                />
-              ))}
-            </div>
-            <div className="hero-orb" aria-hidden="true"><span className="hero-orb-core" /></div>
-            <motion.div
-              className="hero-copy"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, ease: 'easeOut', delay: 0.12 }}
-            >
-              <p className="eyebrow">Kafka Talk</p>
-              <h1>대화가<br />시작되는 곳.</h1>
-              <p className="hero-sub">친구와의 순간을 가볍게, 끊김 없이 이어가세요.</p>
-            </motion.div>
-          </div>
+          <motion.div
+            className="hero-copy"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: 'easeOut', delay: 0.15 }}
+          >
+            <p className="eyebrow">Kafka Talk</p>
+            <h1>대화가<br />시작되는 곳.</h1>
+            <p className="hero-sub">친구와의 순간을 가볍게, 끊김 없이 이어가세요.</p>
+          </motion.div>
 
           <motion.section
             className="auth-panel"
@@ -1643,9 +1631,9 @@ function App() {
                 <div className="email-code-panel">
                   <div className="email-code-title">
                     <span>인증코드</span>
-                    <small>{loading && code.length === 4 ? '확인 중' : '4자리 숫자 입력 시 자동 확인'}</small>
+                    <small>{loading && code.length === EMAIL_CODE_LENGTH ? '확인 중' : '6자리 숫자 입력 시 자동 확인'}</small>
                   </div>
-                  <div className="otp-inputs" aria-label="4자리 이메일 인증코드">
+                  <div className="otp-inputs" aria-label="6자리 이메일 인증코드">
                     {emailCodeDigits.map((digit, index) => (
                       <input
                         key={`email-code-${index}`}
@@ -1664,7 +1652,7 @@ function App() {
                   </div>
                   <button type="button" className="icon-button" onClick={sendCode} disabled={loading} title="인증코드 발송"><Mail size={19} aria-hidden /></button>
                 </div>
-                <p className="hint">메일함에서 4자리 인증코드를 확인하세요.</p>
+                <p className="hint">메일함에서 6자리 인증코드를 확인하세요.</p>
               </motion.form>
             ) : (
               <motion.form key={mode} onSubmit={submitPasswordFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
@@ -1685,11 +1673,7 @@ function App() {
   }
 
   return (
-    <motion.main
-      layout
-      transition={{ layout: { type: 'spring', stiffness: 240, damping: 32 } }}
-      className={['chat-shell', selectedRoomId && 'chat-open', isMenuOpen && 'menu-open'].filter(Boolean).join(' ')}
-    >
+    <div className={['app-shell', `tab-${activeTab}`, selectedRoomId ? 'in-conversation' : ''].filter(Boolean).join(' ')}>
       <NotificationToastStack
         toasts={appToasts}
         onOpen={openNotificationToast}
@@ -1732,31 +1716,58 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <motion.aside
-        className="menu-pane"
-        aria-hidden={!isMenuOpen}
-        animate={{
-          opacity: isMenuOpen ? 1 : 0,
-          x: isMenuOpen ? 0 : -34,
-          scale: isMenuOpen ? 1 : 0.985
-        }}
-        transition={{ type: 'spring', stiffness: 260, damping: 34, mass: 0.85 }}
-        style={{ pointerEvents: isMenuOpen ? 'auto' : 'none' }}
-      >
-        <button className="menu-close-button" type="button" onClick={() => setIsMenuOpen(false)} title="친구 닫기">
-          <X size={18} aria-hidden />
-        </button>
+      <AnimatePresence>
+        {withdrawConfirmOpen && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={() => setWithdrawConfirmOpen(false)}
+          >
+            <motion.section
+              className="confirm-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="withdraw-confirm-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={() => setWithdrawConfirmOpen(false)} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <span className="confirm-dialog-icon danger"><Trash2 size={20} aria-hidden /></span>
+              <div>
+                <strong id="withdraw-confirm-title">정말 탈퇴하시겠어요?</strong>
+                <p>계정이 삭제되어 더 이상 로그인할 수 없습니다. 이 작업은 되돌릴 수 없어요.</p>
+              </div>
+              <div className="confirm-dialog-actions">
+                <button type="button" onClick={() => setWithdrawConfirmOpen(false)} disabled={loading}>취소</button>
+                <button type="button" className="danger" onClick={deleteAccount} disabled={loading}>{loading ? '탈퇴 중' : '탈퇴하기'}</button>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {(activeTab === 'friends' || activeTab === 'settings') && (
+      <aside className="side-pane">
         <section className="sidebar">
           <div className="sidebar-content">
+            <header className="panel-header"><h2>{activeTab === 'friends' ? '친구' : '설정'}</h2></header>
             <div className="profile-card">
               <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
               <div>
-                <h1>Kafka Talk</h1>
-                <p>{user.name} · {user.provider}</p>
+                <h1>{user.name}</h1>
+                <p>{user.email} · {user.provider}</p>
                 {user.statusMessage && <small>{user.statusMessage}</small>}
               </div>
             </div>
 
+            {activeTab === 'settings' && (<>
             <form className="profile-editor" onSubmit={saveProfile}>
               <label>이름<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
               <label>상태메시지<input value={profileStatus} onChange={(event) => setProfileStatus(event.target.value)} maxLength={500} placeholder="지금의 상태를 남겨보세요" /></label>
@@ -1872,6 +1883,30 @@ function App() {
               </section>
             )}
 
+            <section className="panel-section settings-group">
+              <div className="section-title"><span>계정 정보</span></div>
+              <div className="settings-row static">
+                <span className="settings-row-label"><AtSign size={16} aria-hidden />이메일</span>
+                <span className="settings-row-value">{user.email}</span>
+              </div>
+              <div className="settings-row static">
+                <span className="settings-row-label"><KeyRound size={16} aria-hidden />로그인 방식</span>
+                <span className="settings-row-value">{user.provider}</span>
+              </div>
+            </section>
+
+            <section className="panel-section settings-group danger-zone">
+              <div className="section-title"><span>계정 관리</span></div>
+              <button type="button" className="settings-action" onClick={logout} disabled={loading}>
+                <LogOut size={17} aria-hidden /><span>로그아웃</span>
+              </button>
+              <button type="button" className="settings-action danger" onClick={() => setWithdrawConfirmOpen(true)} disabled={loading}>
+                <Trash2 size={17} aria-hidden /><span>회원 탈퇴</span>
+              </button>
+            </section>
+            </>)}
+
+            {activeTab === 'friends' && (<>
             <form className="search-row" onSubmit={(event) => { event.preventDefault(); loadContacts(contactQuery); }}>
               <Search size={17} aria-hidden />
               <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
@@ -1930,13 +1965,17 @@ function App() {
                 onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
               />
             </section>
+            </>)}
           </div>
-
-          <footer className="sidebar-footer">
-            <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
-          </footer>
         </section>
-      </motion.aside>
+      </aside>
+      )}
+
+      {activeTab === 'news' && (
+        <section className="tab-panel news-panel">
+          <NewsFeed />
+        </section>
+      )}
 
       <AnimatePresence mode="wait">
         {selectedRoomId ? (
@@ -1952,9 +1991,6 @@ function App() {
           >
             <header className="conversation-header">
               <div className="header-navigation">
-                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-                </button>
                 <button className="back-button" type="button" onClick={() => setSelectedRoomId('')} title="채팅방 목록으로 돌아가기">
                   <ArrowLeft size={19} aria-hidden />
                   <span>채팅방 목록</span>
@@ -2039,7 +2075,9 @@ function App() {
                 </section>
               )}
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
-              {messages.map((message) => (
+              {messages.map((message) => {
+                const linkUrl = message.deletedForEveryone ? null : firstMessageUrl(message.content);
+                return (
                 <motion.article
                   key={message.id}
                   className={message.senderEmail === user.email ? 'chat-bubble mine' : 'chat-bubble'}
@@ -2074,6 +2112,7 @@ function App() {
                         </a>
                       )}
                       {message.content && <p>{message.content}</p>}
+                      {linkUrl && <MessageLinkPreview url={linkUrl} />}
                       {message.editedAt && <span className="edited-label">수정됨</span>}
                       {message.reactions.length > 0 && (
                         <div className="reaction-strip" aria-label="메시지 반응">
@@ -2125,7 +2164,8 @@ function App() {
                     </>
                   )}
                 </motion.article>
-              ))}
+                );
+              })}
             </div>
 
             <form className="composer" onSubmit={sendMessage}>
@@ -2153,7 +2193,7 @@ function App() {
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
           </motion.section>
-        ) : (
+        ) : activeTab === 'chats' ? (
           <motion.section
             key="rooms"
             className="room-directory"
@@ -2176,14 +2216,9 @@ function App() {
                 opacity: shouldReduceMotion ? 1 : directoryHeaderOpacity
               }}
             >
-              <div className="header-navigation">
-                <button className="menu-toggle-button" type="button" onClick={() => setIsMenuOpen((current) => !current)} title={isMenuOpen ? '친구 닫기' : '친구 열기'}>
-                  {isMenuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
-                </button>
-              </div>
               <div>
                 <p className="eyebrow">Kafka Talk</p>
-                <h2>채팅방</h2>
+                <h2>채팅</h2>
                 <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
               </div>
             </motion.header>
@@ -2250,9 +2285,31 @@ function App() {
 
             {status && <p className="notice">{status}</p>}
           </motion.section>
-        )}
+        ) : null}
       </AnimatePresence>
-    </motion.main>
+
+      {!selectedRoomId && (
+        <nav className="tab-bar" aria-label="주요 탭">
+          <button type="button" className={activeTab === 'friends' ? 'active' : ''} onClick={() => setActiveTab('friends')}>
+            <Users size={22} aria-hidden />
+            <span>친구</span>
+          </button>
+          <button type="button" className={activeTab === 'chats' ? 'active' : ''} onClick={() => setActiveTab('chats')}>
+            <MessageCircle size={22} aria-hidden />
+            <span>채팅</span>
+            {totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}
+          </button>
+          <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => setActiveTab('news')}>
+            <Newspaper size={22} aria-hidden />
+            <span>뉴스</span>
+          </button>
+          <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
+            <Settings size={22} aria-hidden />
+            <span>설정</span>
+          </button>
+        </nav>
+      )}
+    </div>
   );
 }
 

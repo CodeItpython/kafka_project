@@ -57,75 +57,38 @@ p {
   gap: 26px;
 }
 
-/* ── 히어로: 떠오르는 이리데센트 버블 + 광택 오브 ── */
-.auth-hero {
-  position: relative;
-  min-height: 300px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding-top: 44px;
-  isolation: isolate;
-}
-
-.bubble-field {
-  position: absolute;
-  inset: -20px 0 90px;
-  z-index: -1;
+/* ── 풀스크린 3D 파티클 웰컴 씬 ── */
+.welcome-canvas {
+  position: fixed !important;
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 0;
+  display: block;
   pointer-events: none;
 }
 
-.bubble {
-  position: absolute;
-  bottom: 0;
-  left: var(--x);
-  width: var(--s);
-  height: var(--s);
-  margin-left: calc(var(--s) / -2);
-  border-radius: 50%;
-  opacity: 0;
-  transform: translateY(24px) scale(0.5);
+.auth-shell--3d {
+  color: #f4f6ff;
   background:
-    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 40%),
-    conic-gradient(from 130deg, #ff9ecb, #ffd98a, #b6f5c9, #8fd4ff, #c4a4ff, #ff9ecb);
-  box-shadow:
-    inset -5px -7px 13px rgba(120, 90, 160, 0.30),
-    inset 4px 5px 10px rgba(255, 255, 255, 0.6),
-    0 8px 22px rgba(110, 84, 140, 0.18);
-  filter: hue-rotate(var(--hue)) saturate(1.15);
-  animation: bubble-rise var(--d) ease-in var(--delay) infinite;
+    radial-gradient(120% 90% at 50% 0%, rgba(91, 83, 235, 0.30), transparent 60%),
+    radial-gradient(90% 70% at 85% 92%, rgba(103, 232, 249, 0.12), transparent 55%),
+    linear-gradient(180deg, #0a0a1f 0%, #0d0b26 45%, #08081a 100%);
 }
 
-@keyframes bubble-rise {
-  0% { opacity: 0; transform: translateY(24px) translateX(0) scale(0.45); }
-  14% { opacity: 0.92; }
-  72% { opacity: 0.9; }
-  100% { opacity: 0; transform: translateY(calc(-1 * var(--rise))) translateX(var(--drift)) scale(1); }
+/* 파티클 위 텍스트 가독성을 위한 중앙 스크림 (가장자리 파티클은 그대로 빛남) */
+.auth-shell--3d::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(58% 48% at 50% 52%, rgba(6, 6, 22, 0.62), transparent 72%);
 }
 
-.hero-orb {
+.auth-shell--3d .auth-stage {
   position: relative;
-  display: grid;
-  place-items: center;
-  margin-bottom: 22px;
-}
-
-.hero-orb-core {
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 28%, #ffffff 0%, rgba(255, 255, 255, 0.55) 44%, rgba(228, 219, 236, 0.35) 72%, rgba(210, 198, 224, 0.28) 100%);
-  box-shadow:
-    inset -8px -10px 20px rgba(150, 120, 175, 0.22),
-    inset 7px 8px 16px rgba(255, 255, 255, 0.92),
-    0 18px 38px rgba(120, 92, 150, 0.20);
-  animation: orb-bob 5.5s ease-in-out infinite;
-}
-
-@keyframes orb-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-8px) scale(1.03); }
+  z-index: 1;
 }
 
 .hero-copy {
@@ -146,6 +109,100 @@ p {
   color: #8b92b5;
   font-size: 15px;
   font-weight: 600;
+}
+
+/* ── 3D 웰컴: 다크 배경 위 헤드라인/글래스 패널 오버라이드 ── */
+.auth-shell--3d .hero-copy .eyebrow {
+  color: #a5b4fc;
+}
+
+.auth-shell--3d .hero-copy h1 {
+  color: #ffffff;
+  text-shadow: 0 6px 40px rgba(91, 83, 235, 0.55);
+}
+
+.auth-shell--3d .hero-sub {
+  color: rgba(226, 232, 255, 0.72);
+}
+
+.auth-shell--3d .auth-panel {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(18, 18, 42, 0.55);
+  backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.auth-shell--3d .auth-panel-head h2 {
+  color: #ffffff;
+}
+
+.auth-shell--3d .auth-panel-head .muted {
+  color: rgba(210, 216, 245, 0.6);
+}
+
+.auth-shell--3d .auth-panel label {
+  color: rgba(214, 220, 250, 0.8);
+}
+
+.auth-shell--3d .auth-panel input {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f6ff;
+}
+
+.auth-shell--3d .auth-panel input::placeholder {
+  color: rgba(200, 206, 235, 0.4);
+}
+
+.auth-shell--3d .auth-panel input:focus {
+  border-color: #8b5cf6;
+  background: rgba(255, 255, 255, 0.10);
+  outline: 3px solid rgba(139, 92, 246, 0.22);
+}
+
+.auth-shell--3d .sample-grid button {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(226, 232, 255, 0.85);
+}
+
+.auth-shell--3d .sample-grid button:hover {
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+.auth-shell--3d .mode-tabs {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-shell--3d .mode-tabs button {
+  color: rgba(210, 216, 245, 0.65);
+}
+
+.auth-shell--3d .mode-tabs button.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.auth-shell--3d .otp-inputs input {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.auth-shell--3d .auth-panel .primary-button,
+.auth-shell--3d .auth-panel .icon-button {
+  background: linear-gradient(150deg, #7c74ff 0%, #5b53eb 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 30px rgba(91, 83, 235, 0.45);
+}
+
+.auth-shell--3d .notice {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(226, 232, 255, 0.85);
 }
 
 .auth-panel {
@@ -399,8 +456,8 @@ input:focus {
 
 .otp-inputs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .otp-inputs input {
@@ -2599,3 +2656,299 @@ input:focus {
     margin-left: 0;
   }
 }
+
+/* ===================== 카카오톡식 하단 탭 앱 셸 ===================== */
+.app-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 600px;
+  margin: 0 auto;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 70% at 12% 0%, rgba(199, 210, 254, 0.4), transparent 55%),
+    radial-gradient(120% 70% at 88% 4%, rgba(221, 214, 254, 0.4), transparent 55%),
+    linear-gradient(180deg, #e8ecf8 0%, #eef0f7 60%, #f1f2f8 100%);
+}
+
+@media (min-width: 640px) {
+  .app-shell {
+    border-left: 1px solid #e3e7f2;
+    border-right: 1px solid #e3e7f2;
+  }
+}
+
+/* 탭 콘텐츠 영역: 남는 공간을 채우고 스크롤, 하단 탭바 높이만큼 여백 */
+.app-shell > .side-pane,
+.app-shell > .room-directory,
+.app-shell > .news-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.app-shell > .room-directory { padding: 8px 16px 84px; gap: 14px; }
+.app-shell > .news-panel { padding: 0 0 84px; }
+.app-shell > .side-pane { display: block; }
+
+.app-shell .sidebar {
+  height: auto;
+  min-height: 0;
+  padding: 8px 16px 84px;
+  background: transparent;
+}
+.app-shell .sidebar-footer { padding: 16px 0 0; }
+
+.panel-header { padding: 10px 4px 8px; }
+.panel-header h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #20233f; }
+
+/* 대화창: 탭 위를 덮는 오버레이 */
+.app-shell .conversation {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: linear-gradient(180deg, #eef1f9 0%, #eef0f7 100%);
+}
+
+/* 하단 탭바 */
+.tab-bar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 62px;
+  border-top: 1px solid rgba(150, 155, 190, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+.tab-bar button {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: #9aa0c2;
+  font-size: 11px;
+  font-weight: 800;
+  transition: color 0.15s ease;
+}
+.tab-bar button.active { color: #5b53eb; }
+.tab-bar .tab-badge {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 7px);
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #fb5c6c;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* ===================== 뉴스 피드 (인스타그램식 카드) ===================== */
+.news-feed-root { display: flex; flex-direction: column; }
+.news-header { padding: 14px 16px 4px; }
+.news-header h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #20233f; }
+.news-header .muted { font-size: 13px; }
+
+.news-catbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 2px 8px 0;
+  border-bottom: 1px solid rgba(150, 155, 190, 0.2);
+  background: rgba(238, 240, 247, 0.94);
+  backdrop-filter: blur(10px);
+  scrollbar-width: none;
+}
+.news-catbar::-webkit-scrollbar { display: none; }
+.news-catbar button {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 13px 14px 14px;
+  border: 0;
+  background: transparent;
+  color: #97a0bd;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.news-catbar button.active {
+  color: #20233f;
+  font-weight: 800;
+}
+.news-catbar button.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, #6d66ef, #5b53eb);
+}
+
+.news-list { display: grid; gap: 12px; padding: 6px 16px; }
+.news-card {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 13px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(66, 71, 130, 0.08);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.news-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(66, 71, 130, 0.16); }
+.news-card-thumb {
+  width: 104px;
+  height: 78px;
+  border-radius: 13px;
+  overflow: hidden;
+  background: #eef0f8;
+  flex: 0 0 auto;
+}
+.news-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.news-card-thumb--empty { display: grid; place-items: center; color: #b9bed6; }
+.news-card-body { display: grid; gap: 6px; min-width: 0; }
+.news-card-title {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.34;
+  color: #20233f;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.news-card-meta { display: inline-flex; align-items: center; gap: 4px; color: #9aa0c2; font-size: 12px; font-weight: 700; }
+
+.news-empty { padding: 64px 24px; text-align: center; color: #8b92b5; display: grid; gap: 14px; justify-items: center; }
+.news-retry { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 1px solid rgba(150, 155, 190, 0.3); border-radius: 999px; background: #ffffff; color: #5b53eb; font-weight: 800; }
+
+.news-card--skeleton { pointer-events: none; }
+.news-card--skeleton .news-card-thumb { background: #e7e9f4; }
+.skeleton-line { display: block; height: 12px; border-radius: 6px; background: #e7e9f4; }
+.skeleton-line.short { width: 50%; margin-top: 8px; }
+
+/* ===================== 설정 탭 ===================== */
+.settings-group { margin-top: 4px; }
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(150, 155, 190, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.settings-row-label { display: inline-flex; align-items: center; gap: 8px; color: #59608a; font-weight: 800; font-size: 14px; }
+.settings-row-value { max-width: 58%; overflow: hidden; color: #8b92b5; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+
+.settings-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 15px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(150, 155, 190, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #3a4468;
+  font-size: 15px;
+  font-weight: 800;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.settings-action:hover { background: #ffffff; transform: translateY(-1px); }
+.settings-action.danger {
+  color: #e0304a;
+  border-color: rgba(224, 48, 74, 0.22);
+  background: rgba(255, 241, 243, 0.75);
+}
+.settings-action.danger:hover { background: #fff1f3; }
+
+.confirm-dialog-icon.danger { color: #e0304a; background: rgba(224, 48, 74, 0.12); }
+.confirm-dialog-actions button.danger { color: #ffffff; background: #e0304a; }
+
+/* ===================== 채팅 링크 미리보기 카드 ===================== */
+.link-card {
+  display: block;
+  margin-top: 8px;
+  max-width: 300px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(66, 71, 130, 0.12);
+  text-decoration: none;
+  color: inherit;
+}
+.link-card-thumb { width: 100%; aspect-ratio: 1.9 / 1; background: #eef0f8; overflow: hidden; }
+.link-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.link-card-body { display: grid; gap: 4px; padding: 10px 12px; }
+.link-card-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #20233f;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b7280;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9aa0c2;
+  text-transform: lowercase;
+}
+
+/* 내가 보낸(딥네이비) 말풍선 위에서의 카드 */
+.chat-bubble.mine .link-card {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.chat-bubble.mine .link-card-title { color: #ffffff; }
+.chat-bubble.mine .link-card-desc { color: rgba(226, 232, 255, 0.72); }
+.chat-bubble.mine .link-card-host { color: rgba(226, 232, 255, 0.6); }
+.chat-bubble.mine .link-card-thumb { background: rgba(255, 255, 255, 0.1); }
