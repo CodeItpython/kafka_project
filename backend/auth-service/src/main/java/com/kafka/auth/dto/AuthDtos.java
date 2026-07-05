@@ -30,7 +30,7 @@ public final class AuthDtos {
 
     public record EmailLoginRequest(
             @Email @NotBlank String email,
-            @NotBlank @Pattern(regexp = "\\d{4}", message = "인증코드는 4자리 숫자입니다.") String code,
+            @NotBlank @Pattern(regexp = "\\d{6}", message = "인증코드는 6자리 숫자입니다.") String code,
             String name
     ) {
     }

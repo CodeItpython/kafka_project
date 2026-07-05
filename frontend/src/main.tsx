@@ -261,6 +261,7 @@ type DltReplayResponse = {
 };
 
 const API_ROOT = '/api';
+const EMAIL_CODE_LENGTH = 6;
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
@@ -373,7 +374,7 @@ function App() {
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
-  const emailCodeDigits = Array.from({ length: 4 }, (_, index) => code[index] ?? '');
+  const emailCodeDigits = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? '');
   const pullRefreshProgress = messagesRefreshing ? 1 : Math.min(1, pullRefreshDistance / 58);
   const pullRefreshVisible = messagesRefreshing || pullRefreshDistance > 0;
 
@@ -463,7 +464,7 @@ function App() {
       setCode('');
       lastAutoSubmittedCodeRef.current = '';
       requestAnimationFrame(() => codeInputRefs.current[0]?.focus());
-      setStatus(`${data.sentTo}로 4자리 인증코드를 보냈습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
+      setStatus(`${data.sentTo}로 6자리 인증코드를 보냈습니다. 만료시각: ${new Date(data.expiresAt).toLocaleTimeString()}`);
     } catch (error) {
       setStatus(readableError(error, '인증코드를 보내지 못했습니다.'));
     } finally {
@@ -473,9 +474,9 @@ function App() {
 
   async function submitEmailFlow(event?: FormEvent) {
     event?.preventDefault();
-    const verificationCode = code.replace(/\D/g, '').slice(0, 4);
-    if (verificationCode.length !== 4) {
-      setStatus('4자리 인증코드를 입력해주세요.');
+    const verificationCode = code.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (verificationCode.length !== EMAIL_CODE_LENGTH) {
+      setStatus('6자리 인증코드를 입력해주세요.');
       return;
     }
     setLoading(true);
@@ -499,10 +500,10 @@ function App() {
   }
 
   function updateCode(nextCode: string, nextFocusIndex?: number) {
-    const sanitizedCode = nextCode.replace(/\D/g, '').slice(0, 4);
+    const sanitizedCode = nextCode.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
     setCode(sanitizedCode);
     if (nextFocusIndex !== undefined) {
-      focusCodeInput(Math.min(Math.max(nextFocusIndex, 0), 3));
+      focusCodeInput(Math.min(Math.max(nextFocusIndex, 0), EMAIL_CODE_LENGTH - 1));
     }
   }
 
@@ -513,11 +514,11 @@ function App() {
       return;
     }
     const nextDigits = code.split('');
-    numericValue.slice(0, 4 - index).split('').forEach((digit, offset) => {
+    numericValue.slice(0, EMAIL_CODE_LENGTH - index).split('').forEach((digit, offset) => {
       nextDigits[index + offset] = digit;
     });
-    const nextCode = nextDigits.join('').slice(0, 4);
-    updateCode(nextCode, Math.min(index + numericValue.length, 3));
+    const nextCode = nextDigits.join('').slice(0, EMAIL_CODE_LENGTH);
+    updateCode(nextCode, Math.min(index + numericValue.length, EMAIL_CODE_LENGTH - 1));
   }
 
   function handleCodeKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
@@ -529,7 +530,7 @@ function App() {
       event.preventDefault();
       focusCodeInput(index - 1);
     }
-    if (event.key === 'ArrowRight' && index < 3) {
+    if (event.key === 'ArrowRight' && index < EMAIL_CODE_LENGTH - 1) {
       event.preventDefault();
       focusCodeInput(index + 1);
     }
@@ -537,8 +538,8 @@ function App() {
 
   function handleCodePaste(event: ClipboardEvent<HTMLInputElement>) {
     event.preventDefault();
-    const pastedCode = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
-    updateCode(pastedCode, Math.min(pastedCode.length, 3));
+    const pastedCode = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    updateCode(pastedCode, Math.min(pastedCode.length, EMAIL_CODE_LENGTH - 1));
   }
 
   async function loadMe() {
@@ -1338,8 +1339,8 @@ function App() {
   }, [user?.email]);
 
   useEffect(() => {
-    const verificationCode = code.replace(/\D/g, '').slice(0, 4);
-    if (mode !== 'email' || verificationCode.length !== 4 || loading || !email.trim() || !name.trim()) {
+    const verificationCode = code.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (mode !== 'email' || verificationCode.length !== EMAIL_CODE_LENGTH || loading || !email.trim() || !name.trim()) {
       return;
     }
     if (lastAutoSubmittedCodeRef.current === verificationCode) {
@@ -1478,11 +1479,12 @@ function App() {
   }, [messageQuery, token]);
 
   useEffect(() => {
-    if (!selectedRoomId) return;
+    if (!selectedRoomId || !token) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const client = new Client({
       brokerURL: `${protocol}//${window.location.host}/ws/websocket`,
+      connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 3000,
       onConnect: () => {
         setConnected(true);
@@ -1514,13 +1516,14 @@ function App() {
       setConnected(false);
       client.deactivate();
     };
-  }, [selectedRoomId, user?.email]);
+  }, [selectedRoomId, user?.email, token]);
 
   useEffect(() => {
     if (!notificationTopic || !token) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const client = new Client({
       brokerURL: `${protocol}//${window.location.host}/ws/websocket`,
+      connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 3000,
       onConnect: () => {
         client.subscribe(notificationTopic, (frame: IMessage) => {
@@ -1643,9 +1646,9 @@ function App() {
                 <div className="email-code-panel">
                   <div className="email-code-title">
                     <span>인증코드</span>
-                    <small>{loading && code.length === 4 ? '확인 중' : '4자리 숫자 입력 시 자동 확인'}</small>
+                    <small>{loading && code.length === EMAIL_CODE_LENGTH ? '확인 중' : '6자리 숫자 입력 시 자동 확인'}</small>
                   </div>
-                  <div className="otp-inputs" aria-label="4자리 이메일 인증코드">
+                  <div className="otp-inputs" aria-label="6자리 이메일 인증코드">
                     {emailCodeDigits.map((digit, index) => (
                       <input
                         key={`email-code-${index}`}
@@ -1664,7 +1667,7 @@ function App() {
                   </div>
                   <button type="button" className="icon-button" onClick={sendCode} disabled={loading} title="인증코드 발송"><Mail size={19} aria-hidden /></button>
                 </div>
-                <p className="hint">메일함에서 4자리 인증코드를 확인하세요.</p>
+                <p className="hint">메일함에서 6자리 인증코드를 확인하세요.</p>
               </motion.form>
             ) : (
               <motion.form key={mode} onSubmit={submitPasswordFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>

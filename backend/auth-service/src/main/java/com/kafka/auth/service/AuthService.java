@@ -15,6 +15,7 @@ import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.EmailVerificationCodeRepository;
 import com.kafka.auth.repository.UserAccountRepository;
 import com.kafka.auth.security.JwtService;
+import com.kafka.auth.storage.StorageUrlSigner;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -41,6 +42,7 @@ public class AuthService {
     private final EmailVerificationMailService emailVerificationMailService;
     private final EmailVerificationProperties emailVerificationProperties;
     private final EmailVerificationThrottleService emailVerificationThrottleService;
+    private final StorageUrlSigner storageUrlSigner;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -71,7 +73,7 @@ public class AuthService {
         String normalizedEmail = normalizeEmail(email);
         emailVerificationThrottleService.acquireSendPermit(normalizedEmail);
         try {
-            String code = "%04d".formatted(RANDOM.nextInt(10_000));
+            String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
             Instant expiresAt = Instant.now().plus(emailVerificationProperties.getTtl());
             emailVerificationCodeRepository.markUnusedCodesAsUsed(normalizedEmail);
             emailVerificationCodeRepository.save(new EmailVerificationCode(normalizedEmail, hashCode(normalizedEmail, code), expiresAt));
@@ -142,7 +144,7 @@ public class AuthService {
                 user.getProvider().name(),
                 user.getRole().name(),
                 user.getStatusMessage(),
-                user.getProfileImageUrl()
+                storageUrlSigner.sign(user.getProfileImageUrl())
         );
     }
 

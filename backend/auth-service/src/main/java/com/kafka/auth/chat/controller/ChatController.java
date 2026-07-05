@@ -21,6 +21,7 @@ import com.kafka.auth.chat.dto.ChatDtos.TypingRequest;
 import com.kafka.auth.chat.dto.ChatMessageEvent;
 import com.kafka.auth.chat.service.ChatService;
 import com.kafka.auth.model.UserAccount;
+import com.kafka.auth.storage.StorageUrlSigner;
 import com.kafka.auth.storage.StoredObject;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -48,6 +49,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Validated
 public class ChatController {
     private final ChatService chatService;
+    private final StorageUrlSigner storageUrlSigner;
 
     @GetMapping("/rooms")
     public ResponseEntity<List<ChatRoomResponse>> rooms(
@@ -217,7 +219,14 @@ public class ChatController {
     }
 
     @GetMapping("/attachments/{fileName:.+}")
-    public ResponseEntity<Resource> attachment(@PathVariable String fileName) {
+    public ResponseEntity<Resource> attachment(
+            @PathVariable String fileName,
+            @RequestParam(required = false) Long exp,
+            @RequestParam(required = false) String sig
+    ) {
+        if (!storageUrlSigner.isValid("/api/chat/attachments/" + fileName, exp, sig)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
         StoredObject storedObject = chatService.loadAttachment(fileName);
         String contentType = storedObject.contentType();
         return ResponseEntity.ok()
