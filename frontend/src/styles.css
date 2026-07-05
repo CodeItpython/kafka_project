@@ -2952,3 +2952,166 @@ input:focus {
 .chat-bubble.mine .link-card-desc { color: rgba(226, 232, 255, 0.72); }
 .chat-bubble.mine .link-card-host { color: rgba(226, 232, 255, 0.6); }
 .chat-bubble.mine .link-card-thumb { background: rgba(255, 255, 255, 0.1); }
+
+/* ===================== 스크롤 시네마틱 웰컴 랜딩 ===================== */
+.landing {
+  position: relative;
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  color: #f4f6ff;
+  background: linear-gradient(180deg, #0a0a1f 0%, #0d0b26 45%, #08081a 100%);
+  scrollbar-width: none;
+}
+.landing::-webkit-scrollbar { display: none; }
+
+.landing-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(58% 52% at 50% 45%, rgba(6, 6, 22, 0.34), rgba(6, 6, 22, 0.72) 100%);
+}
+.landing-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 6;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #6d66ef, #67e8f9);
+}
+
+.landing-section {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  scroll-snap-align: start;
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.landing-eyebrow {
+  margin: 0;
+  color: #a5b4fc;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+.landing-lead {
+  margin: 0;
+  color: rgba(226, 232, 255, 0.72);
+  font-size: clamp(15px, 2.6vw, 18px);
+  font-weight: 600;
+}
+
+.landing-hero-inner { display: grid; gap: 16px; justify-items: center; }
+.landing-title {
+  margin: 0;
+  font-size: clamp(44px, 12vw, 96px);
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  text-shadow: 0 12px 64px rgba(91, 83, 235, 0.5);
+}
+
+.landing-scroll-hint {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  color: rgba(226, 232, 255, 0.6);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+}
+.landing-scroll-chevron { display: grid; place-items: center; color: #a5b4fc; }
+
+.landing-feature-inner { display: grid; gap: 16px; justify-items: center; max-width: 560px; }
+.landing-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  border-radius: 22px;
+  color: #ffffff;
+  background: linear-gradient(150deg, rgba(124, 116, 255, 0.28), rgba(103, 232, 249, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 14px 44px rgba(91, 83, 235, 0.3);
+}
+.landing-feature-title {
+  margin: 0;
+  font-size: clamp(30px, 7vw, 52px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+.landing-feature-desc {
+  margin: 0;
+  color: rgba(226, 232, 255, 0.7);
+  font-size: clamp(15px, 2.6vw, 18px);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.landing-cta-inner { display: grid; gap: 18px; justify-items: center; max-width: 520px; }
+.landing-cta-title {
+  margin: 0;
+  font-size: clamp(38px, 10vw, 72px);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+.landing-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 16px 30px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(150deg, #7c74ff 0%, #5b53eb 100%);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: 0 16px 42px rgba(91, 83, 235, 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.landing-start:hover { transform: translateY(-2px); box-shadow: 0 22px 52px rgba(91, 83, 235, 0.55); }
+.landing-login-link {
+  border: 0;
+  background: transparent;
+  color: rgba(226, 232, 255, 0.62);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 로그인 화면 '돌아가기' 버튼 */
+.auth-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  margin-bottom: 8px;
+  padding: 7px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(226, 232, 255, 0.82);
+  font-size: 13px;
+  font-weight: 800;
+}
+.auth-back:hover { background: rgba(255, 255, 255, 0.12); }
