@@ -20,6 +20,7 @@ import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.EmailVerificationCodeRepository;
 import com.kafka.auth.repository.UserAccountRepository;
 import com.kafka.auth.security.JwtService;
+import com.kafka.auth.storage.StorageUrlSigner;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,7 @@ class AuthServiceTest {
     private final EmailVerificationProperties emailVerificationProperties = new EmailVerificationProperties();
 
     @Test
-    void createEmailCodeSendsFourDigitCodeAndLoginVerifiesHashedCode() {
+    void createEmailCodeSendsSixDigitCodeAndLoginVerifiesHashedCode() {
         AuthService service = authService();
         ArgumentCaptor<EmailVerificationCode> verificationCodeCaptor = ArgumentCaptor.forClass(EmailVerificationCode.class);
         ArgumentCaptor<String> plainCodeCaptor = ArgumentCaptor.forClass(String.class);
@@ -67,7 +68,7 @@ class AuthServiceTest {
         verify(emailVerificationThrottleService).acquireSendPermit("user@example.com");
         String plainCode = plainCodeCaptor.getValue();
         EmailVerificationCode savedCode = verificationCodeCaptor.getValue();
-        assertThat(plainCode).matches("\\d{4}");
+        assertThat(plainCode).matches("\\d{6}");
         assertThat(savedCode.getEmail()).isEqualTo("user@example.com");
         assertThat(savedCode.getCode()).isNotEqualTo(plainCode);
         assertThat(savedCode.getCode()).hasSize(64);
@@ -110,7 +111,8 @@ class AuthServiceTest {
                 jwtService,
                 emailVerificationMailService,
                 emailVerificationProperties,
-                emailVerificationThrottleService
+                emailVerificationThrottleService,
+                new StorageUrlSigner("test-signing-secret-please-change", java.time.Duration.ofHours(12))
         );
     }
 }

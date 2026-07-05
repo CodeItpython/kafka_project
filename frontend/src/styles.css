@@ -456,8 +456,8 @@ input:focus {
 
 .otp-inputs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .otp-inputs input {

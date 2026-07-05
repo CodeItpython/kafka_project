@@ -12,11 +12,16 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class JwtService {
     private static final Base64.Encoder BASE64_URL = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder BASE64_URL_DECODER = Base64.getUrlDecoder();
+    /** HS256 needs a key of at least 256 bits (32 bytes) to be secure. */
+    private static final int MIN_SECRET_BYTES = 32;
+    private static final String KNOWN_DEV_SECRET = "local-dev-secret-change-me-local-dev-secret";
 
     private final ObjectMapper objectMapper;
     private final String secret;
@@ -29,6 +34,15 @@ public class JwtService {
             @Value("${app.jwt.issuer}") String issuer,
             @Value("${app.jwt.expiration-minutes}") long expirationMinutes
     ) {
+        int secretLength = secret == null ? 0 : secret.getBytes(StandardCharsets.UTF_8).length;
+        if (secretLength < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "app.jwt.secret must be at least " + MIN_SECRET_BYTES
+                            + " bytes for HS256. Set a strong JWT_SECRET environment variable.");
+        }
+        if (KNOWN_DEV_SECRET.equals(secret)) {
+            log.warn("app.jwt.secret is the built-in development default. Set JWT_SECRET to a unique strong value before deploying.");
+        }
         this.objectMapper = objectMapper;
         this.secret = secret;
         this.issuer = issuer;

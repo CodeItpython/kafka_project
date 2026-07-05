@@ -66,6 +66,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
             writeTooManyRequests(request, response, result);
         } catch (RuntimeException exception) {
+            if (rule.auth()) {
+                // Fail closed on auth-write endpoints: if we cannot enforce the limit
+                // (e.g. Redis outage) we must not silently disable brute-force protection.
+                log.warn("Rate limit check failed on auth endpoint. Rejecting request. path={} reason={}",
+                        request.getRequestURI(),
+                        exception.getClass().getSimpleName());
+                log.debug("Rate limit failure detail.", exception);
+                writeRateLimitUnavailable(request, response);
+                return;
+            }
+            // Non-auth traffic favours availability and fails open.
             log.warn("Rate limit check failed. Continuing request. path={} reason={}",
                     request.getRequestURI(),
                     exception.getClass().getSimpleName());
@@ -79,9 +90,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String clientKey = clientKey(request);
         if (isAuthWriteEndpoint(method, path)) {
-            return new RateLimitRule("auth:" + clientKey + ":" + sanitize(method + ":" + path), rateLimitService.authLimit());
+            return new RateLimitRule("auth:" + clientKey + ":" + sanitize(method + ":" + path), rateLimitService.authLimit(), true);
         }
-        return new RateLimitRule("api:" + clientKey + ":" + sanitize(method + ":" + path), rateLimitService.apiLimit());
+        return new RateLimitRule("api:" + clientKey + ":" + sanitize(method + ":" + path), rateLimitService.apiLimit(), false);
     }
 
     private boolean isAuthWriteEndpoint(String method, String path) {
@@ -98,12 +109,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String clientKey(HttpServletRequest request) {
-        String forwardedFor = Optional.ofNullable(request.getHeader("X-Forwarded-For"))
-                .map(value -> value.split(",")[0].trim())
-                .filter(value -> !value.isBlank())
-                .orElse(null);
-        if (forwardedFor != null) {
-            return sanitize(forwardedFor);
+        // Only honour X-Forwarded-For behind a trusted proxy; otherwise it is
+        // attacker-controlled and lets a client mint a fresh bucket per request.
+        if (rateLimitService.trustForwardedFor()) {
+            String forwardedFor = Optional.ofNullable(request.getHeader("X-Forwarded-For"))
+                    .map(value -> value.split(",")[0].trim())
+                    .filter(value -> !value.isBlank())
+                    .orElse(null);
+            if (forwardedFor != null) {
+                return sanitize(forwardedFor);
+            }
         }
         return sanitize(Optional.ofNullable(request.getRemoteAddr()).orElse("unknown"));
     }
@@ -159,6 +174,26 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return UUID.randomUUID().toString();
     }
 
-    private record RateLimitRule(String bucket, int limit) {
+    private void writeRateLimitUnavailable(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        Instant now = Instant.now();
+        String traceId = resolveTraceId(request, response);
+        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader(HttpHeaders.RETRY_AFTER, "5");
+
+        ErrorResponse body = new ErrorResponse(
+                now,
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "RATE_LIMIT_UNAVAILABLE",
+                "요청을 처리할 수 없습니다. 잠시 후 다시 시도해주세요.",
+                request.getRequestURI(),
+                traceId,
+                List.of("retryAfterSeconds: 5")
+        );
+        objectMapper.writeValue(response.getWriter(), body);
+    }
+
+    private record RateLimitRule(String bucket, int limit, boolean auth) {
     }
 }

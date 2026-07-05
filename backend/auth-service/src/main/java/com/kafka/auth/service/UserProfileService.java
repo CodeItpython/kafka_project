@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.kafka.auth.storage.ObjectStorageService;
+import com.kafka.auth.storage.StorageUrlSigner;
 import com.kafka.auth.storage.StoredObject;
 
 @Service
@@ -27,17 +28,20 @@ public class UserProfileService {
     private final UserProfileHistoryRepository userProfileHistoryRepository;
     private final ChatStateService chatStateService;
     private final ObjectStorageService objectStorageService;
+    private final StorageUrlSigner storageUrlSigner;
 
     public UserProfileService(
             UserAccountRepository userAccountRepository,
             UserProfileHistoryRepository userProfileHistoryRepository,
             ChatStateService chatStateService,
-            ObjectStorageService objectStorageService
+            ObjectStorageService objectStorageService,
+            StorageUrlSigner storageUrlSigner
     ) {
         this.userAccountRepository = userAccountRepository;
         this.userProfileHistoryRepository = userProfileHistoryRepository;
         this.chatStateService = chatStateService;
         this.objectStorageService = objectStorageService;
+        this.storageUrlSigner = storageUrlSigner;
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +118,7 @@ public class UserProfileService {
                 user.getName(),
                 user.getProvider().name(),
                 user.getStatusMessage(),
-                user.getProfileImageUrl(),
+                storageUrlSigner.sign(user.getProfileImageUrl()),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 history
@@ -126,7 +130,7 @@ public class UserProfileService {
                 history.getId(),
                 history.getName(),
                 history.getStatusMessage(),
-                history.getProfileImageUrl(),
+                storageUrlSigner.sign(history.getProfileImageUrl()),
                 history.getEventType(),
                 history.getCreatedAt()
         );
