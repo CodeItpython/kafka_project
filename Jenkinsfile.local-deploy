@@ -24,7 +24,7 @@ pipeline {
         stage('Verify Backend') {
             steps {
                 dir('backend') {
-                    sh './gradlew test :discovery-service:bootJar :auth-service:bootJar'
+                    sh './gradlew test :discovery-service:bootJar :auth-service:bootJar :news-service:bootJar'
                 }
             }
         }
@@ -75,9 +75,11 @@ pipeline {
                     kubectl apply -k k8s
                     kubectl -n "$K8S_NAMESPACE" set image deployment/discovery-service discovery-service="kafka-discovery-service:${IMAGE_TAG}"
                     kubectl -n "$K8S_NAMESPACE" set image deployment/auth-service auth-service="kafka-auth-service:${IMAGE_TAG}"
+                    kubectl -n "$K8S_NAMESPACE" set image deployment/news-service news-service="kafka-news-service:${IMAGE_TAG}"
                     kubectl -n "$K8S_NAMESPACE" set image deployment/frontend frontend="kafka-frontend:${IMAGE_TAG}"
                     kubectl -n "$K8S_NAMESPACE" rollout status deployment/discovery-service
                     kubectl -n "$K8S_NAMESPACE" rollout status deployment/auth-service
+                    kubectl -n "$K8S_NAMESPACE" rollout status deployment/news-service
                     kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend
                 '''
             }

@@ -6,11 +6,12 @@ WORKDIR /workspace
 COPY settings.gradle build.gradle ./
 COPY auth-service ./auth-service
 COPY discovery-service ./discovery-service
+COPY news-service ./news-service
 RUN gradle :${SERVICE}:bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
 ARG SERVICE
 WORKDIR /app
 COPY --from=build /workspace/${SERVICE}/build/libs/*.jar app.jar
-EXPOSE 8890 8761
+EXPOSE 8890 8761 8891
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

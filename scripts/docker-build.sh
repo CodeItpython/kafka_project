@@ -60,4 +60,6 @@ case "$AUTH_IMAGE_MODE" in
     ;;
 esac
 
+build_backend_jvm_image news-service kafka-news-service
+
 build_frontend_image

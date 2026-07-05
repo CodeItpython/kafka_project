@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 8880,
     proxy: {
+      '/api/news': 'http://localhost:8891',
       '/api': 'http://localhost:8890',
       '/ws': {
         target: 'ws://localhost:8890',
