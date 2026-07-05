@@ -136,6 +136,18 @@ public class AuthService {
         return issueToken(user);
     }
 
+    /**
+     * 회원 탈퇴. users 행은 다른 테이블에서 FK로 참조되지 않고 email 문자열로만
+     * 느슨하게 연결되므로 하드 삭제해도 무결성 문제가 없다(대화/방 등 잔여 데이터는
+     * 이메일 기준 orphan으로 남지만 참조 무결성에는 영향 없음). 로그인 계정만 제거해
+     * 재로그인이 불가하도록 한다.
+     */
+    @Transactional
+    public void deleteAccount(UserAccount user) {
+        emailVerificationCodeRepository.deleteByEmailIgnoreCase(user.getEmail());
+        userAccountRepository.delete(user);
+    }
+
     public UserResponse toUserResponse(UserAccount user) {
         return new UserResponse(
                 user.getId(),

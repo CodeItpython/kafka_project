@@ -18,4 +18,8 @@ public interface EmailVerificationCodeRepository extends JpaRepository<EmailVeri
               and code.used = false
             """)
     int markUnusedCodesAsUsed(@Param("email") String email);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from EmailVerificationCode code where lower(code.email) = lower(:email)")
+    int deleteByEmailIgnoreCase(@Param("email") String email);
 }

@@ -333,6 +333,7 @@ function App() {
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
+  const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
@@ -1299,6 +1300,20 @@ function App() {
     setStatus('로그아웃되었습니다.');
   }
 
+  async function deleteAccount() {
+    setLoading(true);
+    try {
+      await request<void>('/auth/me', { method: 'DELETE' });
+      setWithdrawConfirmOpen(false);
+      logout();
+      setStatus('회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.');
+    } catch (error) {
+      setStatus(readableError(error, '회원 탈퇴에 실패했습니다.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const kakaoToken = hashParams.get('access_token');
@@ -1700,6 +1715,43 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {withdrawConfirmOpen && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={() => setWithdrawConfirmOpen(false)}
+          >
+            <motion.section
+              className="confirm-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="withdraw-confirm-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={() => setWithdrawConfirmOpen(false)} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <span className="confirm-dialog-icon danger"><Trash2 size={20} aria-hidden /></span>
+              <div>
+                <strong id="withdraw-confirm-title">정말 탈퇴하시겠어요?</strong>
+                <p>계정이 삭제되어 더 이상 로그인할 수 없습니다. 이 작업은 되돌릴 수 없어요.</p>
+              </div>
+              <div className="confirm-dialog-actions">
+                <button type="button" onClick={() => setWithdrawConfirmOpen(false)} disabled={loading}>취소</button>
+                <button type="button" className="danger" onClick={deleteAccount} disabled={loading}>{loading ? '탈퇴 중' : '탈퇴하기'}</button>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {(activeTab === 'friends' || activeTab === 'settings') && (
       <aside className="side-pane">
         <section className="sidebar">
@@ -1829,6 +1881,28 @@ function App() {
                 <ProfileHistoryList history={myProfile.history.slice(0, 3)} />
               </section>
             )}
+
+            <section className="panel-section settings-group">
+              <div className="section-title"><span>계정 정보</span></div>
+              <div className="settings-row static">
+                <span className="settings-row-label"><AtSign size={16} aria-hidden />이메일</span>
+                <span className="settings-row-value">{user.email}</span>
+              </div>
+              <div className="settings-row static">
+                <span className="settings-row-label"><KeyRound size={16} aria-hidden />로그인 방식</span>
+                <span className="settings-row-value">{user.provider}</span>
+              </div>
+            </section>
+
+            <section className="panel-section settings-group danger-zone">
+              <div className="section-title"><span>계정 관리</span></div>
+              <button type="button" className="settings-action" onClick={logout} disabled={loading}>
+                <LogOut size={17} aria-hidden /><span>로그아웃</span>
+              </button>
+              <button type="button" className="settings-action danger" onClick={() => setWithdrawConfirmOpen(true)} disabled={loading}>
+                <Trash2 size={17} aria-hidden /><span>회원 탈퇴</span>
+              </button>
+            </section>
             </>)}
 
             {activeTab === 'friends' && (<>
@@ -1891,12 +1965,6 @@ function App() {
               />
             </section>
             </>)}
-
-            {activeTab === 'settings' && (
-            <footer className="sidebar-footer">
-              <button className="logout-button" onClick={logout}><LogOut size={17} aria-hidden />로그아웃</button>
-            </footer>
-            )}
           </div>
         </section>
       </aside>

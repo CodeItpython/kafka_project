@@ -2773,29 +2773,40 @@ input:focus {
   top: 0;
   z-index: 3;
   display: flex;
-  gap: 8px;
+  gap: 2px;
   overflow-x: auto;
-  padding: 12px 16px;
-  background: linear-gradient(180deg, rgba(238, 240, 247, 0.96), rgba(238, 240, 247, 0.82));
-  backdrop-filter: blur(8px);
+  padding: 2px 8px 0;
+  border-bottom: 1px solid rgba(150, 155, 190, 0.2);
+  background: rgba(238, 240, 247, 0.94);
+  backdrop-filter: blur(10px);
+  scrollbar-width: none;
 }
 .news-catbar::-webkit-scrollbar { display: none; }
 .news-catbar button {
+  position: relative;
   flex: 0 0 auto;
-  padding: 8px 15px;
-  border: 1px solid rgba(150, 155, 190, 0.22);
-  border-radius: 999px;
-  background: #ffffff;
-  color: #59608a;
-  font-size: 13px;
-  font-weight: 800;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  padding: 13px 14px 14px;
+  border: 0;
+  background: transparent;
+  color: #97a0bd;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 0.15s ease;
 }
 .news-catbar button.active {
-  color: #ffffff;
-  background: linear-gradient(150deg, #6d66ef 0%, #5b53eb 100%);
-  border-color: transparent;
-  box-shadow: 0 8px 18px rgba(91, 83, 235, 0.28);
+  color: #20233f;
+  font-weight: 800;
+}
+.news-catbar button.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, #6d66ef, #5b53eb);
 }
 
 .news-list { display: grid; gap: 12px; padding: 6px 16px; }
@@ -2843,3 +2854,45 @@ input:focus {
 .news-card--skeleton .news-card-thumb { background: #e7e9f4; }
 .skeleton-line { display: block; height: 12px; border-radius: 6px; background: #e7e9f4; }
 .skeleton-line.short { width: 50%; margin-top: 8px; }
+
+/* ===================== 설정 탭 ===================== */
+.settings-group { margin-top: 4px; }
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(150, 155, 190, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.settings-row-label { display: inline-flex; align-items: center; gap: 8px; color: #59608a; font-weight: 800; font-size: 14px; }
+.settings-row-value { max-width: 58%; overflow: hidden; color: #8b92b5; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+
+.settings-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 15px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(150, 155, 190, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #3a4468;
+  font-size: 15px;
+  font-weight: 800;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.settings-action:hover { background: #ffffff; transform: translateY(-1px); }
+.settings-action.danger {
+  color: #e0304a;
+  border-color: rgba(224, 48, 74, 0.22);
+  background: rgba(255, 241, 243, 0.75);
+}
+.settings-action.danger:hover { background: #fff1f3; }
+
+.confirm-dialog-icon.danger { color: #e0304a; background: rgba(224, 48, 74, 0.12); }
+.confirm-dialog-actions button.danger { color: #ffffff; background: #e0304a; }
