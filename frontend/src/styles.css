@@ -2700,7 +2700,7 @@ input:focus {
 }
 
 .app-shell > .room-directory { padding: 8px 16px 84px; gap: 14px; }
-.app-shell > .news-panel { padding: 0 0 84px; }
+.app-shell > .news-panel { padding: 0; overflow: hidden; }
 .app-shell > .side-pane { display: block; }
 
 .app-shell .sidebar {
@@ -2767,7 +2767,34 @@ input:focus {
 }
 
 /* ===================== 뉴스 피드 (인스타그램식 카드) ===================== */
-.news-feed-root { display: flex; flex-direction: column; }
+.news-feed-root {
+  display: block;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 84px;
+}
+
+/* 당겨서 새로고침 인디케이터 */
+.news-pull {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  transition: height 0.18s ease;
+}
+.news-pull-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+  color: #8b92b5;
+  font-size: 12px;
+  font-weight: 800;
+}
+.news-pull-inner.loading svg { animation: spin 850ms linear infinite; }
 .news-header { padding: 14px 16px 4px; }
 .news-header h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #20233f; }
 .news-header .muted { font-size: 13px; }
