@@ -34,9 +34,12 @@ public class NewsController {
 
     /** 카테고리별 뉴스 피드 (기본 실시간 핫) */
     @GetMapping("/feed")
-    public FeedResponse feed(@RequestParam(name = "category", required = false) String category) {
+    public FeedResponse feed(
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "refresh", required = false, defaultValue = "false") boolean refresh
+    ) {
         NewsCategory resolved = NewsCategory.fromCode(category);
-        List<NewsItem> items = newsService.feed(resolved);
+        List<NewsItem> items = newsService.feed(resolved, refresh);
         return new FeedResponse(resolved.code(), resolved.label(), items.size(), items);
     }
 
