@@ -57,75 +57,38 @@ p {
   gap: 26px;
 }
 
-/* ── 히어로: 떠오르는 이리데센트 버블 + 광택 오브 ── */
-.auth-hero {
-  position: relative;
-  min-height: 300px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding-top: 44px;
-  isolation: isolate;
-}
-
-.bubble-field {
-  position: absolute;
-  inset: -20px 0 90px;
-  z-index: -1;
+/* ── 풀스크린 3D 파티클 웰컴 씬 ── */
+.welcome-canvas {
+  position: fixed !important;
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 0;
+  display: block;
   pointer-events: none;
 }
 
-.bubble {
-  position: absolute;
-  bottom: 0;
-  left: var(--x);
-  width: var(--s);
-  height: var(--s);
-  margin-left: calc(var(--s) / -2);
-  border-radius: 50%;
-  opacity: 0;
-  transform: translateY(24px) scale(0.5);
+.auth-shell--3d {
+  color: #f4f6ff;
   background:
-    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 40%),
-    conic-gradient(from 130deg, #ff9ecb, #ffd98a, #b6f5c9, #8fd4ff, #c4a4ff, #ff9ecb);
-  box-shadow:
-    inset -5px -7px 13px rgba(120, 90, 160, 0.30),
-    inset 4px 5px 10px rgba(255, 255, 255, 0.6),
-    0 8px 22px rgba(110, 84, 140, 0.18);
-  filter: hue-rotate(var(--hue)) saturate(1.15);
-  animation: bubble-rise var(--d) ease-in var(--delay) infinite;
+    radial-gradient(120% 90% at 50% 0%, rgba(91, 83, 235, 0.30), transparent 60%),
+    radial-gradient(90% 70% at 85% 92%, rgba(103, 232, 249, 0.12), transparent 55%),
+    linear-gradient(180deg, #0a0a1f 0%, #0d0b26 45%, #08081a 100%);
 }
 
-@keyframes bubble-rise {
-  0% { opacity: 0; transform: translateY(24px) translateX(0) scale(0.45); }
-  14% { opacity: 0.92; }
-  72% { opacity: 0.9; }
-  100% { opacity: 0; transform: translateY(calc(-1 * var(--rise))) translateX(var(--drift)) scale(1); }
+/* 파티클 위 텍스트 가독성을 위한 중앙 스크림 (가장자리 파티클은 그대로 빛남) */
+.auth-shell--3d::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(58% 48% at 50% 52%, rgba(6, 6, 22, 0.62), transparent 72%);
 }
 
-.hero-orb {
+.auth-shell--3d .auth-stage {
   position: relative;
-  display: grid;
-  place-items: center;
-  margin-bottom: 22px;
-}
-
-.hero-orb-core {
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 28%, #ffffff 0%, rgba(255, 255, 255, 0.55) 44%, rgba(228, 219, 236, 0.35) 72%, rgba(210, 198, 224, 0.28) 100%);
-  box-shadow:
-    inset -8px -10px 20px rgba(150, 120, 175, 0.22),
-    inset 7px 8px 16px rgba(255, 255, 255, 0.92),
-    0 18px 38px rgba(120, 92, 150, 0.20);
-  animation: orb-bob 5.5s ease-in-out infinite;
-}
-
-@keyframes orb-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-8px) scale(1.03); }
+  z-index: 1;
 }
 
 .hero-copy {
@@ -146,6 +109,100 @@ p {
   color: #8b92b5;
   font-size: 15px;
   font-weight: 600;
+}
+
+/* ── 3D 웰컴: 다크 배경 위 헤드라인/글래스 패널 오버라이드 ── */
+.auth-shell--3d .hero-copy .eyebrow {
+  color: #a5b4fc;
+}
+
+.auth-shell--3d .hero-copy h1 {
+  color: #ffffff;
+  text-shadow: 0 6px 40px rgba(91, 83, 235, 0.55);
+}
+
+.auth-shell--3d .hero-sub {
+  color: rgba(226, 232, 255, 0.72);
+}
+
+.auth-shell--3d .auth-panel {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(18, 18, 42, 0.55);
+  backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.auth-shell--3d .auth-panel-head h2 {
+  color: #ffffff;
+}
+
+.auth-shell--3d .auth-panel-head .muted {
+  color: rgba(210, 216, 245, 0.6);
+}
+
+.auth-shell--3d .auth-panel label {
+  color: rgba(214, 220, 250, 0.8);
+}
+
+.auth-shell--3d .auth-panel input {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f6ff;
+}
+
+.auth-shell--3d .auth-panel input::placeholder {
+  color: rgba(200, 206, 235, 0.4);
+}
+
+.auth-shell--3d .auth-panel input:focus {
+  border-color: #8b5cf6;
+  background: rgba(255, 255, 255, 0.10);
+  outline: 3px solid rgba(139, 92, 246, 0.22);
+}
+
+.auth-shell--3d .sample-grid button {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(226, 232, 255, 0.85);
+}
+
+.auth-shell--3d .sample-grid button:hover {
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+.auth-shell--3d .mode-tabs {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-shell--3d .mode-tabs button {
+  color: rgba(210, 216, 245, 0.65);
+}
+
+.auth-shell--3d .mode-tabs button.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.auth-shell--3d .otp-inputs input {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.auth-shell--3d .auth-panel .primary-button,
+.auth-shell--3d .auth-panel .icon-button {
+  background: linear-gradient(150deg, #7c74ff 0%, #5b53eb 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 30px rgba(91, 83, 235, 0.45);
+}
+
+.auth-shell--3d .notice {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(226, 232, 255, 0.85);
 }
 
 .auth-panel {
