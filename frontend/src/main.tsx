@@ -39,6 +39,7 @@ import './styles.css';
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
 const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
 import NewsFeed from './NewsFeed';
+import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
 
 type Mode = 'login' | 'register' | 'email';
 type HomeTab = 'friends' | 'chats' | 'news' | 'settings';
@@ -2074,7 +2075,9 @@ function App() {
                 </section>
               )}
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
-              {messages.map((message) => (
+              {messages.map((message) => {
+                const linkUrl = message.deletedForEveryone ? null : firstMessageUrl(message.content);
+                return (
                 <motion.article
                   key={message.id}
                   className={message.senderEmail === user.email ? 'chat-bubble mine' : 'chat-bubble'}
@@ -2109,6 +2112,7 @@ function App() {
                         </a>
                       )}
                       {message.content && <p>{message.content}</p>}
+                      {linkUrl && <MessageLinkPreview url={linkUrl} />}
                       {message.editedAt && <span className="edited-label">수정됨</span>}
                       {message.reactions.length > 0 && (
                         <div className="reaction-strip" aria-label="메시지 반응">
@@ -2160,7 +2164,8 @@ function App() {
                     </>
                   )}
                 </motion.article>
-              ))}
+                );
+              })}
             </div>
 
             <form className="composer" onSubmit={sendMessage}>
