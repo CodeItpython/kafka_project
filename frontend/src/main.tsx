@@ -50,6 +50,17 @@ import WelcomeLanding from './WelcomeLanding';
 type Mode = 'login' | 'register' | 'email';
 type HomeTab = 'friends' | 'chats' | 'news' | 'shopping' | 'settings';
 
+// 하단 탭 순서 — 탭 전환 시 이 순서 기준으로 좌/우 슬라이드 방향을 정한다.
+const TAB_ORDER: HomeTab[] = ['friends', 'chats', 'news', 'shopping', 'settings'];
+// 오른쪽 탭으로 이동하면 새 패널이 오른쪽에서, 왼쪽 탭이면 왼쪽에서 슬라이드 인.
+// 나가는 패널은 반대 방향으로 슬라이드 아웃(패널은 absolute 오버레이라 서로 겹쳐 크로스 슬라이드).
+const TAB_SLIDE = {
+  enter: (dir: number) => ({ x: dir >= 0 ? '100%' : '-100%' }),
+  center: { x: '0%' },
+  exit: (dir: number) => ({ x: dir >= 0 ? '-100%' : '100%' })
+};
+const TAB_SLIDE_TRANSITION = { type: 'spring', stiffness: 300, damping: 34 } as const;
+
 type ShoppingCartItem = {
   id: number;
   productId: string;
@@ -345,6 +356,13 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>('chats');
+  const [tabDirection, setTabDirection] = useState(0);
+  // 탭 전환: 이동 방향(순서 기준)을 기록해 슬라이드 방향 결정 후 탭 변경
+  const switchTab = useCallback((next: HomeTab) => {
+    if (next === activeTab) return;
+    setTabDirection(TAB_ORDER.indexOf(next) >= TAB_ORDER.indexOf(activeTab) ? 1 : -1);
+    setActiveTab(next);
+  }, [activeTab]);
   const [authStage, setAuthStage] = useState<'landing' | 'login'>('landing');
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
@@ -2262,8 +2280,9 @@ function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence custom={tabDirection} initial={false}>
       {(activeTab === 'friends' || activeTab === 'settings') && (
-      <aside className="side-pane">
+      <motion.aside key={activeTab} className="side-pane" custom={tabDirection} variants={TAB_SLIDE} initial="enter" animate="center" exit="exit" transition={TAB_SLIDE_TRANSITION}>
         <section className="sidebar">
           <div className="sidebar-content">
             <header className="panel-header"><h2>{activeTab === 'friends' ? '친구' : '설정'}</h2></header>
@@ -2478,25 +2497,26 @@ function App() {
             </>)}
           </div>
         </section>
-      </aside>
+      </motion.aside>
       )}
 
       {activeTab === 'news' && (
-        <section className="tab-panel news-panel">
+        <motion.section key="news" className="tab-panel news-panel" custom={tabDirection} variants={TAB_SLIDE} initial="enter" animate="center" exit="exit" transition={TAB_SLIDE_TRANSITION}>
           <NewsFeed onShare={openShareModal} />
-        </section>
+        </motion.section>
       )}
 
       {activeTab === 'shopping' && (
-        <section className="tab-panel shop-panel">
+        <motion.section key="shopping" className="tab-panel shop-panel" custom={tabDirection} variants={TAB_SLIDE} initial="enter" animate="center" exit="exit" transition={TAB_SLIDE_TRANSITION}>
           <ShoppingFeed
             onAddToCart={addToShoppingCart}
             onOpenCart={() => { loadShoppingCart(); setCartOpen(true); }}
             cartCount={shoppingCart?.totalCount ?? 0}
             addingId={cartAddingId}
           />
-        </section>
+        </motion.section>
       )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {cartOpen && (
@@ -2570,8 +2590,8 @@ function App() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        {selectedRoomId ? (
+      <AnimatePresence>
+        {selectedRoomId && (
           <motion.section
             key="conversation"
             className="conversation"
@@ -2799,16 +2819,20 @@ function App() {
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
           </motion.section>
-        ) : activeTab === 'chats' ? (
+        )}
+      </AnimatePresence>
+      <AnimatePresence custom={tabDirection} initial={false}>
+        {activeTab === 'chats' && (
           <motion.section
             key="rooms"
             className="room-directory"
             ref={roomDirectoryRef}
-            layout
-            initial={{ opacity: 0, x: 18 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -18 }}
-            transition={{ type: 'spring', stiffness: 230, damping: 28 }}
+            custom={tabDirection}
+            variants={TAB_SLIDE}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={TAB_SLIDE_TRANSITION}
           >
             <motion.span
               className="scroll-progress-bar"
@@ -2931,30 +2955,30 @@ function App() {
 
             {status && <p className="notice">{status}</p>}
           </motion.section>
-        ) : null}
+        )}
       </AnimatePresence>
 
       {!selectedRoomId && (
         <nav className="tab-bar" aria-label="주요 탭">
-          <button type="button" className={activeTab === 'friends' ? 'active' : ''} onClick={() => setActiveTab('friends')}>
+          <button type="button" className={activeTab === 'friends' ? 'active' : ''} onClick={() => switchTab('friends')}>
             <Users size={22} aria-hidden />
             <span>친구</span>
           </button>
-          <button type="button" className={activeTab === 'chats' ? 'active' : ''} onClick={() => setActiveTab('chats')}>
+          <button type="button" className={activeTab === 'chats' ? 'active' : ''} onClick={() => switchTab('chats')}>
             <MessageCircle size={22} aria-hidden />
             <span>채팅</span>
             {totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}
           </button>
-          <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => setActiveTab('news')}>
+          <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => switchTab('news')}>
             <Newspaper size={22} aria-hidden />
             <span>뉴스</span>
           </button>
-          <button type="button" className={activeTab === 'shopping' ? 'active' : ''} onClick={() => { setActiveTab('shopping'); loadShoppingCart(); }}>
+          <button type="button" className={activeTab === 'shopping' ? 'active' : ''} onClick={() => { switchTab('shopping'); loadShoppingCart(); }}>
             <ShoppingBag size={22} aria-hidden />
             <span>쇼핑</span>
             {(shoppingCart?.totalCount ?? 0) > 0 && <i className="tab-badge">{(shoppingCart?.totalCount ?? 0) > 99 ? '99+' : shoppingCart?.totalCount}</i>}
           </button>
-          <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
+          <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => switchTab('settings')}>
             <Settings size={22} aria-hidden />
             <span>설정</span>
           </button>
