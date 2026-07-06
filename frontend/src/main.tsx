@@ -27,6 +27,8 @@ import {
   Send,
   Settings,
   Share2,
+  ShoppingBag,
+  ShoppingCart,
   Sparkles,
   Trash2,
   UserPlus,
@@ -40,11 +42,30 @@ import './styles.css';
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
 const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
 import NewsFeed, { NewsItem } from './NewsFeed';
+import ShoppingFeed, { ShoppingProduct } from './ShoppingFeed';
 import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
 import WelcomeLanding from './WelcomeLanding';
 
 type Mode = 'login' | 'register' | 'email';
-type HomeTab = 'friends' | 'chats' | 'news' | 'settings';
+type HomeTab = 'friends' | 'chats' | 'news' | 'shopping' | 'settings';
+
+type ShoppingCartItem = {
+  id: number;
+  productId: string;
+  title: string;
+  link: string;
+  image: string | null;
+  price: number;
+  mallName: string | null;
+  brand: string | null;
+  quantity: number;
+};
+
+type ShoppingCart = {
+  items: ShoppingCartItem[];
+  totalCount: number;
+  totalPrice: number;
+};
 
 type User = {
   id: number;
@@ -329,6 +350,10 @@ function App() {
   const [notificationTopic, setNotificationTopic] = useState('');
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
   const [appToasts, setAppToasts] = useState<AppToast[]>([]);
+  // 네이버 쇼핑 장바구니
+  const [shoppingCart, setShoppingCart] = useState<ShoppingCart | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartAddingId, setCartAddingId] = useState<string | null>(null);
   const [pendingEmailAuth, setPendingEmailAuth] = useState<AuthResponse | null>(null);
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => localStorage.getItem('inAppNotificationsEnabled') !== 'false');
   const [dltMessages, setDltMessages] = useState<DltMessage[]>([]);
@@ -1113,6 +1138,69 @@ function App() {
       setStatus(readableError(error, '1:1 채팅방을 열지 못했습니다.'));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadShoppingCart() {
+    try {
+      const data = await request<ShoppingCart>('/shopping/cart');
+      setShoppingCart(data);
+    } catch {
+      // 장바구니는 로그인 사용자 전용 — 실패 시 조용히 무시
+    }
+  }
+
+  async function addToShoppingCart(product: ShoppingProduct) {
+    setCartAddingId(product.productId);
+    try {
+      const data = await request<ShoppingCart>('/shopping/cart', {
+        method: 'POST',
+        body: JSON.stringify({
+          productId: product.productId,
+          title: product.title,
+          link: product.link,
+          image: product.image,
+          price: product.price,
+          mallName: product.mallName,
+          brand: product.brand
+        })
+      });
+      setShoppingCart(data);
+      setStatus(`장바구니에 담았어요. (${data.totalCount}개)`);
+    } catch (error) {
+      setStatus(readableError(error, '장바구니에 담지 못했습니다.'));
+    } finally {
+      setCartAddingId(null);
+    }
+  }
+
+  async function updateCartQuantity(id: number, quantity: number) {
+    try {
+      const data = await request<ShoppingCart>(`/shopping/cart/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ quantity })
+      });
+      setShoppingCart(data);
+    } catch (error) {
+      setStatus(readableError(error, '수량을 변경하지 못했습니다.'));
+    }
+  }
+
+  async function removeCartItem(id: number) {
+    try {
+      const data = await request<ShoppingCart>(`/shopping/cart/${id}`, { method: 'DELETE' });
+      setShoppingCart(data);
+    } catch (error) {
+      setStatus(readableError(error, '삭제하지 못했습니다.'));
+    }
+  }
+
+  async function clearShoppingCart() {
+    try {
+      const data = await request<ShoppingCart>('/shopping/cart', { method: 'DELETE' });
+      setShoppingCart(data);
+    } catch (error) {
+      setStatus(readableError(error, '장바구니를 비우지 못했습니다.'));
     }
   }
 
@@ -2398,6 +2486,89 @@ function App() {
         </section>
       )}
 
+      {activeTab === 'shopping' && (
+        <section className="tab-panel shop-panel">
+          <ShoppingFeed
+            onAddToCart={addToShoppingCart}
+            onOpenCart={() => { loadShoppingCart(); setCartOpen(true); }}
+            cartCount={shoppingCart?.totalCount ?? 0}
+            addingId={cartAddingId}
+          />
+        </section>
+      )}
+
+      <AnimatePresence>
+        {cartOpen && (
+          <motion.div
+            className="cart-drawer-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={() => setCartOpen(false)}
+          >
+            <motion.aside
+              className="cart-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="장바구니"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+            >
+              <header className="cart-drawer-head">
+                <strong><ShoppingCart size={18} aria-hidden /> 장바구니</strong>
+                <button type="button" className="cart-drawer-close" onClick={() => setCartOpen(false)} title="닫기"><X size={18} aria-hidden /></button>
+              </header>
+
+              {(!shoppingCart || shoppingCart.items.length === 0) ? (
+                <div className="cart-empty">
+                  <ShoppingBag size={26} aria-hidden />
+                  <p>장바구니가 비어 있어요.</p>
+                </div>
+              ) : (
+                <div className="cart-items">
+                  {shoppingCart.items.map((item) => (
+                    <div className="cart-item" key={item.id}>
+                      <a className="cart-item-thumb" href={item.link} target="_blank" rel="noreferrer noopener" title={item.title}>
+                        {item.image ? <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <ShoppingBag size={18} aria-hidden />}
+                      </a>
+                      <div className="cart-item-body">
+                        <a className="cart-item-title" href={item.link} target="_blank" rel="noreferrer noopener">{item.title}</a>
+                        <span className="cart-item-mall">{item.mallName || item.brand || '네이버쇼핑'}</span>
+                        <strong className="cart-item-price">{(item.price * item.quantity).toLocaleString('ko-KR')}원</strong>
+                      </div>
+                      <div className="cart-item-actions">
+                        <div className="cart-qty">
+                          <button type="button" onClick={() => updateCartQuantity(item.id, item.quantity - 1)} aria-label="수량 감소">−</button>
+                          <span>{item.quantity}</span>
+                          <button type="button" onClick={() => updateCartQuantity(item.id, item.quantity + 1)} aria-label="수량 증가">+</button>
+                        </div>
+                        <button type="button" className="cart-item-remove" onClick={() => removeCartItem(item.id)} title="삭제"><Trash2 size={15} aria-hidden /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <footer className="cart-drawer-foot">
+                <div className="cart-total">
+                  <span>합계</span>
+                  <strong>{(shoppingCart?.totalPrice ?? 0).toLocaleString('ko-KR')}원</strong>
+                </div>
+                <p className="cart-note">상품을 누르면 네이버에서 구매할 수 있어요.</p>
+                <div className="cart-foot-actions">
+                  <button type="button" onClick={clearShoppingCart} disabled={!shoppingCart || shoppingCart.items.length === 0}>비우기</button>
+                  <button type="button" className="primary" onClick={() => setCartOpen(false)}>계속 쇼핑</button>
+                </div>
+              </footer>
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         {selectedRoomId ? (
           <motion.section
@@ -2763,6 +2934,11 @@ function App() {
           <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => setActiveTab('news')}>
             <Newspaper size={22} aria-hidden />
             <span>뉴스</span>
+          </button>
+          <button type="button" className={activeTab === 'shopping' ? 'active' : ''} onClick={() => { setActiveTab('shopping'); loadShoppingCart(); }}>
+            <ShoppingBag size={22} aria-hidden />
+            <span>쇼핑</span>
+            {(shoppingCart?.totalCount ?? 0) > 0 && <i className="tab-badge">{(shoppingCart?.totalCount ?? 0) > 99 ? '99+' : shoppingCart?.totalCount}</i>}
           </button>
           <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
             <Settings size={22} aria-hidden />

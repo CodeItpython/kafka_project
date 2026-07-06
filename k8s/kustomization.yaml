@@ -15,6 +15,7 @@ resources:
   - discovery-service.yaml
   - auth-service.yaml
   - chat-service.yaml
+  - shopping-service.yaml
   - autoscaling.yaml
   - news-service.yaml
   - frontend.yaml

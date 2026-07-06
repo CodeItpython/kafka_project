@@ -7,6 +7,8 @@ export default defineConfig({
     port: 8880,
     proxy: {
       '/api/news': 'http://localhost:8891',
+      // shopping-service owns the Naver shopping catalog + cart.
+      '/api/shopping': 'http://localhost:8893',
       // chat-service owns chat, notifications and the DLT admin endpoints.
       '/api/chat': 'http://localhost:8892',
       '/api/notifications': 'http://localhost:8892',
