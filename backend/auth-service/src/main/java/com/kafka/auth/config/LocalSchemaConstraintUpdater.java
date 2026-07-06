@@ -29,10 +29,11 @@ public class LocalSchemaConstraintUpdater implements ApplicationRunner {
             }
 
             jdbcTemplate.execute("alter table users drop constraint if exists users_provider_check");
+            jdbcTemplate.execute("alter table users drop constraint if exists ck_users_provider");
             jdbcTemplate.execute("""
                     alter table users
                     add constraint users_provider_check
-                    check (provider in ('LOCAL', 'EMAIL', 'KAKAO'))
+                    check (provider in ('LOCAL', 'EMAIL', 'KAKAO', 'NAVER'))
                     """);
             jdbcTemplate.execute("alter table users add column if not exists role varchar(255)");
             jdbcTemplate.execute("update users set role = 'USER' where role is null or role = ''");

@@ -19,4 +19,8 @@ public final class ShoppingDtos {
             String category
     ) {
     }
+
+    /** A ranked popular search keyword (1 = most searched in the window). */
+    public record PopularKeywordResponse(int rank, String keyword, long count) {
+    }
 }

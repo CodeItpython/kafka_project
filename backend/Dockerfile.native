@@ -3,7 +3,6 @@ WORKDIR /workspace
 COPY settings.gradle build.gradle gradlew ./
 COPY gradle ./gradle
 COPY auth-service ./auth-service
-COPY discovery-service ./discovery-service
 RUN ./gradlew :auth-service:nativeCompile --no-daemon
 
 FROM debian:bookworm-slim

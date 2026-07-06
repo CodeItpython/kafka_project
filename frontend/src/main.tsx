@@ -1934,6 +1934,7 @@ function App() {
           </AnimatePresence>
 
           <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
+          <button className="naver-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/naver/authorize`; }}><span className="naver-mark" aria-hidden>N</span>네이버로 로그인</button>
           {status && <p className="notice">{status}</p>}
           </motion.section>
         </div>
@@ -2624,9 +2625,11 @@ function App() {
                   <CheckCircle2 size={15} aria-hidden />
                   {connected ? '실시간 연결' : '연결 대기'}
                 </span>
-                <button className="soft-action-button" onClick={summarizeConversation} disabled={!selectedRoomId || messages.length === 0 || summaryLoading} type="button">
-                  <Sparkles size={15} aria-hidden />{summaryLoading ? '요약 중' : 'GPT 요약'}
-                </button>
+                <span className="tip-wrap" data-tip="서비스 준비중입니다">
+                  <button className="soft-action-button is-soon" onClick={() => setStatus('GPT 요약은 서비스 준비중입니다.')} type="button" aria-label="GPT 요약 (서비스 준비중)">
+                    <Sparkles size={15} aria-hidden />GPT 요약
+                  </button>
+                </span>
                 <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
                 {selectedRoom?.type === 'GROUP' && <button className="soft-action-button" onClick={leaveSelectedRoom} disabled={loading} type="button">나가기</button>}
                 <button className="ghost-icon-button" onClick={() => setRoomDeleteConfirmOpen(true)} disabled={!selectedRoomId || loading} title="채팅방 나가기"><Trash2 size={17} aria-hidden /></button>
