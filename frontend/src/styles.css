@@ -3631,3 +3631,39 @@ input:focus {
 .cart-foot-actions button { min-height: 44px; border: 0; border-radius: 12px; font-weight: 900; cursor: pointer; background: #edf0f8; color: #4e5968; }
 .cart-foot-actions button.primary { background: #5b53eb; color: #fff; }
 .cart-foot-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── 쇼핑: 당겨서 새로고침 + 더 불러오기 ─────────────── */
+.shop-pull {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  transition: height 0.12s ease;
+}
+.shop-pull-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+  color: #8b8ff0;
+  font-size: 12px;
+  font-weight: 800;
+}
+.shop-pull-inner.loading svg { animation: spin 850ms linear infinite; }
+.shop-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 16px 26px;
+  min-height: 24px;
+}
+.shop-more-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8b8ff0;
+  font-size: 13px;
+  font-weight: 800;
+}
+.shop-more-loading svg { animation: spin 850ms linear infinite; }
+.shop-more-end { color: #b9bed6; font-size: 12px; font-weight: 700; }
