@@ -2189,14 +2189,8 @@ input:focus {
   right: auto;
   left: 100%;
 }
-.message-actions::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  right: -10px;
-  left: -10px;
-  height: 12px;
-}
+/* 팝오버를 Radix(클릭 오픈)로 전환하면서 버튼↔팝오버 hover 브릿지는 불필요해짐.
+   말풍선↔버튼 ::before 브릿지는 버튼이 여전히 hover로 나타나므로 유지. */
 
 .message-more-button {
   display: grid;
@@ -2218,10 +2212,9 @@ input:focus {
   transform: scale(1.06);
 }
 
+/* Radix Popover.Content — 위치·표시는 Radix가 담당(포털 + Floating UI),
+   여기선 모양만 정의한다. 클릭으로 열려 hover-gap 문제가 원천적으로 없다. */
 .message-action-popover {
-  position: absolute;
-  top: 36px;
-  right: 0;
   display: grid;
   gap: 8px;
   width: max-content;
@@ -2231,22 +2224,25 @@ input:focus {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 16px 34px rgb(25 31 40 / 16%);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-5px) scale(0.98);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 40;
+  transform-origin: var(--radix-popover-content-transform-origin);
 }
 
-.chat-bubble.mine .message-action-popover {
-  right: auto;
-  left: 0;
+.message-action-popover[data-state='open'] {
+  animation: message-popover-in 0.14s ease;
 }
 
-.message-actions:hover .message-action-popover,
-.message-actions:focus-within .message-action-popover {
+@keyframes message-popover-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 팝오버가 열려 있는 동안엔 트리거(...) 버튼을 계속 보이게 고정한다
+   (버튼 노출은 .chat-bubble:hover 기준이라, 마우스가 벗어나도 유지되도록) */
+.message-actions:has(.message-more-button[data-state='open']) {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0) scale(1);
+  transform: none;
 }
 
 .reaction-strip,
@@ -2667,8 +2663,7 @@ input:focus {
   }
 
   /* 모바일에선 액션이 static·상시 노출이라 hover 브릿지 불필요 */
-  .message-actions::before,
-  .message-actions::after {
+  .message-actions::before {
     content: none;
   }
 

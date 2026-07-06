@@ -37,6 +37,7 @@ import {
   X,
   UserRound
 } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
 import './styles.css';
 
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
@@ -2722,37 +2723,50 @@ function App() {
                           ))}
                         </div>
                       )}
-                      <div className="message-actions">
-                        <button className="message-more-button" type="button" title="메시지 더보기" aria-label="메시지 더보기">
-                          <MoreHorizontal size={16} aria-hidden />
-                        </button>
-                        <div className="message-action-popover">
-                          <div className="quick-reactions" aria-label="빠른 반응">
-                            {QUICK_REACTIONS.map((emoji) => (
-                              <button
-                                key={`${message.id}-${emoji}`}
-                                type="button"
-                                className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
-                                onClick={() => toggleMessageReaction(message, emoji)}
-                                title={`${emoji} 반응`}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="message-command-list">
-                            {message.senderEmail === user.email && (
-                              <span className="read-state">{deliveryStatusLabel(message)}</span>
-                            )}
-                            {message.senderEmail === user.email && message.content && (
-                              <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
-                            )}
-                            <button onClick={() => setReplyTarget(message)} type="button">답장</button>
-                            <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
-                            {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
-                          </div>
+                      <Popover.Root>
+                        <div className="message-actions">
+                          <Popover.Trigger asChild>
+                            <button className="message-more-button" type="button" title="메시지 더보기" aria-label="메시지 더보기">
+                              <MoreHorizontal size={16} aria-hidden />
+                            </button>
+                          </Popover.Trigger>
                         </div>
-                      </div>
+                        <Popover.Portal>
+                          <Popover.Content
+                            className="message-action-popover"
+                            side="bottom"
+                            align="end"
+                            sideOffset={6}
+                            collisionPadding={12}
+                            onOpenAutoFocus={(event) => event.preventDefault()}
+                          >
+                            <div className="quick-reactions" aria-label="빠른 반응">
+                              {QUICK_REACTIONS.map((emoji) => (
+                                <button
+                                  key={`${message.id}-${emoji}`}
+                                  type="button"
+                                  className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
+                                  onClick={() => toggleMessageReaction(message, emoji)}
+                                  title={`${emoji} 반응`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="message-command-list">
+                              {message.senderEmail === user.email && (
+                                <span className="read-state">{deliveryStatusLabel(message)}</span>
+                              )}
+                              {message.senderEmail === user.email && message.content && (
+                                <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
+                              )}
+                              <button onClick={() => setReplyTarget(message)} type="button">답장</button>
+                              <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
+                              {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
+                            </div>
+                          </Popover.Content>
+                        </Popover.Portal>
+                      </Popover.Root>
                     </>
                   )}
                 </motion.article>
