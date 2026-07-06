@@ -2812,14 +2812,14 @@ input:focus {
   align-items: flex-end;
   justify-content: center;
   overflow: hidden;
-  transition: height 0.18s ease;
+  transition: height 0.12s ease;
 }
 .news-pull-inner {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding-bottom: 8px;
-  color: #8b92b5;
+  color: #8b8ff0;
   font-size: 12px;
   font-weight: 800;
 }
