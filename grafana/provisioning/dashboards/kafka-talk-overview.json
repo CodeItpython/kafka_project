@@ -1,0 +1,132 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "tags": ["kafka-talk"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Kafka Talk — 서비스 개요",
+  "uid": "kafka-talk-overview",
+  "refresh": "10s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "서비스 상태 (UP=1 / DOWN=0)",
+      "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+          "expr": "up{job=~\"auth-service|chat-service|news-service|shopping-service\"}",
+          "legendFormat": "{{job}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP 요청 처리량 (req/s, job별)",
+      "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+          "expr": "sum by (job) (rate(http_server_requests_seconds_count[1m]))",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP 5xx 에러 (req/s, job별)",
+      "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+          "expr": "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\"}[1m]))",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20 }, "color": { "mode": "fixed", "fixedColor": "red" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HTTP p95 지연 (초, job별)",
+      "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "JVM 힙 사용량 (bytes, job별)",
+      "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+          "expr": "sum by (job) (jvm_memory_used_bytes{area=\"heap\"})",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "프로세스 CPU 사용률 (job별)",
+      "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "kafka-talk-prometheus" },
+          "expr": "process_cpu_usage{job=~\"auth-service|chat-service|news-service|shopping-service\"}",
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}
