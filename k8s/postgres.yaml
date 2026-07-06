@@ -82,6 +82,9 @@ data:
     -- DB-per-service: chat-service owns its own relational database on the same
     -- Postgres instance. Runs only on first initialization of an empty data volume.
     CREATE DATABASE kafka_chat OWNER kafka;
+  02-create-shopping-db.sql: |
+    -- DB-per-service: shopping-service owns its own relational database (cart).
+    CREATE DATABASE kafka_shopping OWNER kafka;
 ---
 apiVersion: v1
 kind: Service

@@ -14,12 +14,14 @@ COPY auth-service/build.gradle ./auth-service/
 COPY discovery-service/build.gradle ./discovery-service/
 COPY news-service/build.gradle ./news-service/
 COPY chat-service/build.gradle ./chat-service/
+COPY shopping-service/build.gradle ./shopping-service/
 RUN gradle :${SERVICE}:dependencies --no-daemon --no-configuration-cache || true
 # Now bring in the sources and build the bootable jar.
 COPY auth-service ./auth-service
 COPY discovery-service ./discovery-service
 COPY news-service ./news-service
 COPY chat-service ./chat-service
+COPY shopping-service ./shopping-service
 RUN gradle :${SERVICE}:bootJar --no-daemon \
     && cp ${SERVICE}/build/libs/*.jar /workspace/app.jar
 
@@ -44,7 +46,7 @@ COPY --from=layers /layers/spring-boot-loader/ ./
 COPY --from=layers /layers/snapshot-dependencies/ ./
 COPY --from=layers /layers/application/ ./
 USER spring:spring
-EXPOSE 8890 8761 8891 8892
+EXPOSE 8890 8761 8891 8892 8893
 HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=10 \
   CMD wget -qO- "http://localhost:${APP_PORT}${HEALTH_PATH}" >/dev/null 2>&1 || exit 1
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

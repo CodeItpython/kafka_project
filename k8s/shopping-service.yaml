@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopping-service
+  namespace: kafka-project
+spec:
+  # Stateless (cart lives in Postgres, catalog is proxied) — safe to scale out.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shopping-service
+  template:
+    metadata:
+      labels:
+        app: shopping-service
+    spec:
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: shopping-service
+          image: kafka-shopping-service:local
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 8893
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          env:
+            - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+              value: http://discovery-service:8761/eureka/
+            - name: EUREKA_CLIENT_ENABLED
+              value: "true"
+            - name: SPRING_PROFILES_ACTIVE
+              value: logstash
+            - name: APP_CORS_ALLOWED_ORIGINS
+              value: http://localhost:8880,http://127.0.0.1:8880
+            # jwt-secret MUST match auth-secrets (tokens are minted by auth-service).
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shopping-secrets
+                  key: jwt-secret
+            - name: NAVER_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: shopping-secrets
+                  key: naver-client-id
+                  optional: true
+            - name: NAVER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shopping-secrets
+                  key: naver-client-secret
+                  optional: true
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/kafka_shopping
+            - name: SPRING_DATASOURCE_USERNAME
+              value: kafka
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: kafka
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: MANAGEMENT_OTLP_TRACING_ENDPOINT
+              value: http://tempo:4318/v1/traces
+            - name: LOGSTASH_HOST
+              value: logstash
+            - name: LOGSTASH_PORT
+              value: "5000"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8893
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 48
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8893
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8893
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopping-service
+  namespace: kafka-project
+spec:
+  type: NodePort
+  selector:
+    app: shopping-service
+  ports:
+    - name: http
+      port: 8893
+      targetPort: 8893
+      nodePort: 30893
