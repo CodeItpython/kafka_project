@@ -1,22 +1,4 @@
 services:
-  discovery-service:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      args:
-        SERVICE: discovery-service
-        APP_PORT: "8761"
-        HEALTH_PATH: /
-    image: kafka-discovery-service:local
-    ports:
-      - "8761:8761"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/ >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
-
   auth-service:
     build:
       context: ./backend
@@ -25,8 +7,6 @@ services:
         SERVICE: auth-service
     image: kafka-auth-service:local
     depends_on:
-      discovery-service:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -40,8 +20,6 @@ services:
     ports:
       - "8890:8890"
     environment:
-      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
-      EUREKA_CLIENT_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: logstash
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
@@ -92,13 +70,9 @@ services:
       args:
         SERVICE: news-service
     image: kafka-news-service:local
-    depends_on:
-      - discovery-service
     ports:
       - "8891:8891"
     environment:
-      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
-      EUREKA_CLIENT_ENABLED: "true"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       NEWS_CACHE_TTL_SECONDS: ${NEWS_CACHE_TTL_SECONDS:-180}
 
@@ -111,8 +85,6 @@ services:
         APP_PORT: "8892"
     image: kafka-chat-service:local
     depends_on:
-      discovery-service:
-        condition: service_healthy
       auth-service:
         condition: service_started
       kafka:
@@ -134,8 +106,6 @@ services:
     ports:
       - "8892:8892"
     environment:
-      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
-      EUREKA_CLIENT_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: logstash
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
@@ -173,8 +143,6 @@ services:
         APP_PORT: "8893"
     image: kafka-shopping-service:local
     depends_on:
-      discovery-service:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       elasticsearch:
@@ -186,8 +154,6 @@ services:
     ports:
       - "8893:8893"
     environment:
-      EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE: http://discovery-service:8761/eureka/
-      EUREKA_CLIENT_ENABLED: "true"
       SPRING_PROFILES_ACTIVE: logstash
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret

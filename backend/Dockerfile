@@ -11,14 +11,12 @@ WORKDIR /workspace
 # gradle files themselves change (source edits no longer re-download deps).
 COPY settings.gradle build.gradle ./
 COPY auth-service/build.gradle ./auth-service/
-COPY discovery-service/build.gradle ./discovery-service/
 COPY news-service/build.gradle ./news-service/
 COPY chat-service/build.gradle ./chat-service/
 COPY shopping-service/build.gradle ./shopping-service/
 RUN gradle :${SERVICE}:dependencies --no-daemon --no-configuration-cache || true
 # Now bring in the sources and build the bootable jar.
 COPY auth-service ./auth-service
-COPY discovery-service ./discovery-service
 COPY news-service ./news-service
 COPY chat-service ./chat-service
 COPY shopping-service ./shopping-service

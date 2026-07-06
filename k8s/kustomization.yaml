@@ -12,7 +12,6 @@ resources:
   - tempo.yaml
   - prometheus.yaml
   - grafana.yaml
-  - discovery-service.yaml
   - auth-service.yaml
   - chat-service.yaml
   - shopping-service.yaml
