@@ -26,17 +26,21 @@ public class ShoppingController {
     public List<ProductResponse> feed(
             @RequestParam @NotBlank String category,
             @RequestParam(defaultValue = "sim") String sort,
-            @RequestParam(defaultValue = "20") int display
+            @RequestParam(defaultValue = "20") int display,
+            @RequestParam(defaultValue = "1") int start,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
-        return shoppingService.feed(category, sort, display);
+        return shoppingService.feed(category, sort, display, start, refresh);
     }
 
     @GetMapping("/search")
     public List<ProductResponse> search(
             @RequestParam @NotBlank String query,
             @RequestParam(defaultValue = "sim") String sort,
-            @RequestParam(defaultValue = "20") int display
+            @RequestParam(defaultValue = "20") int display,
+            @RequestParam(defaultValue = "1") int start,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
-        return shoppingService.search(query, sort, display);
+        return shoppingService.search(query, sort, display, start, refresh);
     }
 }

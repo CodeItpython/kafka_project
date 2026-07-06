@@ -44,25 +44,27 @@ public class ShoppingService {
                 .toList();
     }
 
-    public List<ProductResponse> feed(String categoryCode, String sort, int display) {
+    public List<ProductResponse> feed(String categoryCode, String sort, int display, int start, boolean refresh) {
         ShoppingCategory category = ShoppingCategory.fromCode(categoryCode)
                 .orElseThrow(() -> new IllegalArgumentException("알 수 없는 카테고리입니다: " + categoryCode));
         String normalizedSort = normalizeSort(sort);
-        String key = "feed:" + category.code() + ":" + normalizedSort + ":" + clampDisplay(display);
-        return cached(key, () -> fetch(category.query(), display, normalizedSort));
+        int normalizedStart = clampStart(start);
+        String key = "feed:" + category.code() + ":" + normalizedSort + ":" + clampDisplay(display) + ":" + normalizedStart;
+        return cached(key, refresh, () -> fetch(category.query(), display, normalizedStart, normalizedSort));
     }
 
-    public List<ProductResponse> search(String query, String sort, int display) {
+    public List<ProductResponse> search(String query, String sort, int display, int start, boolean refresh) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
         String normalizedSort = normalizeSort(sort);
-        String key = "search:" + query.trim().toLowerCase(Locale.ROOT) + ":" + normalizedSort + ":" + clampDisplay(display);
-        return cached(key, () -> fetch(query.trim(), display, normalizedSort));
+        int normalizedStart = clampStart(start);
+        String key = "search:" + query.trim().toLowerCase(Locale.ROOT) + ":" + normalizedSort + ":" + clampDisplay(display) + ":" + normalizedStart;
+        return cached(key, refresh, () -> fetch(query.trim(), display, normalizedStart, normalizedSort));
     }
 
-    private List<ProductResponse> fetch(String query, int display, String sort) {
-        NaverSearchResponse response = naverClient.search(query, clampDisplay(display), 1, sort);
+    private List<ProductResponse> fetch(String query, int display, int start, String sort) {
+        NaverSearchResponse response = naverClient.search(query, clampDisplay(display), start, sort);
         if (response == null || response.items() == null) {
             return List.of();
         }
@@ -122,10 +124,20 @@ public class ShoppingService {
         return Math.min(display, MAX_DISPLAY);
     }
 
-    private List<ProductResponse> cached(String key, java.util.function.Supplier<List<ProductResponse>> loader) {
-        CacheEntry entry = cache.get(key);
-        if (entry != null && entry.expiresAt().isAfter(Instant.now())) {
-            return entry.data();
+    /** Naver의 start는 1~1000 범위(+ display를 더해도 1000을 넘지 않도록 캡). */
+    private int clampStart(int start) {
+        if (start < 1) {
+            return 1;
+        }
+        return Math.min(start, 1000);
+    }
+
+    private List<ProductResponse> cached(String key, boolean refresh, java.util.function.Supplier<List<ProductResponse>> loader) {
+        if (!refresh) {
+            CacheEntry entry = cache.get(key);
+            if (entry != null && entry.expiresAt().isAfter(Instant.now())) {
+                return entry.data();
+            }
         }
         List<ProductResponse> data = loader.get();
         cache.put(key, new CacheEntry(Instant.now().plus(cacheTtl), data));
