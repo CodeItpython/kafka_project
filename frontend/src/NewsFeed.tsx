@@ -199,6 +199,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
               initial={{ y: 10 }}
               animate={{ y: 0 }}
               transition={{ duration: 0.28, delay: Math.min(index * 0.02, 0.3) }}
+              whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
+              whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
             >
               <a
                 className="news-card"

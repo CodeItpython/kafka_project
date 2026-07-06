@@ -3178,6 +3178,7 @@ input:focus {
 
 /* ── 뉴스 → 채팅 공유 ─────────────────────────────── */
 .news-card-wrap { position: relative; }
+.news-card-wrap:hover { z-index: 1; }
 .news-share-btn {
   position: absolute;
   top: 10px;
@@ -3561,6 +3562,14 @@ input:focus {
   display: flex; flex-direction: column;
   border: 1px solid #eceef5; border-radius: 14px;
   background: #fff; overflow: hidden;
+  position: relative;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+/* hover 확대(Framer whileHover)에 맞춰 살짝 떠오르는 그림자로 자연스럽게 */
+.shop-card:hover {
+  z-index: 1;
+  border-color: #dfe3f0;
+  box-shadow: 0 12px 26px rgba(66, 71, 130, 0.14);
 }
 .shop-card-thumb {
   display: block; aspect-ratio: 1 / 1; background: #f5f6fa;

@@ -335,6 +335,8 @@ export default function ShoppingFeed({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.26, delay: Math.min((index % DISPLAY) * 0.015, 0.25) }}
+                whileHover={{ scale: 1.03, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
+                whileTap={{ scale: 0.98, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
               >
                 <a className="shop-card-thumb" href={item.link} target="_blank" rel="noreferrer noopener" title={item.title}>
                   {item.image ? (
