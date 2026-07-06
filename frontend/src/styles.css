@@ -2692,6 +2692,7 @@ input:focus {
   position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   height: 100vh;
   max-width: 600px;
   margin: 0 auto;
@@ -2709,14 +2710,16 @@ input:focus {
   }
 }
 
-/* 탭 콘텐츠 영역: 남는 공간을 채우고 스크롤, 하단 탭바 높이만큼 여백 */
+/* 탭 콘텐츠 영역: 하단 탭바(62px) 위 공간을 채우는 오버레이.
+   flex로 높이를 나누면 탭 전환 중 두 패널이 공존할 때(AnimatePresence
+   exit) 높이가 반씩 쪼개져 친구 목록이 잘리므로, 각 패널을 같은 영역에
+   겹치는 absolute 오버레이로 둔다. */
 .app-shell > .side-pane,
 .app-shell > .room-directory,
 .app-shell > .news-panel {
-  flex: 1 1 auto;
+  position: absolute;
+  inset: 0 0 62px 0;
   min-height: 0;
-  width: 100%;
-  max-width: none;
   overflow-x: hidden;
   overflow-y: auto;
   border: 0;
@@ -3484,10 +3487,9 @@ input:focus {
 /* ── 네이버 쇼핑 탭 ─────────────────────────────── */
 /* 뉴스 탭과 동일한 스크롤 구조: 패널은 flex로 남는 높이를 채우고 내부 root가 스크롤러. */
 .app-shell > .shop-panel {
-  flex: 1 1 auto;
+  position: absolute;
+  inset: 0 0 62px 0;
   min-height: 0;
-  width: 100%;
-  max-width: none;
   overflow: hidden;
 }
 .shop-root {
