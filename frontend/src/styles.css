@@ -2173,6 +2173,31 @@ input:focus {
   transform: translateX(0) scale(1);
 }
 
+/* 투명 hover 브릿지: 말풍선 ↔ ...버튼 사이 6px 틈에서 hover가 끊겨
+   버튼이 클릭 전에 사라지던 문제 해결. (::before는 옆 틈, ::after는
+   버튼 ↔ 팝오버 아래 틈을 메워 마우스 이동이 끊기지 않게 한다.)
+   .message-actions의 자식이라 데스크톱 hover 시에만 pointer-events가 살아난다. */
+.message-actions::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 18px;
+}
+.chat-bubble.mine .message-actions::before {
+  right: auto;
+  left: 100%;
+}
+.message-actions::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: -10px;
+  left: -10px;
+  height: 12px;
+}
+
 .message-more-button {
   display: grid;
   width: 32px;
@@ -2639,6 +2664,12 @@ input:focus {
     opacity: 1;
     pointer-events: auto;
     transform: none;
+  }
+
+  /* 모바일에선 액션이 static·상시 노출이라 hover 브릿지 불필요 */
+  .message-actions::before,
+  .message-actions::after {
+    content: none;
   }
 
   .composer {
