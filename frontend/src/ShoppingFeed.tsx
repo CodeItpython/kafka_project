@@ -63,6 +63,7 @@ export default function ShoppingFeed({
   const refreshingRef = useRef(false);
   const touchStartY = useRef<number | null>(null);
   const wheelAccum = useRef(0);
+  const wheelResetTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,7 +181,16 @@ export default function ShoppingFeed({
       setPull(Math.min(wheelAccum.current * 0.6, MAX_PULL));
       if (wheelAccum.current > PULL_THRESHOLD * 1.6) {
         triggerRefresh();
+        return;
       }
+      // 휠은 손 떼는 이벤트가 없으므로, 스크롤이 멈추면 곧바로 당김을 원위치로 되돌린다.
+      if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
+      wheelResetTimer.current = window.setTimeout(() => {
+        if (!refreshingRef.current) {
+          wheelAccum.current = 0;
+          setPull(0);
+        }
+      }, 140);
     } else {
       wheelAccum.current = 0;
       if (pull !== 0) setPull(0);
