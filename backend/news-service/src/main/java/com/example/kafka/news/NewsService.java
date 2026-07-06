@@ -28,9 +28,13 @@ public class NewsService {
     }
 
     public List<NewsItem> feed(NewsCategory category) {
+        return feed(category, false);
+    }
+
+    public List<NewsItem> feed(NewsCategory category, boolean forceRefresh) {
         CacheEntry entry = cache.get(category);
         Instant now = Instant.now();
-        if (entry != null && now.isBefore(entry.expiresAt)) {
+        if (!forceRefresh && entry != null && now.isBefore(entry.expiresAt)) {
             return entry.items;
         }
         List<NewsItem> fresh = client.fetch(category);

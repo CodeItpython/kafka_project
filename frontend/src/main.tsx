@@ -310,6 +310,10 @@ function App() {
   const [roomQuery, setRoomQuery] = useState('');
   const [contactQuery, setContactQuery] = useState('');
   const [messageQuery, setMessageQuery] = useState('');
+  const [chatFilter, setChatFilter] = useState<'all' | 'unread'>('all');
+  const [createChatOpen, setCreateChatOpen] = useState(false);
+  const [createChatMode, setCreateChatMode] = useState<'group' | 'direct'>('group');
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
   const [roomSuggestions, setRoomSuggestions] = useState<SearchSuggestion[]>([]);
   const [messageSuggestions, setMessageSuggestions] = useState<SearchSuggestion[]>([]);
@@ -374,8 +378,13 @@ function App() {
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
-  const groupRooms = rooms.filter((room) => room.type === 'GROUP');
   const totalUnread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
+  const unreadRoomCount = rooms.filter((room) => room.unreadCount > 0).length;
+  const visibleChatRooms = chatFilter === 'unread' ? rooms.filter((room) => room.unreadCount > 0) : rooms;
+  const chatSearchTerm = messageQuery.trim().toLowerCase();
+  const roomSearchResults = chatSearchTerm
+    ? rooms.filter((room) => room.name.toLowerCase().includes(chatSearchTerm))
+    : [];
   const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
@@ -1045,6 +1054,12 @@ function App() {
     }).catch(() => undefined);
   }
 
+  function openCreateChat(mode: 'group' | 'direct' = 'group') {
+    setCreateChatMode(mode);
+    setCreateChatOpen(true);
+    loadContacts('').catch(() => undefined);
+  }
+
   async function createRoom(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
@@ -1054,6 +1069,7 @@ function App() {
         body: JSON.stringify({ name: roomName, description: roomDescription })
       });
       setRooms((current) => [room, ...current.filter((item) => item.id !== room.id)]);
+      setCreateChatOpen(false);
       openRoom(room.id);
       setRoomName('');
       setRoomDescription('');
@@ -1090,6 +1106,7 @@ function App() {
         body: JSON.stringify({ partnerEmail: contact.email })
       });
       setRooms((current) => [room, ...current.filter((item) => item.id !== room.id)]);
+      setCreateChatOpen(false);
       openRoom(room.id);
       setStatus(`${contact.name}님과 1:1 대화를 시작합니다.`);
     } catch (error) {
@@ -1899,6 +1916,69 @@ function App() {
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {createChatOpen && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={() => setCreateChatOpen(false)}
+          >
+            <motion.section
+              className="confirm-dialog create-chat-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-chat-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 14, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={() => setCreateChatOpen(false)} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <strong id="create-chat-title" className="create-chat-heading">새 채팅</strong>
+              <div className="create-chat-tabs" role="tablist" aria-label="채팅 종류">
+                <button type="button" role="tab" aria-selected={createChatMode === 'group'} className={createChatMode === 'group' ? 'active' : ''} onClick={() => setCreateChatMode('group')}>
+                  <Hash size={15} aria-hidden />그룹 채팅
+                </button>
+                <button type="button" role="tab" aria-selected={createChatMode === 'direct'} className={createChatMode === 'direct' ? 'active' : ''} onClick={() => { setCreateChatMode('direct'); loadContacts('').catch(() => undefined); }}>
+                  <AtSign size={15} aria-hidden />1:1 대화
+                </button>
+              </div>
+
+              {createChatMode === 'group' ? (
+                <form className="create-chat-form" onSubmit={createRoom}>
+                  <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
+                  <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} placeholder="어떤 대화를 나눌까요?" /></label>
+                  <button className="primary-button" disabled={loading}><Plus size={17} aria-hidden />그룹 채팅 만들기</button>
+                </form>
+              ) : (
+                <div className="create-chat-contacts">
+                  {contacts.length === 0 ? (
+                    <p className="empty-state">대화할 친구가 없어요. 친구 탭에서 친구를 검색해보세요.</p>
+                  ) : (
+                    contacts.map((contact) => (
+                      <button key={contact.email} type="button" onClick={() => openDirectRoom(contact)} disabled={loading}>
+                        <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
+                        <span>
+                          <strong>{contact.name}</strong>
+                          <small>{contact.statusMessage || (contact.online ? '온라인' : contact.email)}</small>
+                        </span>
+                        <ChevronRight size={16} aria-hidden />
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {shareItem && (
           <motion.div
             className="confirm-dialog-backdrop"
@@ -2092,6 +2172,7 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
       {(activeTab === 'friends' || activeTab === 'settings') && (
       <aside className="side-pane">
         <section className="sidebar">
@@ -2550,7 +2631,7 @@ function App() {
               aria-hidden
             />
             <motion.header
-              className="directory-header"
+              className="directory-header chat-head"
               style={{
                 y: shouldReduceMotion ? 0 : directoryHeaderY,
                 opacity: shouldReduceMotion ? 1 : directoryHeaderOpacity
@@ -2559,69 +2640,109 @@ function App() {
               <div>
                 <p className="eyebrow">Kafka Talk</p>
                 <h2>채팅</h2>
-                <p>대화할 방을 선택하거나 새 그룹 채팅방을 만들어보세요.</p>
+              </div>
+              <div className="chat-head-actions">
+                <button
+                  type="button"
+                  className={chatSearchOpen ? 'chat-icon-button active' : 'chat-icon-button'}
+                  onClick={() => setChatSearchOpen((open) => !open)}
+                  title={chatSearchOpen ? '검색 닫기' : '검색'}
+                  aria-label={chatSearchOpen ? '검색 닫기' : '검색'}
+                >
+                  {chatSearchOpen ? <X size={19} aria-hidden /> : <Search size={19} aria-hidden />}
+                </button>
+                <button type="button" className="chat-create-button" onClick={() => openCreateChat('group')} title="새 채팅 만들기" aria-label="새 채팅 만들기">
+                  <Plus size={20} aria-hidden />
+                </button>
               </div>
             </motion.header>
 
-            <ScrollRevealSection className="directory-section" disabled={Boolean(shouldReduceMotion)} delay={0}>
-              <div className="section-title">
-                <span>그룹 채팅</span>
-                <small>{groupRooms.length}</small>
-              </div>
-              <form className="room-create" onSubmit={createRoom}>
-                <label>방 이름<input value={roomName} onChange={(event) => setRoomName(event.target.value)} required /></label>
-                <label>설명<input value={roomDescription} onChange={(event) => setRoomDescription(event.target.value)} /></label>
-                <button disabled={loading}><Plus size={17} aria-hidden />방 만들기</button>
-              </form>
-              <form className="search-row compact" onSubmit={(event) => { event.preventDefault(); loadRooms(roomQuery); }}>
-                <Search size={17} aria-hidden />
-                <input value={roomQuery} onChange={(event) => setRoomQuery(event.target.value)} placeholder="방 검색" />
-              </form>
-              <SuggestionList suggestions={roomSuggestions} onSelect={chooseRoomSuggestion} />
-              <RoomList
-                rooms={groupRooms}
-                selectedRoomId={selectedRoomId}
-                onSelect={openRoom}
-                onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
-                onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
-              />
-            </ScrollRevealSection>
+            {chatSearchOpen ? (
+              <div className="chat-search-panel">
+                <form className="search-row compact chat-search-input" onSubmit={searchMessages}>
+                  <Search size={17} aria-hidden />
+                  <input
+                    value={messageQuery}
+                    onChange={(event) => setMessageQuery(event.target.value)}
+                    placeholder="채팅방 또는 대화 내용 검색"
+                    autoFocus
+                  />
+                  {messageQuery && (
+                    <button type="button" className="search-clear" onClick={() => setMessageQuery('')} title="지우기">
+                      <X size={15} aria-hidden />
+                    </button>
+                  )}
+                </form>
+                <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
 
-            <ScrollRevealSection className="directory-section" disabled={Boolean(shouldReduceMotion)} delay={0.06}>
-              <div className="section-title">
-                <span>최근 1:1 대화</span>
-                <small>{directRooms.length}</small>
-              </div>
-              <RoomList
-                rooms={directRooms}
-                selectedRoomId={selectedRoomId}
-                onSelect={openRoom}
-                onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
-                onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
-              />
-            </ScrollRevealSection>
+                {!chatSearchTerm ? (
+                  <p className="empty-state">채팅방 이름이나 대화 내용을 검색해 보세요.</p>
+                ) : (
+                  <>
+                    <div className="section-title"><span>채팅방</span><small>{roomSearchResults.length}</small></div>
+                    {roomSearchResults.length === 0 ? (
+                      <p className="empty-state">일치하는 채팅방이 없어요.</p>
+                    ) : (
+                      <div className="room-list">
+                        {roomSearchResults.map((room) => (
+                          <article key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}>
+                            <button type="button" className="room-main-button" onClick={() => openRoom(room.id)}>
+                              {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
+                              <span>
+                                <strong>{room.name}</strong>
+                                <small>{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
+                              </span>
+                            </button>
+                            {room.unreadCount > 0 && <i className="unread-badge">{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
+                          </article>
+                        ))}
+                      </div>
+                    )}
 
-            <ScrollRevealSection className="directory-section" disabled={Boolean(shouldReduceMotion)} delay={0.12}>
-              <div className="section-title">
-                <span>메시지 검색</span>
-                <small>Elastic</small>
+                    <div className="section-title"><span>메시지</span><small>Elastic</small></div>
+                    <div className="search-results">
+                      {searchResults.map((message) => (
+                        <button key={message.id} onClick={() => openRoom(message.roomId)}>
+                          <span>{message.roomName}</span>
+                          <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
+                          <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
+                        </button>
+                      ))}
+                      {searchResults.length === 0 && <p className="empty-state">Enter로 대화 내용을 검색하세요.</p>}
+                    </div>
+                  </>
+                )}
               </div>
-              <form className="search-row compact" onSubmit={searchMessages}>
-                <Search size={17} aria-hidden />
-                <input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="대화 내용 검색" />
-              </form>
-              <SuggestionList suggestions={messageSuggestions} onSelect={chooseMessageSuggestion} />
-              <div className="search-results">
-                {searchResults.map((message) => (
-                  <button key={message.id} onClick={() => openRoom(message.roomId)}>
-                    <span>{message.roomName}</span>
-                    <strong>{message.deletedForEveryone ? '삭제된 메시지입니다.' : message.content || message.attachmentName || '첨부 메시지'}</strong>
-                    <small>{message.senderName} · {new Date(message.createdAt).toLocaleString()}</small>
+            ) : (
+              <>
+                <div className="chat-filterbar" role="tablist" aria-label="채팅 필터">
+                  <button type="button" role="tab" aria-selected={chatFilter === 'all'} className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>
+                    전체 <small>{rooms.length}</small>
                   </button>
-                ))}
-                {searchResults.length === 0 && <p className="empty-state">색인된 메시지를 검색할 수 있어요.</p>}
-              </div>
-            </ScrollRevealSection>
+                  <button type="button" role="tab" aria-selected={chatFilter === 'unread'} className={chatFilter === 'unread' ? 'active' : ''} onClick={() => setChatFilter('unread')}>
+                    안읽음 {unreadRoomCount > 0 && <small className="count">{unreadRoomCount}</small>}
+                  </button>
+                </div>
+
+                <div className="chat-room-list">
+                  {visibleChatRooms.length === 0 ? (
+                    <p className="empty-state">
+                      {chatFilter === 'unread'
+                        ? '안 읽은 채팅이 없어요.'
+                        : '아직 참여한 채팅이 없어요. 오른쪽 위 + 버튼으로 새 채팅을 시작해보세요.'}
+                    </p>
+                  ) : (
+                    <RoomList
+                      rooms={visibleChatRooms}
+                      selectedRoomId={selectedRoomId}
+                      onSelect={openRoom}
+                      onTogglePinned={(room) => updateRoomPreference(room, { pinned: !room.pinned })}
+                      onToggleMuted={(room) => updateRoomPreference(room, { muted: !room.muted })}
+                    />
+                  )}
+                </div>
+              </>
+            )}
 
             {status && <p className="notice">{status}</p>}
           </motion.section>

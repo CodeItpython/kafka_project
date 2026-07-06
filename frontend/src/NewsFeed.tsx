@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ExternalLink, Newspaper, RefreshCcw, Share2 } from 'lucide-react';
 
@@ -6,13 +6,22 @@ type NewsCategory = { code: string; label: string };
 export type NewsItem = { id: string; title: string; url: string; press: string | null; thumbnail: string | null };
 
 const NEWS_ROOT = '/api/news';
+const PULL_THRESHOLD = 64;
+const MAX_PULL = 96;
 
 export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
   const [categories, setCategories] = useState<NewsCategory[]>([]);
   const [active, setActive] = useState<string>('');
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pull, setPull] = useState(0);
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef<number | null>(null);
+  const wheelAccum = useRef(0);
+  const refreshingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,36 +40,110 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     };
   }, []);
 
-  useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
-    setLoading(true);
+  const runFeed = useCallback((category: string, refresh: boolean) => {
+    if (!category) return Promise.resolve();
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
-    fetch(`${NEWS_ROOT}/feed?category=${encodeURIComponent(active)}`)
+    const suffix = refresh ? '&refresh=true' : '';
+    return fetch(`${NEWS_ROOT}/feed?category=${encodeURIComponent(category)}${suffix}`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data: { items: NewsItem[] }) => {
-        if (cancelled) return;
         setItems(Array.isArray(data.items) ? data.items : []);
       })
       .catch(() => {
-        if (!cancelled) {
-          setItems([]);
-          setError('뉴스를 불러오지 못했습니다.');
-        }
+        setError('뉴스를 불러오지 못했습니다.');
+        if (!refresh) setItems([]);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
+        setRefreshing(false);
       });
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    setItems([]);
+    runFeed(active, false).finally(() => {
+      if (cancelled) return;
+    });
+    // 카테고리 전환 시 당김 상태 초기화
+    setPull(0);
+    wheelAccum.current = 0;
     return () => {
       cancelled = true;
     };
-  }, [active]);
+  }, [active, runFeed]);
+
+  const triggerRefresh = useCallback(() => {
+    if (refreshingRef.current || !active) return;
+    refreshingRef.current = true;
+    setPull(0);
+    wheelAccum.current = 0;
+    runFeed(active, true).finally(() => {
+      refreshingRef.current = false;
+    });
+  }, [active, runFeed]);
+
+  // 데스크톱: 최상단에서 위로 휠 → 당김/새로고침
+  function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
+    const el = rootRef.current;
+    if (!el || el.scrollTop > 0 || refreshingRef.current) return;
+    if (event.deltaY < 0) {
+      wheelAccum.current += -event.deltaY;
+      setPull(Math.min(wheelAccum.current * 0.6, MAX_PULL));
+      if (wheelAccum.current > PULL_THRESHOLD * 1.6) {
+        triggerRefresh();
+      }
+    } else {
+      wheelAccum.current = 0;
+      if (pull !== 0) setPull(0);
+    }
+  }
+
+  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+    const el = rootRef.current;
+    touchStartY.current = el && el.scrollTop <= 0 ? event.touches[0].clientY : null;
+  }
+  function handleTouchMove(event: React.TouchEvent<HTMLDivElement>) {
+    const el = rootRef.current;
+    if (touchStartY.current === null || !el || el.scrollTop > 0 || refreshingRef.current) return;
+    const dy = event.touches[0].clientY - touchStartY.current;
+    if (dy > 0) setPull(Math.min(dy * 0.5, MAX_PULL));
+  }
+  function handleTouchEnd() {
+    if (touchStartY.current === null) return;
+    touchStartY.current = null;
+    if (pull >= PULL_THRESHOLD) triggerRefresh();
+    else setPull(0);
+  }
+
+  const indicatorHeight = refreshing ? 46 : pull;
+  const armed = pull >= PULL_THRESHOLD;
 
   return (
-    <div className="news-feed-root">
+    <div
+      className="news-feed-root"
+      ref={rootRef}
+      onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+    >
+      <div className="news-pull" style={{ height: `${indicatorHeight}px` }} aria-hidden={indicatorHeight === 0}>
+        {indicatorHeight > 0 && (
+          <div className={refreshing ? 'news-pull-inner loading' : 'news-pull-inner'}>
+            <RefreshCcw size={15} aria-hidden />
+            <span>{refreshing ? '새로고침 중' : armed ? '놓으면 새로고침' : '당겨서 새로고침'}</span>
+          </div>
+        )}
+      </div>
+
       <header className="news-header">
         <h2>뉴스</h2>
-        <p className="muted">네이버 뉴스에서 모은 주요 소식이에요.</p>
+        <p className="muted">네이버 뉴스에서 모은 주요 소식이에요. 위로 당기면 새로고침돼요.</p>
       </header>
 
       <div className="news-catbar" role="tablist" aria-label="뉴스 카테고리">
@@ -95,7 +178,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       {!loading && error && (
         <div className="news-empty">
           <p>{error}</p>
-          <button type="button" className="news-retry" onClick={() => setActive((current) => current)}>
+          <button type="button" className="news-retry" onClick={() => runFeed(active, true)}>
             <RefreshCcw size={15} aria-hidden /> 다시 시도
           </button>
         </div>
@@ -113,8 +196,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
             <motion.div
               key={item.id}
               className="news-card-wrap"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ y: 10 }}
+              animate={{ y: 0 }}
               transition={{ duration: 0.28, delay: Math.min(index * 0.02, 0.3) }}
             >
               <a
