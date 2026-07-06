@@ -1,0 +1,178 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+  namespace: kafka-project
+spec:
+  # Pinned to 1 replica: real-time delivery uses an in-memory STOMP SimpleBroker,
+  # so scaling out needs a shared broker (RabbitMQ/Redis relay) first.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-service
+  template:
+    metadata:
+      labels:
+        app: chat-service
+    spec:
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: chat-service
+          image: kafka-chat-service:local
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 8892
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          env:
+            - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+              value: http://discovery-service:8761/eureka/
+            - name: EUREKA_CLIENT_ENABLED
+              value: "true"
+            - name: SPRING_PROFILES_ACTIVE
+              value: logstash
+            - name: APP_CORS_ALLOWED_ORIGINS
+              value: http://localhost:8880,http://127.0.0.1:8880
+            # jwt-secret and internal-api-token MUST match auth-secrets.
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: jwt-secret
+            - name: APP_INTERNAL_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: internal-api-token
+            - name: APP_SERVICES_AUTH_SERVICE_URL
+              value: http://auth-service:8890
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: OPENAI_MODEL
+              value: gpt-5.2
+            - name: OPENAI_RESPONSES_URL
+              value: https://api.openai.com/v1/responses
+            - name: APP_PUSH_FCM_ENABLED
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: fcm-enabled
+                  optional: true
+            - name: APP_PUSH_FCM_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: fcm-project-id
+                  optional: true
+            - name: APP_PUSH_FCM_SERVICE_ACCOUNT_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: fcm-service-account-json
+                  optional: true
+            - name: APP_PUSH_FCM_DRY_RUN
+              valueFrom:
+                secretKeyRef:
+                  name: chat-secrets
+                  key: fcm-dry-run
+                  optional: true
+            - name: APP_PUSH_FCM_WEB_PUSH_LINK
+              value: http://localhost:8880
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/kafka_chat
+            - name: SPRING_DATASOURCE_USERNAME
+              value: kafka
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: kafka
+            - name: SPRING_DATA_MONGODB_URI
+              value: mongodb://mongodb:27017/kafka_chat
+            - name: SPRING_ELASTICSEARCH_URIS
+              value: http://elasticsearch:9200
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: APP_STORAGE_TYPE
+              value: s3
+            - name: APP_STORAGE_S3_ENDPOINT
+              value: http://minio:9000
+            - name: APP_STORAGE_S3_REGION
+              value: us-east-1
+            - name: APP_STORAGE_S3_BUCKET
+              value: kafka-talk-files
+            - name: APP_STORAGE_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secrets
+                  key: root-user
+            - name: APP_STORAGE_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secrets
+                  key: root-password
+            - name: APP_STORAGE_S3_PATH_STYLE_ACCESS
+              value: "true"
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: MANAGEMENT_OTLP_TRACING_ENDPOINT
+              value: http://tempo:4318/v1/traces
+            - name: LOGSTASH_HOST
+              value: logstash
+            - name: LOGSTASH_PORT
+              value: "5000"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8892
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 48
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8892
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8892
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+  namespace: kafka-project
+spec:
+  type: NodePort
+  selector:
+    app: chat-service
+  ports:
+    - name: http
+      port: 8892
+      targetPort: 8892
+      nodePort: 30892

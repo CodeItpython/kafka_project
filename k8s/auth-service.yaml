@@ -52,16 +52,12 @@ spec:
                 secretKeyRef:
                   name: auth-secrets
                   key: jwt-secret
-            - name: OPENAI_API_KEY
+            # Shared secret guarding /api/internal/** (chat-service → auth-service calls).
+            - name: APP_INTERNAL_API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: auth-secrets
-                  key: openai-api-key
-                  optional: true
-            - name: OPENAI_MODEL
-              value: gpt-5.2
-            - name: OPENAI_RESPONSES_URL
-              value: https://api.openai.com/v1/responses
+                  key: internal-api-token
             - name: SPRING_MAIL_HOST
               valueFrom:
                 secretKeyRef:
@@ -122,48 +118,16 @@ spec:
               value: "5"
             - name: APP_EMAIL_VERIFICATION_VERIFY_ATTEMPT_WINDOW
               value: "10m"
-            - name: APP_PUSH_FCM_ENABLED
-              valueFrom:
-                secretKeyRef:
-                  name: auth-secrets
-                  key: fcm-enabled
-                  optional: true
-            - name: APP_PUSH_FCM_PROJECT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: auth-secrets
-                  key: fcm-project-id
-                  optional: true
-            - name: APP_PUSH_FCM_SERVICE_ACCOUNT_JSON
-              valueFrom:
-                secretKeyRef:
-                  name: auth-secrets
-                  key: fcm-service-account-json
-                  optional: true
-            - name: APP_PUSH_FCM_DRY_RUN
-              valueFrom:
-                secretKeyRef:
-                  name: auth-secrets
-                  key: fcm-dry-run
-                  optional: true
-            - name: APP_PUSH_FCM_WEB_PUSH_LINK
-              value: http://localhost:8880
             - name: SPRING_DATASOURCE_URL
               value: jdbc:postgresql://postgres:5432/kafka_project
             - name: SPRING_DATASOURCE_USERNAME
               value: kafka
             - name: SPRING_DATASOURCE_PASSWORD
               value: kafka
-            - name: SPRING_DATA_MONGODB_URI
-              value: mongodb://mongodb:27017/kafka_chat
-            - name: SPRING_ELASTICSEARCH_URIS
-              value: http://elasticsearch:9200
             - name: SPRING_DATA_REDIS_HOST
               value: redis
             - name: SPRING_DATA_REDIS_PORT
               value: "6379"
-            - name: KAFKA_BOOTSTRAP_SERVERS
-              value: kafka:9092
             - name: APP_STORAGE_TYPE
               value: s3
             - name: APP_STORAGE_S3_ENDPOINT

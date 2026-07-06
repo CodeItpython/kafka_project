@@ -1,16 +1,9 @@
 package com.kafka.auth.admin.audit;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kafka.auth.admin.audit.AdminAuditDtos.AdminAuditEventListResponse;
 import com.kafka.auth.admin.audit.AdminAuditDtos.AdminAuditEventResponse;
-import com.kafka.auth.chat.dlt.KafkaDltDtos.DltReplayRequest;
-import com.kafka.auth.chat.dlt.KafkaDltDtos.DltReplayResponse;
-import com.kafka.auth.model.UserAccount;
-import java.time.Instant;
-import java.util.LinkedHashMap;
+import com.kafka.auth.internal.AdminAuditRecordRequest;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -21,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdminAuditService {
     private final AdminAuditEventRepository adminAuditEventRepository;
-    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public AdminAuditEventListResponse recentEvents(int limit) {
@@ -33,73 +25,24 @@ public class AdminAuditService {
         return new AdminAuditEventListResponse(normalizedLimit, events);
     }
 
+    /**
+     * Persists an audit event submitted by a trusted internal service (e.g. chat-service's
+     * DLT replay). The submitting service builds the domain-specific summary/details; this
+     * keeps the audit log central without auth-service depending on other services' domains.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordDltReplaySuccess(UserAccount actor, DltReplayRequest request, DltReplayResponse response) {
-        AdminAuditAction action = actionFor(request);
-        Map<String, Object> details = baseDltReplayDetails(request);
-        details.put("sourceTopic", response.sourceTopic());
-        details.put("targetTopic", response.targetTopic());
-        details.put("scannedCount", response.scannedCount());
-        details.put("replayedCount", response.replayedCount());
-        details.put("replayedMessageIds", response.replayedMessages().stream().map(message -> message.messageId()).toList());
-        details.put("createdAt", Instant.now().toString());
-
+    public void record(AdminAuditRecordRequest request) {
+        AdminAuditAction action = AdminAuditAction.valueOf(request.action());
         adminAuditEventRepository.save(new AdminAuditEvent(
-                actor.getEmail(),
-                actor.getName(),
+                request.actorEmail(),
+                request.actorName(),
                 action,
-                "KAFKA_DLT",
-                response.sourceTopic(),
-                summaryFor(action, true, response.replayedCount()),
-                true,
-                toJson(details)
+                request.resourceType(),
+                request.resourceId(),
+                request.summary(),
+                request.success(),
+                request.detailsJson()
         ));
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordDltReplayFailure(UserAccount actor, DltReplayRequest request, RuntimeException exception) {
-        AdminAuditAction action = actionFor(request);
-        Map<String, Object> details = baseDltReplayDetails(request);
-        details.put("errorType", exception.getClass().getName());
-        details.put("errorMessage", exception.getMessage());
-        details.put("createdAt", Instant.now().toString());
-
-        adminAuditEventRepository.save(new AdminAuditEvent(
-                actor.getEmail(),
-                actor.getName(),
-                action,
-                "KAFKA_DLT",
-                "unknown",
-                summaryFor(action, false, 0),
-                false,
-                toJson(details)
-        ));
-    }
-
-    private Map<String, Object> baseDltReplayDetails(DltReplayRequest request) {
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("dryRun", request.dryRun());
-        details.put("requestedLimit", request.normalizedLimit());
-        details.put("requestedMessageIds", request.messageIds() == null ? List.of() : request.messageIds());
-        return details;
-    }
-
-    private AdminAuditAction actionFor(DltReplayRequest request) {
-        return request.dryRun() ? AdminAuditAction.DLT_REPLAY_DRY_RUN : AdminAuditAction.DLT_REPLAY_EXECUTE;
-    }
-
-    private String summaryFor(AdminAuditAction action, boolean success, int affectedCount) {
-        String verb = action == AdminAuditAction.DLT_REPLAY_DRY_RUN ? "DLT 재처리 미리 확인" : "DLT 재처리 실행";
-        String result = success ? "성공" : "실패";
-        return "%s %s, 대상 %d개".formatted(verb, result, affectedCount);
-    }
-
-    private String toJson(Map<String, Object> details) {
-        try {
-            return objectMapper.writeValueAsString(details);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("관리자 감사 로그 상세 정보를 JSON으로 변환하지 못했습니다.", exception);
-        }
     }
 
     private AdminAuditEventResponse toResponse(AdminAuditEvent event) {

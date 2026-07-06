@@ -42,8 +42,8 @@ public class SecurityConfig {
                         .requestMatchers(EndpointRequest.to("health", "prometheus")).permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/chat/attachments/**").permitAll()
+                        // Service-to-service endpoints — guarded by InternalApiTokenFilter, not user JWT.
+                        .requestMatchers("/api/internal/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/profile-images/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/email/code", "/api/auth/email/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/oauth/kakao/guide", "/api/auth/oauth/kakao/authorize", "/oauth2/callback/kakao").permitAll()

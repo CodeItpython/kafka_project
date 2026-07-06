@@ -1,7 +1,8 @@
 # Horizontal scaling for the auth-service. Requires metrics-server (see README > Kubernetes).
 # CPU-only on purpose: a JVM holds heap near its ceiling, so memory-utilisation-vs-request
-# autoscaling would scale up perpetually. NOTE: real-time WebSocket delivery uses an in-memory
-# SimpleBroker, so scaling beyond 1 replica needs a shared STOMP broker first (backend follow-up).
+# autoscaling would scale up perpetually. auth-service is now stateless (WebSocket/chat moved
+# to chat-service), so it scales out freely. chat-service is intentionally NOT autoscaled: its
+# in-memory STOMP SimpleBroker requires a shared broker before running >1 replica.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

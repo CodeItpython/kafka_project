@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ExternalLink, Newspaper, RefreshCcw } from 'lucide-react';
+import { ExternalLink, Newspaper, RefreshCcw, Share2 } from 'lucide-react';
 
 type NewsCategory = { code: string; label: string };
-type NewsItem = { id: string; title: string; url: string; press: string | null; thumbnail: string | null };
+export type NewsItem = { id: string; title: string; url: string; press: string | null; thumbnail: string | null };
 
 const NEWS_ROOT = '/api/news';
 const PULL_THRESHOLD = 64;
 const MAX_PULL = 96;
 
-export default function NewsFeed() {
+export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
   const [categories, setCategories] = useState<NewsCategory[]>([]);
   const [active, setActive] = useState<string>('');
   const [items, setItems] = useState<NewsItem[]>([]);
@@ -193,32 +193,48 @@ export default function NewsFeed() {
       {!loading && !error && items.length > 0 && (
         <div className="news-list">
           {items.map((item, index) => (
-            <motion.a
+            <motion.div
               key={item.id}
-              className="news-card"
-              href={item.url}
-              target="_blank"
-              rel="noreferrer noopener"
+              className="news-card-wrap"
               initial={{ y: 10 }}
               animate={{ y: 0 }}
               transition={{ duration: 0.28, delay: Math.min(index * 0.02, 0.3) }}
             >
-              {item.thumbnail ? (
-                <div className="news-card-thumb">
-                  <img src={item.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+              <a
+                className="news-card"
+                href={item.url}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {item.thumbnail ? (
+                  <div className="news-card-thumb">
+                    <img src={item.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                  </div>
+                ) : (
+                  <div className="news-card-thumb news-card-thumb--empty" aria-hidden>
+                    <Newspaper aria-hidden />
+                  </div>
+                )}
+                <div className="news-card-body">
+                  <strong className="news-card-title">{item.title}</strong>
+                  <span className="news-card-meta">
+                    {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
+                  </span>
                 </div>
-              ) : (
-                <div className="news-card-thumb news-card-thumb--empty" aria-hidden>
-                  <Newspaper aria-hidden />
-                </div>
+              </a>
+              {onShare && (
+                <button
+                  type="button"
+                  className="news-share-btn"
+                  title="채팅으로 공유"
+                  aria-label={`${item.title} 채팅으로 공유`}
+                  onClick={() => onShare(item)}
+                >
+                  <Share2 size={15} aria-hidden />
+                  <span>공유</span>
+                </button>
               )}
-              <div className="news-card-body">
-                <strong className="news-card-title">{item.title}</strong>
-                <span className="news-card-meta">
-                  {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
-                </span>
-              </div>
-            </motion.a>
+            </motion.div>
           ))}
         </div>
       )}

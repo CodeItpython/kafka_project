@@ -3147,6 +3147,60 @@ input:focus {
 }
 .auth-back:hover { background: rgba(255, 255, 255, 0.12); }
 
+/* ── 뉴스 → 채팅 공유 ─────────────────────────────── */
+.news-card-wrap { position: relative; }
+.news-share-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(91, 83, 235, 0.94);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(91, 83, 235, 0.28);
+  cursor: pointer;
+}
+.news-share-btn:hover { background: #5b53eb; }
+
+.share-dialog {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  width: min(420px, 100%);
+  max-height: min(82vh, 640px);
+  padding: 22px;
+  border: 1px solid #e3e7f2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgb(25 31 40 / 22%);
+}
+.share-dialog-head { display: flex; gap: 12px; align-items: flex-start; }
+.share-dialog-head strong { display: block; color: #191f28; font-size: 18px; font-weight: 900; }
+.share-news-title {
+  margin-top: 4px;
+  color: #4e5968;
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.share-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #edf0f8;
+}
+.share-toggle button {
 /* ===================== 채팅 탭: + 버튼 / 필터 / 생성 모달 ===================== */
 .directory-header.chat-head {
   align-items: center;
@@ -3229,6 +3283,81 @@ input:focus {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #6b7684;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+.share-toggle button.active { background: #fff; color: #191f28; box-shadow: 0 2px 6px rgba(25, 31, 40, 0.08); }
+.share-list {
+  display: grid;
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 120px;
+  max-height: 340px;
+  padding-right: 2px;
+}
+.share-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.share-item:hover { background: #f5f7fb; }
+.share-item.selected { border-color: #c9c4fb; background: #f2f0ff; }
+.share-item > span { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.share-item strong { color: #191f28; font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-item small { color: #8b93a7; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-check { color: #5b53eb; flex-shrink: 0; }
+.share-room-glyph {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #edf0f8;
+  color: #6b7684;
+  flex-shrink: 0;
+}
+/* 공유/이메일 등 긍정 확정 버튼은 브랜드 퍼플(삭제 계열 레드가 아님) */
+.confirm-dialog-actions button.primary { color: #fff; background: #5b53eb; }
+
+/* ── 설정: 이메일 변경 ────────────────────────────── */
+.settings-row-action {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid #d7dcea;
+  border-radius: 999px;
+  background: #fff;
+  color: #5b53eb;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.settings-row-action:hover { background: #f2f0ff; }
+.settings-row-action:disabled { opacity: 0.6; cursor: not-allowed; }
+.email-change-dialog { width: min(400px, 100%); }
+.email-change-form { display: grid; gap: 12px; }
+.email-change-form label { display: grid; gap: 6px; color: #4e5968; font-size: 13px; font-weight: 800; }
+.email-change-form input {
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid #d7dcea;
+  border-radius: 12px;
+  font-size: 15px;
+}
+.email-change-form input:focus { outline: none; border-color: #5b53eb; box-shadow: 0 0 0 3px rgba(91, 83, 235, 0.14); }
+.email-change-status { color: #4e5968; font-size: 12.5px; line-height: 1.45; }
   min-height: 40px;
   border: 0;
   border-radius: 11px;

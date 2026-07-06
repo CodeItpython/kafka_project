@@ -1,6 +1,7 @@
 package com.kafka.auth.controller;
 
 import com.kafka.auth.dto.AuthDtos.AuthResponse;
+import com.kafka.auth.dto.AuthDtos.ChangeEmailRequest;
 import com.kafka.auth.dto.AuthDtos.EmailCodeRequest;
 import com.kafka.auth.dto.AuthDtos.EmailCodeResponse;
 import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
@@ -63,6 +64,22 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(@AuthenticationPrincipal UserAccount user) {
         return ResponseEntity.ok(authService.toUserResponse(user));
+    }
+
+    @PostMapping("/me/email/code")
+    public ResponseEntity<EmailCodeResponse> sendEmailChangeCode(
+            @AuthenticationPrincipal UserAccount user,
+            @Valid @RequestBody EmailCodeRequest request
+    ) {
+        return ResponseEntity.ok(authService.sendEmailChangeCode(user, request.email()));
+    }
+
+    @PostMapping("/me/email")
+    public ResponseEntity<AuthResponse> changeEmail(
+            @AuthenticationPrincipal UserAccount user,
+            @Valid @RequestBody ChangeEmailRequest request
+    ) {
+        return ResponseEntity.ok(authService.changeEmail(user, request));
     }
 
     @DeleteMapping("/me")
