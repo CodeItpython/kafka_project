@@ -3487,7 +3487,21 @@ input:focus {
 .chat-search-panel .section-title { margin-top: 4px; }
 
 /* ── 네이버 쇼핑 탭 ─────────────────────────────── */
-.shop-root { display: flex; flex-direction: column; min-height: 100%; }
+/* 뉴스 탭과 동일한 스크롤 구조: 패널은 flex로 남는 높이를 채우고 내부 root가 스크롤러. */
+.app-shell > .shop-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  overflow: hidden;
+}
+.shop-root {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 88px;
+}
 .shop-hero {
   display: flex;
   align-items: center;
