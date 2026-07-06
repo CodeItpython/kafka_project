@@ -1,9 +1,6 @@
 .gradle
-/build
-**/build/**
-!**/build/
-!**/build/libs/
-!**/build/libs/*.jar
+build
+**/build/
 **/target
 *.log
 .DS_Store

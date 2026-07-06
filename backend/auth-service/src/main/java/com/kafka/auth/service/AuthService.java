@@ -1,6 +1,7 @@
 package com.kafka.auth.service;
 
 import com.kafka.auth.dto.AuthDtos.AuthResponse;
+import com.kafka.auth.dto.AuthDtos.ChangeEmailRequest;
 import com.kafka.auth.dto.AuthDtos.EmailCodeResponse;
 import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
 import com.kafka.auth.dto.AuthDtos.LoginRequest;
@@ -89,21 +90,7 @@ public class AuthService {
     @Transactional
     public AuthResponse loginWithEmailCode(EmailLoginRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
-        emailVerificationThrottleService.assertVerifyAllowed(normalizedEmail);
-        String codeHash = hashCode(normalizedEmail, request.code());
-        EmailVerificationCode verificationCode = emailVerificationCodeRepository
-                .findTopByEmailAndCodeAndUsedFalseOrderByExpiresAtDesc(normalizedEmail, codeHash)
-                .orElse(null);
-        if (verificationCode == null) {
-            emailVerificationThrottleService.recordVerifyFailure(normalizedEmail);
-            throw new IllegalArgumentException("인증코드가 올바르지 않습니다.");
-        }
-        if (verificationCode.getExpiresAt().isBefore(Instant.now())) {
-            emailVerificationThrottleService.recordVerifyFailure(normalizedEmail);
-            throw new IllegalArgumentException("인증코드가 만료되었습니다.");
-        }
-        verificationCode.markUsed();
-        emailVerificationThrottleService.clearVerifyFailures(normalizedEmail);
+        verifyEmailCode(normalizedEmail, request.code());
 
         UserAccount user = userAccountRepository.findByEmail(normalizedEmail)
                 .orElseGet(() -> userAccountRepository.save(new UserAccount(
@@ -113,6 +100,42 @@ public class AuthService {
                         AuthProvider.EMAIL
                 )));
         return issueToken(user);
+    }
+
+    /**
+     * Sends a verification code to the address the signed-in user wants to switch to.
+     * Rejects up-front if it is unchanged or already taken; the code is bound to the
+     * new email, so only someone who controls it can complete {@link #changeEmail}.
+     */
+    @Transactional
+    public EmailCodeResponse sendEmailChangeCode(UserAccount user, String newEmailRaw) {
+        String newEmail = normalizeEmail(newEmailRaw);
+        if (newEmail.equals(normalizeEmail(user.getEmail()))) {
+            throw new IllegalArgumentException("현재 사용 중인 이메일과 동일합니다.");
+        }
+        if (userAccountRepository.existsByEmail(newEmail)) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+        }
+        return createEmailCode(newEmail);
+    }
+
+    /**
+     * Verifies the code for the new email, updates the account, and re-issues a JWT
+     * because the token subject is the email (the old token still validates until it
+     * expires, but the client should replace it with the returned one).
+     */
+    @Transactional
+    public AuthResponse changeEmail(UserAccount user, ChangeEmailRequest request) {
+        String newEmail = normalizeEmail(request.email());
+        if (newEmail.equals(normalizeEmail(user.getEmail()))) {
+            throw new IllegalArgumentException("현재 사용 중인 이메일과 동일합니다.");
+        }
+        if (userAccountRepository.existsByEmail(newEmail)) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+        }
+        verifyEmailCode(newEmail, request.code());
+        user.changeEmail(newEmail);
+        return issueToken(userAccountRepository.save(user));
     }
 
     @Transactional
@@ -162,6 +185,25 @@ public class AuthService {
 
     private AuthResponse issueToken(UserAccount user) {
         return new AuthResponse(jwtService.createToken(user), "Bearer", toUserResponse(user));
+    }
+
+    /** Validates a one-time email code (throttled) and consumes it, or throws with a friendly message. */
+    private void verifyEmailCode(String normalizedEmail, String code) {
+        emailVerificationThrottleService.assertVerifyAllowed(normalizedEmail);
+        String codeHash = hashCode(normalizedEmail, code);
+        EmailVerificationCode verificationCode = emailVerificationCodeRepository
+                .findTopByEmailAndCodeAndUsedFalseOrderByExpiresAtDesc(normalizedEmail, codeHash)
+                .orElse(null);
+        if (verificationCode == null) {
+            emailVerificationThrottleService.recordVerifyFailure(normalizedEmail);
+            throw new IllegalArgumentException("인증코드가 올바르지 않습니다.");
+        }
+        if (verificationCode.getExpiresAt().isBefore(Instant.now())) {
+            emailVerificationThrottleService.recordVerifyFailure(normalizedEmail);
+            throw new IllegalArgumentException("인증코드가 만료되었습니다.");
+        }
+        verificationCode.markUsed();
+        emailVerificationThrottleService.clearVerifyFailures(normalizedEmail);
     }
 
     private String normalizeEmail(String email) {

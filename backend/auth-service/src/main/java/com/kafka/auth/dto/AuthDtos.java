@@ -35,6 +35,12 @@ public final class AuthDtos {
     ) {
     }
 
+    public record ChangeEmailRequest(
+            @Email @NotBlank String email,
+            @NotBlank @Pattern(regexp = "\\d{6}", message = "인증코드는 6자리 숫자입니다.") String code
+    ) {
+    }
+
     public record AuthResponse(
             String accessToken,
             String tokenType,

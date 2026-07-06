@@ -80,6 +80,11 @@ public class UserAccount {
         this.updatedAt = Instant.now();
     }
 
+    public void changeEmail(String email) {
+        this.email = email;
+        this.updatedAt = Instant.now();
+    }
+
     public String getStatusMessage() {
         return statusMessage == null ? "" : statusMessage;
     }

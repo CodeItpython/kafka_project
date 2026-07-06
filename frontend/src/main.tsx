@@ -26,6 +26,7 @@ import {
   Search,
   Send,
   Settings,
+  Share2,
   Sparkles,
   Trash2,
   UserPlus,
@@ -38,7 +39,7 @@ import './styles.css';
 
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
 const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
-import NewsFeed from './NewsFeed';
+import NewsFeed, { NewsItem } from './NewsFeed';
 import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
 import WelcomeLanding from './WelcomeLanding';
 
@@ -337,6 +338,19 @@ function App() {
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
   const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
+  // 뉴스 → 채팅 공유
+  const [shareItem, setShareItem] = useState<NewsItem | null>(null);
+  const [shareTab, setShareTab] = useState<'friends' | 'rooms'>('friends');
+  const [shareSelected, setShareSelected] = useState<string[]>([]);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareResult, setShareResult] = useState<{ count: number; title: string } | null>(null);
+  // 이메일 변경
+  const [emailChangeOpen, setEmailChangeOpen] = useState(false);
+  const [emailChangeNew, setEmailChangeNew] = useState('');
+  const [emailChangeCode, setEmailChangeCode] = useState('');
+  const [emailChangeSent, setEmailChangeSent] = useState(false);
+  const [emailChangeLoading, setEmailChangeLoading] = useState(false);
+  const [emailChangeStatus, setEmailChangeStatus] = useState('');
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
@@ -652,7 +666,6 @@ function App() {
   function openRoom(roomId: string) {
     setSelectedRoomId(roomId);
     setConversationSummary(null);
-    setShowRefreshButton(false);
     cancelEditingMessage();
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
@@ -1083,6 +1096,129 @@ function App() {
       setStatus(readableError(error, '1:1 채팅방을 열지 못했습니다.'));
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openShareModal(item: NewsItem) {
+    setShareItem(item);
+    setShareTab('friends');
+    setShareSelected([]);
+    if (contacts.length === 0) loadContacts('');
+    if (rooms.length === 0) loadRooms('');
+  }
+
+  function closeShareModal() {
+    setShareItem(null);
+    setShareSelected([]);
+  }
+
+  function toggleShareTarget(key: string) {
+    setShareSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+  }
+
+  async function submitShareNews() {
+    if (!shareItem || shareSelected.length === 0) return;
+    setShareLoading(true);
+    const content = `${shareItem.title}\n${shareItem.url}`;
+    const title = shareItem.title;
+    let shared = 0;
+    try {
+      for (const key of shareSelected) {
+        try {
+          let roomId: string;
+          if (key.startsWith('contact:')) {
+            const partnerEmail = key.slice('contact:'.length);
+            const room = await request<ChatRoom>('/chat/direct-rooms', {
+              method: 'POST',
+              body: JSON.stringify({ partnerEmail })
+            });
+            setRooms((current) => [room, ...current.filter((item) => item.id !== room.id)]);
+            roomId = room.id;
+          } else {
+            roomId = key.slice('room:'.length);
+          }
+          await request(`/chat/rooms/${roomId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ content, attachment: null, replyToMessageId: null })
+          });
+          shared += 1;
+        } catch (error) {
+          // 개별 대상 전송 실패는 건너뛰고 나머지를 계속 공유한다.
+          console.warn('news share failed', key, error);
+        }
+      }
+      closeShareModal();
+      if (shared > 0) {
+        setShareResult({ count: shared, title });
+      } else {
+        setStatus('뉴스를 공유하지 못했습니다. 잠시 후 다시 시도해주세요.');
+      }
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  function openEmailChange() {
+    setEmailChangeOpen(true);
+    setEmailChangeNew('');
+    setEmailChangeCode('');
+    setEmailChangeSent(false);
+    setEmailChangeStatus('');
+  }
+
+  function closeEmailChange() {
+    setEmailChangeOpen(false);
+    setEmailChangeNew('');
+    setEmailChangeCode('');
+    setEmailChangeSent(false);
+    setEmailChangeStatus('');
+  }
+
+  async function sendEmailChangeCode() {
+    const target = emailChangeNew.trim();
+    if (!target) {
+      setEmailChangeStatus('변경할 이메일을 입력해주세요.');
+      return;
+    }
+    setEmailChangeLoading(true);
+    setEmailChangeStatus('');
+    try {
+      const data = await request<{ expiresAt: string; sentTo: string }>('/auth/me/email/code', {
+        method: 'POST',
+        body: JSON.stringify({ email: target })
+      });
+      setEmailChangeSent(true);
+      setEmailChangeCode('');
+      setEmailChangeStatus(`${data.sentTo}로 6자리 인증코드를 보냈습니다.`);
+    } catch (error) {
+      setEmailChangeStatus(readableError(error, '인증코드를 보내지 못했습니다.'));
+    } finally {
+      setEmailChangeLoading(false);
+    }
+  }
+
+  async function submitEmailChange() {
+    const target = emailChangeNew.trim();
+    const verificationCode = emailChangeCode.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (verificationCode.length !== EMAIL_CODE_LENGTH) {
+      setEmailChangeStatus('6자리 인증코드를 입력해주세요.');
+      return;
+    }
+    setEmailChangeLoading(true);
+    setEmailChangeStatus('');
+    try {
+      const data = await request<AuthResponse>('/auth/me/email', {
+        method: 'POST',
+        body: JSON.stringify({ email: target, code: verificationCode })
+      });
+      saveSession(data);
+      setEmail(data.user.email);
+      closeEmailChange();
+      setStatus(`이메일이 ${data.user.email}로 변경되었습니다.`);
+    } catch (error) {
+      setEmailChangeStatus(readableError(error, '이메일을 변경하지 못했습니다.'));
+    } finally {
+      setEmailChangeLoading(false);
     }
   }
 
@@ -1762,6 +1898,200 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {shareItem && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={closeShareModal}
+          >
+            <motion.section
+              className="share-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="share-dialog-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={closeShareModal} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <header className="share-dialog-head">
+                <span className="confirm-dialog-icon"><Share2 size={20} aria-hidden /></span>
+                <div>
+                  <strong id="share-dialog-title">채팅으로 공유</strong>
+                  <p className="share-news-title">{shareItem.title}</p>
+                </div>
+              </header>
+              <div className="share-toggle" role="tablist" aria-label="공유 대상">
+                <button type="button" role="tab" aria-selected={shareTab === 'friends'} className={shareTab === 'friends' ? 'active' : ''} onClick={() => setShareTab('friends')}>
+                  <Users size={15} aria-hidden />친구
+                </button>
+                <button type="button" role="tab" aria-selected={shareTab === 'rooms'} className={shareTab === 'rooms' ? 'active' : ''} onClick={() => setShareTab('rooms')}>
+                  <MessageCircle size={15} aria-hidden />대화방
+                </button>
+              </div>
+              <div className="share-list">
+                {shareTab === 'friends' && contacts.map((contact) => {
+                  const key = `contact:${contact.email}`;
+                  const selected = shareSelected.includes(key);
+                  return (
+                    <button type="button" key={contact.email} className={selected ? 'share-item selected' : 'share-item'} onClick={() => toggleShareTarget(key)}>
+                      <ProfileAvatar className="mini-avatar" name={contact.name} imageUrl={contact.profileImageUrl} />
+                      <span><strong>{contact.name}</strong><small>{contact.statusMessage || contact.email}</small></span>
+                      {selected && <CheckCircle2 className="share-check" size={18} aria-hidden />}
+                    </button>
+                  );
+                })}
+                {shareTab === 'friends' && contacts.length === 0 && <p className="empty-state">친구 목록이 비어 있습니다.</p>}
+                {shareTab === 'rooms' && rooms.map((room) => {
+                  const key = `room:${room.id}`;
+                  const selected = shareSelected.includes(key);
+                  return (
+                    <button type="button" key={room.id} className={selected ? 'share-item selected' : 'share-item'} onClick={() => toggleShareTarget(key)}>
+                      <span className="share-room-glyph" aria-hidden>{room.type === 'DIRECT' ? <MessageCircle size={16} /> : <Hash size={16} />}</span>
+                      <span><strong>{room.name}</strong><small>{room.type === 'DIRECT' ? '1:1 대화' : `참여자 ${room.participantCount}명`}</small></span>
+                      {selected && <CheckCircle2 className="share-check" size={18} aria-hidden />}
+                    </button>
+                  );
+                })}
+                {shareTab === 'rooms' && rooms.length === 0 && <p className="empty-state">대화방이 없습니다.</p>}
+              </div>
+              <div className="confirm-dialog-actions">
+                <button type="button" onClick={closeShareModal} disabled={shareLoading}>취소</button>
+                <button type="button" className="primary" onClick={submitShareNews} disabled={shareLoading || shareSelected.length === 0}>
+                  {shareLoading ? '공유 중' : shareSelected.length > 0 ? `${shareSelected.length}곳에 공유` : '공유'}
+                </button>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {shareResult && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={() => setShareResult(null)}
+          >
+            <motion.section
+              className="confirm-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="share-done-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={() => setShareResult(null)} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <span className="confirm-dialog-icon success"><CheckCircle2 size={20} aria-hidden /></span>
+              <div>
+                <strong id="share-done-title">공유 완료</strong>
+                <p>{shareResult.count}개의 대화방에 뉴스를 공유했어요.</p>
+              </div>
+              <div className="confirm-dialog-actions single">
+                <button type="button" className="primary" onClick={() => setShareResult(null)}>확인</button>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {emailChangeOpen && (
+          <motion.div
+            className="confirm-dialog-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onClick={closeEmailChange}
+          >
+            <motion.section
+              className="confirm-dialog email-change-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="email-change-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+            >
+              <button className="confirm-dialog-close" type="button" onClick={closeEmailChange} title="닫기">
+                <X size={17} aria-hidden />
+              </button>
+              <span className="confirm-dialog-icon"><Mail size={20} aria-hidden /></span>
+              <div>
+                <strong id="email-change-title">이메일 변경</strong>
+                <p>새 이메일로 인증코드를 보내 확인한 뒤 변경합니다. 현재 이메일: {user.email}</p>
+              </div>
+              <form
+                className="email-change-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (emailChangeSent) {
+                    submitEmailChange();
+                  } else {
+                    sendEmailChangeCode();
+                  }
+                }}
+              >
+                <label>새 이메일
+                  <input
+                    type="email"
+                    value={emailChangeNew}
+                    onChange={(event) => setEmailChangeNew(event.target.value)}
+                    placeholder="new@example.com"
+                    disabled={emailChangeLoading || emailChangeSent}
+                    required
+                  />
+                </label>
+                {emailChangeSent && (
+                  <label>인증코드
+                    <input
+                      inputMode="numeric"
+                      value={emailChangeCode}
+                      onChange={(event) => setEmailChangeCode(event.target.value.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH))}
+                      placeholder="6자리 숫자"
+                      maxLength={EMAIL_CODE_LENGTH}
+                      disabled={emailChangeLoading}
+                      autoFocus
+                    />
+                  </label>
+                )}
+                {emailChangeStatus && <small className="email-change-status">{emailChangeStatus}</small>}
+                <div className={emailChangeSent ? 'confirm-dialog-actions' : 'confirm-dialog-actions single'}>
+                  {!emailChangeSent ? (
+                    <button type="submit" className="primary" disabled={emailChangeLoading || !emailChangeNew.trim()}>
+                      {emailChangeLoading ? '전송 중' : '인증코드 받기'}
+                    </button>
+                  ) : (
+                    <>
+                      <button type="button" onClick={sendEmailChangeCode} disabled={emailChangeLoading}>재전송</button>
+                      <button type="submit" className="primary" disabled={emailChangeLoading || emailChangeCode.length !== EMAIL_CODE_LENGTH}>
+                        {emailChangeLoading ? '변경 중' : '이메일 변경'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </form>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {(activeTab === 'friends' || activeTab === 'settings') && (
       <aside className="side-pane">
         <section className="sidebar">
@@ -1894,9 +2224,10 @@ function App() {
 
             <section className="panel-section settings-group">
               <div className="section-title"><span>계정 정보</span></div>
-              <div className="settings-row static">
+              <div className="settings-row">
                 <span className="settings-row-label"><AtSign size={16} aria-hidden />이메일</span>
                 <span className="settings-row-value">{user.email}</span>
+                <button type="button" className="settings-row-action" onClick={openEmailChange} disabled={loading}>변경</button>
               </div>
               <div className="settings-row static">
                 <span className="settings-row-label"><KeyRound size={16} aria-hidden />로그인 방식</span>
@@ -1982,7 +2313,7 @@ function App() {
 
       {activeTab === 'news' && (
         <section className="tab-panel news-panel">
-          <NewsFeed />
+          <NewsFeed onShare={openShareModal} />
         </section>
       )}
 
