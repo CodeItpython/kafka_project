@@ -4,6 +4,7 @@ import com.kafka.shopping.catalog.ShoppingDtos.CategoryResponse;
 import com.kafka.shopping.catalog.ShoppingDtos.ProductResponse;
 import com.kafka.shopping.naver.NaverSearchResponse;
 import com.kafka.shopping.naver.NaverShoppingClient;
+import com.kafka.shopping.search.ProductIndexService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -27,14 +28,17 @@ public class ShoppingService {
     private static final int MAX_DISPLAY = 100;
 
     private final NaverShoppingClient naverClient;
+    private final ProductIndexService productIndexService;
     private final Duration cacheTtl;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     public ShoppingService(
             NaverShoppingClient naverClient,
+            ProductIndexService productIndexService,
             @Value("${app.naver.cache-ttl-seconds:300}") long cacheTtlSeconds
     ) {
         this.naverClient = naverClient;
+        this.productIndexService = productIndexService;
         this.cacheTtl = Duration.ofSeconds(cacheTtlSeconds);
     }
 
@@ -68,7 +72,10 @@ public class ShoppingService {
         if (response == null || response.items() == null) {
             return List.of();
         }
-        return response.items().stream().map(ShoppingService::normalize).toList();
+        List<ProductResponse> products = response.items().stream().map(ShoppingService::normalize).toList();
+        // 조회된 상품을 Elasticsearch에 비동기 색인 → 검색 인덱스가 실카탈로그로 채워진다.
+        productIndexService.indexQuietly(products);
+        return products;
     }
 
     private static ProductResponse normalize(NaverSearchResponse.Item item) {

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'motion/react';
-import { ExternalLink, Plus, RefreshCcw, ShoppingBag, ShoppingCart, Store } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ExternalLink, Plus, RefreshCcw, Search, ShoppingBag, ShoppingCart, Store, TrendingUp, X } from 'lucide-react';
 
 type ShoppingCategory = { code: string; label: string };
+type PopularKeyword = { rank: number; keyword: string; count: number };
 export type ShoppingProduct = {
   productId: string;
   title: string;
@@ -19,6 +20,7 @@ const DISPLAY = 20;
 const MAX_START = 161; // 무한 스크롤 상한(네이버 start 한계 + 과도한 페이징 방지)
 const PULL_THRESHOLD = 64;
 const MAX_PULL = 92;
+const ROLL_INTERVAL = 2800; // 인기검색어 자동 롤링 주기(ms)
 
 const SORTS: { code: string; label: string }[] = [
   { code: 'sim', label: '인기순' },
@@ -54,6 +56,11 @@ export default function ShoppingFeed({
   const [notConfigured, setNotConfigured] = useState(false);
   const [pull, setPull] = useState(0);
 
+  const [input, setInput] = useState('');
+  const [term, setTerm] = useState(''); // 제출된 검색어(비어 있으면 카테고리 피드)
+  const [popular, setPopular] = useState<PopularKeyword[]>([]);
+  const [popIdx, setPopIdx] = useState(0);
+
   const rootRef = useRef<HTMLDivElement>(null);
   const reqRef = useRef(0);
   const nextStartRef = useRef(1);
@@ -64,6 +71,8 @@ export default function ShoppingFeed({
   const touchStartY = useRef<number | null>(null);
   const wheelAccum = useRef(0);
   const wheelResetTimer = useRef<number | undefined>(undefined);
+
+  const searching = term.trim().length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -82,71 +91,106 @@ export default function ShoppingFeed({
     };
   }, []);
 
-  const loadFeed = useCallback((category: string, sortCode: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
-    const myReq = mode === 'replace' ? ++reqRef.current : reqRef.current;
-    if (mode === 'append') {
-      loadingMoreRef.current = true;
-      setLoadingMore(true);
-    } else if (refresh) {
-      refreshingRef.current = true;
-      setRefreshing(true);
-    } else {
-      loadingRef.current = true;
-      setLoading(true);
-      setError(null);
-      setNotConfigured(false);
-    }
-    const url = `${SHOP_ROOT}/feed?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sortCode)}`
-      + `&display=${DISPLAY}&start=${startAt}${refresh ? '&refresh=true' : ''}`;
-    return fetch(url)
-      .then(async (response) => {
-        if (response.ok) return response.json();
-        const body = await response.json().catch(() => null);
-        if (response.status === 503 && body?.code === 'NAVER_NOT_CONFIGURED') {
-          throw new Error('NAVER_NOT_CONFIGURED');
-        }
-        throw new Error(String(response.status));
-      })
-      .then((data: ShoppingProduct[]) => {
-        if (myReq !== reqRef.current) return; // 카테고리/정렬/새로고침으로 무효화된 응답 폐기
-        const list = Array.isArray(data) ? data : [];
-        if (mode === 'append') {
-          setItems((prev) => {
-            const seen = new Set(prev.map((p) => p.productId));
-            return [...prev, ...list.filter((p) => !seen.has(p.productId))];
-          });
-        } else {
-          setItems(list);
-        }
-        nextStartRef.current = startAt + DISPLAY;
-        setHasMore(list.length >= DISPLAY && startAt + DISPLAY <= MAX_START);
-      })
-      .catch((err: Error) => {
-        if (myReq !== reqRef.current) return;
-        if (mode === 'append') {
-          setHasMore(false);
-          return;
-        }
-        setItems([]);
-        if (err.message === 'NAVER_NOT_CONFIGURED') {
-          setNotConfigured(true);
-        } else {
-          setError('상품을 불러오지 못했습니다.');
-        }
-      })
-      .finally(() => {
-        loadingRef.current = false;
-        loadingMoreRef.current = false;
-        refreshingRef.current = false;
-        setLoading(false);
-        setLoadingMore(false);
-        setRefreshing(false);
-        setPull(0);
-        wheelAccum.current = 0;
-      });
+  // 인기검색어: 최초 로드 + 60초마다 갱신
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetch(`${SHOP_ROOT}/popular-keywords`)
+        .then((response) => (response.ok ? response.json() : []))
+        .then((data: PopularKeyword[]) => {
+          if (cancelled || !Array.isArray(data)) return;
+          setPopular(data);
+          setPopIdx(0);
+        })
+        .catch(() => {});
+    load();
+    const timer = window.setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
-  // 카테고리/정렬 변경 → 처음부터 다시
+  // 인기검색어 1→10위 자동 롤링(한 박스 안에서 순환)
+  useEffect(() => {
+    if (popular.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setPopIdx((index) => (index + 1) % popular.length);
+    }, ROLL_INTERVAL);
+    return () => window.clearInterval(timer);
+  }, [popular.length]);
+
+  const loadPage = useCallback(
+    (category: string, sortCode: string, keyword: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
+      const myReq = mode === 'replace' ? ++reqRef.current : reqRef.current;
+      if (mode === 'append') {
+        loadingMoreRef.current = true;
+        setLoadingMore(true);
+      } else if (refresh) {
+        refreshingRef.current = true;
+        setRefreshing(true);
+      } else {
+        loadingRef.current = true;
+        setLoading(true);
+        setError(null);
+        setNotConfigured(false);
+      }
+      const url = keyword
+        ? `${SHOP_ROOT}/search?query=${encodeURIComponent(keyword)}&sort=${encodeURIComponent(sortCode)}`
+          + `&display=${DISPLAY}&start=${startAt}`
+        : `${SHOP_ROOT}/feed?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sortCode)}`
+          + `&display=${DISPLAY}&start=${startAt}${refresh ? '&refresh=true' : ''}`;
+      return fetch(url)
+        .then(async (response) => {
+          if (response.ok) return response.json();
+          const body = await response.json().catch(() => null);
+          if (response.status === 503 && body?.code === 'NAVER_NOT_CONFIGURED') {
+            throw new Error('NAVER_NOT_CONFIGURED');
+          }
+          throw new Error(String(response.status));
+        })
+        .then((data: ShoppingProduct[]) => {
+          if (myReq !== reqRef.current) return; // 카테고리/정렬/검색으로 무효화된 응답 폐기
+          const list = Array.isArray(data) ? data : [];
+          if (mode === 'append') {
+            setItems((prev) => {
+              const seen = new Set(prev.map((p) => p.productId));
+              return [...prev, ...list.filter((p) => !seen.has(p.productId))];
+            });
+          } else {
+            setItems(list);
+          }
+          nextStartRef.current = startAt + DISPLAY;
+          setHasMore(list.length >= DISPLAY && startAt + DISPLAY <= MAX_START);
+        })
+        .catch((err: Error) => {
+          if (myReq !== reqRef.current) return;
+          if (mode === 'append') {
+            setHasMore(false);
+            return;
+          }
+          setItems([]);
+          if (err.message === 'NAVER_NOT_CONFIGURED') {
+            setNotConfigured(true);
+          } else {
+            setError('상품을 불러오지 못했습니다.');
+          }
+        })
+        .finally(() => {
+          loadingRef.current = false;
+          loadingMoreRef.current = false;
+          refreshingRef.current = false;
+          setLoading(false);
+          setLoadingMore(false);
+          setRefreshing(false);
+          setPull(0);
+          wheelAccum.current = 0;
+        });
+    },
+    []
+  );
+
+  // 카테고리/정렬/검색어 변경 → 처음부터 다시
   useEffect(() => {
     if (!active) return;
     nextStartRef.current = 1;
@@ -154,23 +198,49 @@ export default function ShoppingFeed({
     setItems([]);
     setPull(0);
     wheelAccum.current = 0;
-    loadFeed(active, sort, 1, 'replace', false);
-  }, [active, sort, loadFeed]);
+    loadPage(active, sort, term.trim(), 1, 'replace', false);
+  }, [active, sort, term, loadPage]);
 
   function loadMore() {
     if (!hasMore || loadingRef.current || loadingMoreRef.current || refreshingRef.current || !active) return;
-    loadFeed(active, sort, nextStartRef.current, 'append', false);
+    loadPage(active, sort, term.trim(), nextStartRef.current, 'append', false);
   }
 
   const triggerRefresh = useCallback(() => {
     if (refreshingRef.current || loadingRef.current || !active) return;
+    setItems([]);
+    setHasMore(true);
+    if (term.trim()) {
+      loadPage(active, sort, term.trim(), 1, 'replace', true);
+      return;
+    }
     refreshCountRef.current += 1;
     // 새로고침마다 시작 오프셋을 순환시켜 "새로운 인기상품"을 노출(캐시도 우회).
     const rotatedStart = ((refreshCountRef.current % 4) * DISPLAY * 2) + 1; // 1, 41, 81, 121
-    setItems([]);
-    setHasMore(true);
-    loadFeed(active, sort, rotatedStart, 'replace', true);
-  }, [active, sort, loadFeed]);
+    loadPage(active, sort, '', rotatedStart, 'replace', true);
+  }, [active, sort, term, loadPage]);
+
+  function submitSearch(event: React.FormEvent) {
+    event.preventDefault();
+    setTerm(input.trim());
+  }
+
+  function runSearch(keyword: string) {
+    setInput(keyword);
+    setTerm(keyword);
+    rootRef.current?.scrollTo({ top: 0 });
+  }
+
+  function clearSearch() {
+    setInput('');
+    setTerm('');
+  }
+
+  function selectCategory(code: string) {
+    setInput('');
+    setTerm('');
+    setActive(code);
+  }
 
   // 데스크톱: 최상단에서 위로 휠 → 당김/새로고침
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -224,8 +294,10 @@ export default function ShoppingFeed({
   }
 
   const activeLabel = categories.find((category) => category.code === active)?.label ?? '';
+  const sectionTitle = searching ? `‘${term.trim()}’ 검색 결과` : `#${activeLabel || '상품'}`;
   const indicatorHeight = refreshing ? 46 : pull;
   const armed = pull >= PULL_THRESHOLD;
+  const current = popular.length > 0 ? popular[popIdx % popular.length] : null;
 
   return (
     <div
@@ -259,15 +331,70 @@ export default function ShoppingFeed({
         </button>
       </header>
 
+      <div className="shop-searchbar">
+        <form className="shop-search-form" onSubmit={submitSearch} role="search">
+          <Search size={17} aria-hidden />
+          <input
+            type="search"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="상품을 검색해보세요"
+            aria-label="상품 검색"
+            enterKeyHint="search"
+          />
+          {input && (
+            <button type="button" className="shop-search-clear" onClick={clearSearch} aria-label="검색어 지우기">
+              <X size={15} aria-hidden />
+            </button>
+          )}
+          <button type="submit" className="shop-search-submit">검색</button>
+        </form>
+
+        {current && (
+          <div className="shop-popular" tabIndex={0} aria-label="실시간 인기검색어">
+            <span className="shop-popular-label"><TrendingUp size={13} aria-hidden /> 인기검색어</span>
+            <button type="button" className="shop-popular-view" onClick={() => runSearch(current.keyword)}>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={popIdx}
+                  className="shop-popular-current"
+                  initial={{ y: 14, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -14, opacity: 0 }}
+                  transition={{ duration: 0.32, ease: 'easeOut' }}
+                >
+                  <b className="shop-popular-rank">{current.rank}</b>
+                  <span className="shop-popular-kw">{current.keyword}</span>
+                </motion.span>
+              </AnimatePresence>
+            </button>
+            <div className="shop-popular-list" role="listbox" aria-label="인기검색어 1~10위">
+              <p className="shop-popular-list-head"><TrendingUp size={13} aria-hidden /> 실시간 인기검색어</p>
+              {popular.map((keyword) => (
+                <button
+                  key={keyword.keyword}
+                  type="button"
+                  className="shop-popular-item"
+                  onClick={() => runSearch(keyword.keyword)}
+                >
+                  <b className={keyword.rank <= 3 ? 'shop-popular-rank hot' : 'shop-popular-rank'}>{keyword.rank}</b>
+                  <span className="shop-popular-kw">{keyword.keyword}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="shop-catbar" role="tablist" aria-label="쇼핑 카테고리">
         {categories.map((category) => (
           <button
             key={category.code}
             type="button"
             role="tab"
-            aria-selected={active === category.code}
-            className={active === category.code ? 'active' : ''}
-            onClick={() => setActive(category.code)}
+            aria-selected={!searching && active === category.code}
+            className={!searching && active === category.code ? 'active' : ''}
+            onClick={() => selectCategory(category.code)}
           >
             {category.label}
           </button>
@@ -275,7 +402,7 @@ export default function ShoppingFeed({
       </div>
 
       <div className="shop-sortbar">
-        <strong className="shop-section-title">#{activeLabel || '상품'}</strong>
+        <strong className="shop-section-title">{sectionTitle}</strong>
         <div className="shop-sorts">
           {SORTS.map((option) => (
             <button
@@ -315,14 +442,14 @@ export default function ShoppingFeed({
       {!loading && !notConfigured && error && (
         <div className="shop-empty">
           <p>{error}</p>
-          <button type="button" className="news-retry" onClick={() => loadFeed(active, sort, 1, 'replace', true)}>
+          <button type="button" className="news-retry" onClick={() => loadPage(active, sort, term.trim(), 1, 'replace', true)}>
             <RefreshCcw size={15} aria-hidden /> 다시 시도
           </button>
         </div>
       )}
 
       {!loading && !notConfigured && !error && items.length === 0 && (
-        <div className="shop-empty"><p>표시할 상품이 없습니다.</p></div>
+        <div className="shop-empty"><p>{searching ? '검색 결과가 없습니다.' : '표시할 상품이 없습니다.'}</p></div>
       )}
 
       {!loading && !notConfigured && !error && items.length > 0 && (
@@ -366,7 +493,7 @@ export default function ShoppingFeed({
           </div>
           <div className="shop-more">
             {loadingMore && <span className="shop-more-loading"><RefreshCcw size={14} aria-hidden /> 더 불러오는 중…</span>}
-            {!loadingMore && !hasMore && <span className="shop-more-end">모든 상품을 불러왔어요</span>}
+            {!loadingMore && !hasMore && <span className="shop-more-end">{searching ? '검색 결과를 모두 불러왔어요' : '모든 상품을 불러왔어요'}</span>}
           </div>
         </>
       )}

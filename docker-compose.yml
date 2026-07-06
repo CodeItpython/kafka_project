@@ -49,6 +49,10 @@ services:
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-http://localhost:8890/oauth2/callback/kakao}
+      # 네이버 아이디로 로그인 — .env 또는 셸 환경변수로 주입(깃 커밋 금지).
+      NAVER_LOGIN_CLIENT_ID: ${NAVER_LOGIN_CLIENT_ID:-}
+      NAVER_LOGIN_CLIENT_SECRET: ${NAVER_LOGIN_CLIENT_SECRET:-}
+      NAVER_LOGIN_REDIRECT_URI: ${NAVER_LOGIN_REDIRECT_URI:-http://localhost:8890/oauth2/callback/naver}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.2}
       OPENAI_RESPONSES_URL: ${OPENAI_RESPONSES_URL:-https://api.openai.com/v1/responses}
@@ -173,6 +177,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
       logstash:
         condition: service_started
       tempo:
@@ -188,6 +194,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kafka_shopping
       SPRING_DATASOURCE_USERNAME: kafka
       SPRING_DATASOURCE_PASSWORD: kafka
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       # 네이버 검색(쇼핑) API 자격증명 — .env 또는 셸 환경변수로 주입(깃 커밋 금지).
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}

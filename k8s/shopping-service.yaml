@@ -67,6 +67,8 @@ spec:
               value: kafka
             - name: SPRING_DATASOURCE_PASSWORD
               value: kafka
+            - name: SPRING_ELASTICSEARCH_URIS
+              value: http://elasticsearch:9200
             - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
               value: "1.0"
             - name: MANAGEMENT_OTLP_TRACING_ENDPOINT

@@ -159,6 +159,27 @@ public class AuthService {
         return issueToken(user);
     }
 
+    @Transactional
+    public AuthResponse loginWithNaver(String naverId, String email, String name) {
+        String fallbackEmail = "naver-" + naverId + "@naver.local";
+        String resolvedEmail = email == null || email.isBlank() ? fallbackEmail : email;
+        String resolvedName = name == null || name.isBlank() ? resolvedEmail : name;
+
+        UserAccount user = userAccountRepository.findByProviderAndProviderId(AuthProvider.NAVER, naverId)
+                .or(() -> userAccountRepository.findByEmail(resolvedEmail))
+                .orElseGet(() -> userAccountRepository.save(new UserAccount(
+                        resolvedEmail,
+                        resolvedName,
+                        null,
+                        AuthProvider.NAVER
+                )));
+        user.setName(resolvedName);
+        user.setProvider(AuthProvider.NAVER);
+        user.setProviderId(naverId);
+        user.setPasswordHash(null);
+        return issueToken(user);
+    }
+
     /**
      * 회원 탈퇴. users 행은 다른 테이블에서 FK로 참조되지 않고 email 문자열로만
      * 느슨하게 연결되므로 하드 삭제해도 무결성 문제가 없다(대화/방 등 잔여 데이터는
