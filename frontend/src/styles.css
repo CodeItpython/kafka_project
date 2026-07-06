@@ -2412,7 +2412,7 @@ input:focus {
   min-width: 0;
   border-radius: 999px;
   background: transparent;
-  padding-left: 6px;
+  padding-left: 12px;
 }
 
 .composer input:focus {
