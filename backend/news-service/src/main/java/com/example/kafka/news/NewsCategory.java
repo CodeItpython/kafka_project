@@ -4,25 +4,25 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * 네이버 뉴스 카테고리와 크롤링 대상 URL.
- * code는 프론트/API에서 사용하는 식별자, label은 화면 표시명.
+ * 뉴스 카테고리. 네이버 뉴스 검색 API로 전환하면서 각 카테고리는 검색 키워드(query)에 매핑된다.
+ * code는 프론트/API 식별자, label은 화면 표시명.
  */
 public enum NewsCategory {
-    HOT("hot", "실시간 핫", "https://news.naver.com/main/ranking/popularDay.naver"),
-    ECONOMY("economy", "경제", "https://news.naver.com/section/101"),
-    STOCK("stock", "증시", "https://news.naver.com/breakingnews/section/101/258"),
-    SOCIETY("society", "사회", "https://news.naver.com/section/102"),
-    IT("it", "IT·과학", "https://news.naver.com/section/105"),
-    WORLD("world", "세계", "https://news.naver.com/section/104");
+    HOT("hot", "실시간 핫", "속보"),
+    ECONOMY("economy", "경제", "경제"),
+    STOCK("stock", "증시", "증시"),
+    SOCIETY("society", "사회", "사회"),
+    IT("it", "IT·과학", "IT"),
+    WORLD("world", "세계", "국제");
 
     private final String code;
     private final String label;
-    private final String url;
+    private final String query;
 
-    NewsCategory(String code, String label, String url) {
+    NewsCategory(String code, String label, String query) {
         this.code = code;
         this.label = label;
-        this.url = url;
+        this.query = query;
     }
 
     public String code() {
@@ -33,8 +33,8 @@ public enum NewsCategory {
         return label;
     }
 
-    public String url() {
-        return url;
+    public String query() {
+        return query;
     }
 
     public static NewsCategory fromCode(String code) {

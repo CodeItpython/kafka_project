@@ -6,13 +6,14 @@ public final class NewsDtos {
     private NewsDtos() {
     }
 
-    /** 개별 뉴스 카드. thumbnail/press는 없을 수 있어 null 허용. */
+    /** 개별 뉴스 카드. thumbnail/press/description은 없을 수 있어 null 허용. */
     public record NewsItem(
             String id,
             String title,
             String url,
             String press,
-            String thumbnail
+            String thumbnail,
+            String description
     ) {
     }
 
