@@ -11,6 +11,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
+  Copy,
   Hash,
   KeyRound,
   LogOut,
@@ -2694,15 +2695,17 @@ function App() {
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
               {messages.map((message) => {
                 const linkUrl = message.deletedForEveryone ? null : firstMessageUrl(message.content);
+                const isMine = message.senderEmail === user.email;
+                const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
                 return (
                 <ContextMenu.Root key={message.id}>
-                  <ContextMenu.Trigger asChild>
+                  <ContextMenu.Trigger asChild disabled={message.deletedForEveryone || editingMessageId === message.id}>
                     <motion.div
-                      className={message.senderEmail === user.email ? 'chat-row mine' : 'chat-row'}
+                      className={isMine ? 'chat-row mine' : 'chat-row'}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                     >
-                      {message.senderEmail !== user.email && <strong className="bubble-sender">{message.senderName}</strong>}
+                      {!isMine && <strong className="bubble-sender">{message.senderName}</strong>}
                       {editingMessageId === message.id ? (
                         <div className="message-edit-panel">
                           <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} maxLength={2000} autoFocus />
@@ -2769,7 +2772,7 @@ function App() {
                                       <button
                                         key={`${message.id}-pick-${emoji}`}
                                         type="button"
-                                        className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
+                                        className={hasMyReaction(emoji) ? 'active' : ''}
                                         onClick={() => toggleMessageReaction(message, emoji)}
                                         title={`${emoji} 반응`}
                                       >
@@ -2792,7 +2795,7 @@ function App() {
                           {QUICK_REACTIONS.map((emoji) => (
                             <ContextMenu.Item
                               key={`${message.id}-ctx-${emoji}`}
-                              className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'ctx-emoji active' : 'ctx-emoji'}
+                              className={hasMyReaction(emoji) ? 'ctx-emoji active' : 'ctx-emoji'}
                               onSelect={() => toggleMessageReaction(message, emoji)}
                             >
                               {emoji}
@@ -2800,15 +2803,18 @@ function App() {
                           ))}
                         </div>
                         <ContextMenu.Separator className="context-sep" />
-                        {message.senderEmail === user.email && (
+                        {isMine && (
                           <div className="context-read-state">{deliveryStatusLabel(message)}</div>
                         )}
-                        {message.senderEmail === user.email && message.content && (
+                        {message.content && (
+                          <ContextMenu.Item className="ctx-item" onSelect={() => navigator.clipboard?.writeText(message.content ?? '')}><Copy size={14} aria-hidden />복사</ContextMenu.Item>
+                        )}
+                        {isMine && message.content && (
                           <ContextMenu.Item className="ctx-item" onSelect={() => startEditingMessage(message)}><Pencil size={14} aria-hidden />수정</ContextMenu.Item>
                         )}
                         <ContextMenu.Item className="ctx-item" onSelect={() => setReplyTarget(message)}><Reply size={14} aria-hidden />답장</ContextMenu.Item>
                         <ContextMenu.Item className="ctx-item" onSelect={() => hideMessageForMe(message)}>나에게 삭제</ContextMenu.Item>
-                        {message.senderEmail === user.email && (
+                        {isMine && (
                           <ContextMenu.Item className="ctx-item danger" onSelect={() => deleteMessageForEveryone(message)}><Trash2 size={14} aria-hidden />모두에게 삭제</ContextMenu.Item>
                         )}
                       </ContextMenu.Content>
