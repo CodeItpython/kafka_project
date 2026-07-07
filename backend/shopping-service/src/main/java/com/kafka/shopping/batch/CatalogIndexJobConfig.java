@@ -20,7 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Spring Batch 카탈로그 색인 잡: Naver 상품(Reader) → ProductDocument(Processor) → Elasticsearch(Writer).
- * 청크 기반(50건)으로 커밋하고, 개별 항목 실패는 skip으로 흡수해 전체 잡이 죽지 않게 한다.
+ * 청크 기반(50건)으로 커밋하고, ES 쓰기 실패는 Writer가 흡수해(베스트-에포트) 전체 잡이 죽지 않게 한다.
  * 실행 이력/재시작 메타데이터는 JobRepository(kafka_shopping의 BATCH_* 테이블)에 남는다.
  */
 @Configuration
@@ -49,9 +49,6 @@ public class CatalogIndexJobConfig {
                 .reader(naverProductItemReader)
                 .processor(catalogItemProcessor)
                 .writer(catalogItemWriter)
-                .faultTolerant()
-                .skip(RuntimeException.class)
-                .skipLimit(50)
                 .build();
     }
 
@@ -74,8 +71,14 @@ public class CatalogIndexJobConfig {
     @Bean
     public ItemWriter<ProductDocument> catalogItemWriter(ProductSearchRepository repository) {
         return chunk -> {
-            repository.saveAll(chunk.getItems());
-            log.debug("Catalog index chunk written: {} products", chunk.size());
+            try {
+                repository.saveAll(chunk.getItems());
+                log.debug("Catalog index chunk written: {} products", chunk.size());
+            } catch (RuntimeException exception) {
+                // 색인은 베스트-에포트: ES 장애가 잡을 FAILED로 만들거나 항목별 재시도 폭주를 일으키지 않도록
+                // 청크 실패를 흡수한다(다음 주기에 재시도). "색인이 서비스를 막지 않는다" 계약 유지.
+                log.warn("Catalog index chunk write failed ({} products), skipping: {}", chunk.size(), exception.getMessage());
+            }
         };
     }
 }

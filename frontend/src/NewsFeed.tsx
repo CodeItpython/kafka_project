@@ -38,26 +38,34 @@ function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) 
     }
     const el = ref.current;
     if (!el) return;
+    let cancelled = false;
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting) || requested.current) return;
         requested.current = true;
         observer.disconnect();
         fetch(`${NEWS_ROOT}/link-preview?url=${encodeURIComponent(url)}`)
-          .then((response) => (response.status === 200 ? response.json() : null))
+          .then((response) => {
+            if (response.status === 200) return response.json();
+            if (response.status === 204) return null; // 프리뷰 없음(확정) → null 캐시 OK
+            throw new Error(String(response.status)); // 4xx/5xx = 일시적 → 캐시하지 않고 재마운트 시 재시도
+          })
           .then((data: { image?: string } | null) => {
             const img = data && data.image ? data.image : null;
             ogImageCache.set(url, img);
-            setImage(img);
+            if (!cancelled) setImage(img);
           })
           .catch(() => {
-            ogImageCache.set(url, null);
+            // 일시적 실패는 음수 캐시하지 않는다(백엔드 복구 후 카드가 다시 보일 때 재시도되도록).
           });
       },
       { rootMargin: '200px' }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [url, fallback]);
 
   if (image) {
@@ -147,13 +155,14 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       .catch(() => {
         if (myReq !== reqRef.current) return;
         if (mode === 'append') {
-          setHasMore(false);
+          // 일시적 오류로 무한 스크롤을 영구 중단시키지 않는다 — hasMore를 유지해 다음 스크롤에 재시도.
           return;
         }
         setError('뉴스를 불러오지 못했습니다.');
         setItems([]);
       })
       .finally(() => {
+        if (myReq !== reqRef.current) return; // 무효화된(오래된) 응답은 최신 요청의 로딩 상태를 건드리지 않음
         loadingRef.current = false;
         loadingMoreRef.current = false;
         refreshingRef.current = false;
