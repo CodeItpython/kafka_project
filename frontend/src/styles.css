@@ -2042,11 +2042,43 @@ input:focus {
   }
 }
 
+/* 메시지 한 줄: 세로로 [보낸사람 이름] + [말풍선+시간 클러스터] */
+.chat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(560px, 82%);
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.chat-row.mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.bubble-sender {
+  padding: 0 6px;
+  color: #4e5968;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* 말풍선 + 시간(+ hover 액션)을 가로로 (카카오톡처럼 시간은 말풍선 바깥) */
+.bubble-cluster {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+.chat-row.mine .bubble-cluster {
+  flex-direction: row-reverse;
+}
+
 .chat-bubble {
   position: relative;
-  width: fit-content;
-  max-width: min(500px, 68%);
   min-width: 0;
+  max-width: 100%;
   padding: 11px 15px;
   border-radius: 20px 20px 20px 7px;
   color: #2a2f45;
@@ -2054,30 +2086,20 @@ input:focus {
   box-shadow: 0 8px 22px rgba(66, 71, 130, 0.10);
 }
 
-.chat-bubble.mine {
-  align-self: flex-end;
+.chat-row.mine .chat-bubble {
   border-radius: 20px 20px 7px 20px;
   color: #ffffff;
   background: linear-gradient(160deg, #2f2d63 0%, #262353 100%);
   box-shadow: 0 10px 26px rgba(38, 35, 83, 0.28);
 }
 
-.chat-bubble.mine .bubble-meta span {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.bubble-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 5px;
-  font-size: 12px;
-}
-
-.chat-bubble.mine .bubble-meta {
-  justify-content: flex-end;
-  margin-bottom: 4px;
+/* 말풍선 옆 시간 — 초 없이 작게 (오전 9:08) */
+.bubble-time {
+  flex: 0 0 auto;
+  padding-bottom: 2px;
+  color: #8b93a7;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .chat-bubble p {
@@ -2117,13 +2139,13 @@ input:focus {
   white-space: nowrap;
 }
 
-.chat-bubble.mine .reply-preview {
+.chat-row.mine .chat-bubble .reply-preview {
   border-left-color: rgba(255, 255, 255, 0.72);
   background: rgba(255, 255, 255, 0.14);
 }
 
-.chat-bubble.mine .reply-preview strong,
-.chat-bubble.mine .reply-preview span {
+.chat-row.mine .chat-bubble .reply-preview strong,
+.chat-row.mine .chat-bubble .reply-preview span {
   color: #ffffff;
 }
 
@@ -2140,7 +2162,7 @@ input:focus {
   font-weight: 800;
 }
 
-.chat-bubble.mine .edited-label {
+.chat-row.mine .chat-bubble .edited-label {
   color: rgba(255, 255, 255, 0.74);
 }
 
@@ -2200,103 +2222,81 @@ input:focus {
   object-fit: contain;
 }
 
+/* hover 시 나타나는 빠른 액션(답장 + 공감) 툴바 — 말풍선 클러스터 바깥쪽에 표시 */
 .message-actions {
   position: absolute;
-  top: 8px;
-  right: -38px;
-  z-index: 7;
-  display: grid;
-  width: 32px;
-  min-height: 32px;
+  bottom: 1px;
+  display: flex;
+  gap: 4px;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-4px) scale(0.96);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transform: translateY(2px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
 }
+/* 받은 메시지는 클러스터 오른쪽, 내 메시지는 왼쪽. padding이 마우스 이동용 투명 브릿지 역할 */
+.chat-row:not(.mine) .message-actions { left: 100%; padding-left: 5px; }
+.chat-row.mine .message-actions { right: 100%; padding-right: 5px; }
 
-.chat-bubble.mine .message-actions {
-  right: auto;
-  left: -38px;
-  transform: translateX(4px) scale(0.96);
-}
-
-.chat-bubble:hover .message-actions,
-.chat-bubble:focus-within .message-actions {
+.bubble-cluster:hover .message-actions,
+.bubble-cluster:focus-within .message-actions,
+.bubble-cluster:has(.msg-quick-btn[data-state='open']) .message-actions {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0) scale(1);
+  transform: translateY(0);
 }
 
-/* 투명 hover 브릿지: 말풍선 ↔ ...버튼 사이 6px 틈에서 hover가 끊겨
-   버튼이 클릭 전에 사라지던 문제 해결. (::before는 옆 틈, ::after는
-   버튼 ↔ 팝오버 아래 틈을 메워 마우스 이동이 끊기지 않게 한다.)
-   .message-actions의 자식이라 데스크톱 hover 시에만 pointer-events가 살아난다. */
-.message-actions::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 100%;
-  width: 18px;
-}
-.chat-bubble.mine .message-actions::before {
-  right: auto;
-  left: 100%;
-}
-/* 팝오버를 Radix(클릭 오픈)로 전환하면서 버튼↔팝오버 hover 브릿지는 불필요해짐.
-   말풍선↔버튼 ::before 브릿지는 버튼이 여전히 hover로 나타나므로 유지. */
-
-.message-more-button {
+.msg-quick-btn {
   display: grid;
-  width: 32px;
-  height: 32px;
+  place-items: center;
+  width: 30px;
+  height: 30px;
   border: 1px solid #e3e7f2;
   border-radius: 999px;
-  place-items: center;
-  color: #4e5968;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10px 24px rgb(25 31 40 / 12%);
-  transition: color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 6px 16px rgb(25 31 40 / 10%);
+  transition: color 0.14s ease, background 0.14s ease, transform 0.14s ease;
 }
-
-.message-more-button:hover,
-.message-actions:focus-within .message-more-button {
+.msg-quick-btn:hover,
+.msg-quick-btn[data-state='open'] {
   color: #5b53eb;
   background: #f5f4fe;
   transform: scale(1.06);
 }
 
-/* Radix Popover.Content — 위치·표시는 Radix가 담당(포털 + Floating UI),
-   여기선 모양만 정의한다. 클릭으로 열려 hover-gap 문제가 원천적으로 없다. */
-.message-action-popover {
-  display: grid;
-  gap: 8px;
-  width: max-content;
-  max-width: min(270px, 72vw);
-  padding: 8px;
+/* 공감(이모지) 선택 팝오버 — 말풍선 위에 뜨는 알약형 이모지 바 (Radix Popover) */
+.reaction-picker {
+  display: flex;
+  gap: 4px;
+  padding: 6px 9px;
   border: 1px solid #e3e7f2;
-  border-radius: 14px;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 16px 34px rgb(25 31 40 / 16%);
+  box-shadow: 0 14px 32px rgb(25 31 40 / 18%);
   z-index: 40;
   transform-origin: var(--radix-popover-content-transform-origin);
 }
-
-.message-action-popover[data-state='open'] {
+.reaction-picker[data-state='open'] {
   animation: message-popover-in 0.14s ease;
 }
+.reaction-picker button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.reaction-picker button:hover { transform: scale(1.25); background: #f2f0ff; }
+.reaction-picker button.active { background: #eeecfe; }
 
 @keyframes message-popover-in {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
-}
-
-/* 팝오버가 열려 있는 동안엔 트리거(...) 버튼을 계속 보이게 고정한다
-   (버튼 노출은 .chat-bubble:hover 기준이라, 마우스가 벗어나도 유지되도록) */
-.message-actions:has(.message-more-button[data-state='open']) {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
 }
 
 .reaction-strip,
@@ -2343,87 +2343,83 @@ input:focus {
   background: #eeecfe;
 }
 
-.chat-bubble.mine .reaction-strip button,
-.chat-bubble.mine .quick-reactions button {
+.chat-row.mine .chat-bubble .reaction-strip button,
+.chat-row.mine .chat-bubble .quick-reactions button {
   border-color: rgba(255, 255, 255, 0.22);
   color: #ffffff;
   background: rgba(255, 255, 255, 0.12);
 }
 
-.chat-bubble.mine .reaction-strip button.active,
-.chat-bubble.mine .quick-reactions button.active {
+.chat-row.mine .chat-bubble .reaction-strip button.active,
+.chat-row.mine .chat-bubble .quick-reactions button.active {
   border-color: rgba(255, 255, 255, 0.72);
   background: rgba(255, 255, 255, 0.22);
 }
 
-.read-state {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  border-radius: 999px;
-  padding: 0 8px;
-  color: #4e5968;
-  background: #edf0f8;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.message-command-list {
+/* 우클릭(모바일: 길게 누르기) 커스텀 더보기 메뉴 — Radix ContextMenu */
+.message-context-menu {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 172px;
+  padding: 6px;
+  border: 1px solid #e3e7f2;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.99);
+  box-shadow: 0 18px 42px rgb(25 31 40 / 20%);
+  z-index: 60;
+  transform-origin: var(--radix-context-menu-content-transform-origin);
 }
-
-.message-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  min-height: 24px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 8px;
-  color: #4e5968;
-  background: #edf0f8;
-  font-size: 11px;
+.message-context-menu[data-state='open'] {
+  animation: message-popover-in 0.12s ease;
+}
+.context-reactions {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+}
+.ctx-emoji {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+.ctx-emoji[data-highlighted] { background: #f2f0ff; transform: scale(1.12); }
+.ctx-emoji.active { background: #eeecfe; }
+.context-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: #eceef5;
+}
+.context-read-state {
+  padding: 3px 10px 5px;
+  color: #8b93a7;
+  font-size: 11.5px;
   font-weight: 800;
 }
-
-.message-actions > .message-more-button {
-  padding: 0;
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: #2a2f45;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
 }
-
-.chat-bubble.mine .message-actions button {
-  color: #4e5968;
-  background: #edf0f8;
-}
-
-.message-actions .quick-reactions button {
-  min-width: 34px;
-  border: 1px solid #e3e7f2;
-  color: #4e5968;
-  background: #ffffff;
-  font-size: 13px;
-}
-
-.message-actions .quick-reactions button.active {
-  border-color: #5b53eb;
-  color: #5b53eb;
-  background: #eeecfe;
-}
-
-.chat-bubble.mine .message-actions .quick-reactions button {
-  border-color: #e3e7f2;
-  color: #4e5968;
-  background: #ffffff;
-}
-
-.chat-bubble.mine .message-actions .quick-reactions button.active {
-  border-color: #5b53eb;
-  color: #5b53eb;
-  background: #eeecfe;
-}
+.ctx-item[data-highlighted] { background: #f2f0ff; color: #5b53eb; }
+.ctx-item.danger { color: #e5484d; }
+.ctx-item.danger[data-highlighted] { background: #fdecec; color: #e5484d; }
 
 .composer {
   display: grid;
@@ -2696,29 +2692,13 @@ input:focus {
     padding: 14px 2px;
   }
 
-  .chat-bubble {
-    max-width: min(92%, 560px);
+  .chat-row {
+    max-width: 92%;
   }
 
-  .message-actions,
-  .chat-bubble.mine .message-actions {
-    position: static;
-    width: auto;
-    max-width: 100%;
-    margin-top: 8px;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    opacity: 1;
-    pointer-events: auto;
-    transform: none;
-  }
-
-  /* 모바일에선 액션이 static·상시 노출이라 hover 브릿지 불필요 */
-  .message-actions::before {
-    content: none;
+  /* 모바일엔 hover가 없으므로 hover 툴바는 숨기고, 길게 누르기(우클릭) 메뉴로 대체 */
+  .message-actions {
+    display: none;
   }
 
   .composer {
@@ -3058,14 +3038,14 @@ input:focus {
 }
 
 /* 내가 보낸(딥네이비) 말풍선 위에서의 카드 */
-.chat-bubble.mine .link-card {
+.chat-row.mine .chat-bubble .link-card {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.16);
 }
-.chat-bubble.mine .link-card-title { color: #ffffff; }
-.chat-bubble.mine .link-card-desc { color: rgba(226, 232, 255, 0.72); }
-.chat-bubble.mine .link-card-host { color: rgba(226, 232, 255, 0.6); }
-.chat-bubble.mine .link-card-thumb { background: rgba(255, 255, 255, 0.1); }
+.chat-row.mine .chat-bubble .link-card-title { color: #ffffff; }
+.chat-row.mine .chat-bubble .link-card-desc { color: rgba(226, 232, 255, 0.72); }
+.chat-row.mine .chat-bubble .link-card-host { color: rgba(226, 232, 255, 0.6); }
+.chat-row.mine .chat-bubble .link-card-thumb { background: rgba(255, 255, 255, 0.1); }
 
 /* ===================== 스크롤 시네마틱 웰컴 랜딩 ===================== */
 .landing {

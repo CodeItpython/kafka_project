@@ -16,7 +16,8 @@ import {
   LogOut,
   Mail,
   MessageCircle,
-  MoreHorizontal,
+  Reply,
+  SmilePlus,
   Paperclip,
   Pin,
   Plus,
@@ -38,6 +39,7 @@ import {
   UserRound
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import './styles.css';
 
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
@@ -2694,105 +2696,126 @@ function App() {
               {messages.map((message) => {
                 const linkUrl = message.deletedForEveryone ? null : firstMessageUrl(message.content);
                 return (
-                <motion.article
-                  key={message.id}
-                  className={message.senderEmail === user.email ? 'chat-bubble mine' : 'chat-bubble'}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <div className="bubble-meta">
-                    {message.senderEmail !== user.email && <strong>{message.senderName}</strong>}
-                    <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
-                  </div>
-                  {message.deletedForEveryone ? (
-                    <p className="deleted-message">삭제된 메시지입니다.</p>
-                  ) : editingMessageId === message.id ? (
-                    <div className="message-edit-panel">
-                      <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} maxLength={2000} autoFocus />
-                      <div>
-                        <button type="button" onClick={cancelEditingMessage}>취소</button>
-                        <button type="button" onClick={() => editMessage(message)} disabled={!editingDraft.trim()}>저장</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {message.replyToMessageId && (
-                        <div className="reply-preview">
-                          <strong>{message.replyToSenderName ?? '메시지'}</strong>
-                          <span>{message.replyToContent ?? '원본 메시지'}</span>
+                <ContextMenu.Root key={message.id}>
+                  <ContextMenu.Trigger asChild>
+                    <motion.div
+                      className={message.senderEmail === user.email ? 'chat-row mine' : 'chat-row'}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      {message.senderEmail !== user.email && <strong className="bubble-sender">{message.senderName}</strong>}
+                      {editingMessageId === message.id ? (
+                        <div className="message-edit-panel">
+                          <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} maxLength={2000} autoFocus />
+                          <div>
+                            <button type="button" onClick={cancelEditingMessage}>취소</button>
+                            <button type="button" onClick={() => editMessage(message)} disabled={!editingDraft.trim()}>저장</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bubble-cluster">
+                          <article className="chat-bubble">
+                            {message.deletedForEveryone ? (
+                              <p className="deleted-message">삭제된 메시지입니다.</p>
+                            ) : (
+                              <>
+                                {message.replyToMessageId && (
+                                  <div className="reply-preview">
+                                    <strong>{message.replyToSenderName ?? '메시지'}</strong>
+                                    <span>{message.replyToContent ?? '원본 메시지'}</span>
+                                  </div>
+                                )}
+                                {message.attachmentUrl && (
+                                  <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
+                                    <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
+                                  </a>
+                                )}
+                                {message.content && <p>{message.content}</p>}
+                                {linkUrl && <MessageLinkPreview url={linkUrl} />}
+                                {message.editedAt && <span className="edited-label">수정됨</span>}
+                                {message.reactions.length > 0 && (
+                                  <div className="reaction-strip" aria-label="메시지 반응">
+                                    {message.reactions.map((reaction) => (
+                                      <button
+                                        key={`${message.id}-${reaction.emoji}`}
+                                        type="button"
+                                        className={reaction.reactedByMe ? 'active' : ''}
+                                        onClick={() => toggleMessageReaction(message, reaction.emoji)}
+                                        title={`${reaction.emoji} ${reaction.count}명`}
+                                      >
+                                        <span>{reaction.emoji}</span>
+                                        <strong>{reaction.count}</strong>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </article>
+                          <time className="bubble-time">{new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}</time>
+                          {!message.deletedForEveryone && (
+                            <div className="message-actions">
+                              <button className="msg-quick-btn" type="button" title="답장" aria-label="답장" onClick={() => setReplyTarget(message)}>
+                                <Reply size={16} aria-hidden />
+                              </button>
+                              <Popover.Root>
+                                <Popover.Trigger asChild>
+                                  <button className="msg-quick-btn" type="button" title="공감" aria-label="공감 남기기">
+                                    <SmilePlus size={16} aria-hidden />
+                                  </button>
+                                </Popover.Trigger>
+                                <Popover.Portal>
+                                  <Popover.Content className="reaction-picker" side="top" align="center" sideOffset={8} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()}>
+                                    {QUICK_REACTIONS.map((emoji) => (
+                                      <button
+                                        key={`${message.id}-pick-${emoji}`}
+                                        type="button"
+                                        className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
+                                        onClick={() => toggleMessageReaction(message, emoji)}
+                                        title={`${emoji} 반응`}
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </Popover.Content>
+                                </Popover.Portal>
+                              </Popover.Root>
+                            </div>
+                          )}
                         </div>
                       )}
-                      {message.attachmentUrl && (
-                        <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
-                          <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
-                        </a>
-                      )}
-                      {message.content && <p>{message.content}</p>}
-                      {linkUrl && <MessageLinkPreview url={linkUrl} />}
-                      {message.editedAt && <span className="edited-label">수정됨</span>}
-                      {message.reactions.length > 0 && (
-                        <div className="reaction-strip" aria-label="메시지 반응">
-                          {message.reactions.map((reaction) => (
-                            <button
-                              key={`${message.id}-${reaction.emoji}`}
-                              type="button"
-                              className={reaction.reactedByMe ? 'active' : ''}
-                              onClick={() => toggleMessageReaction(message, reaction.emoji)}
-                              title={`${reaction.emoji} ${reaction.count}명`}
+                    </motion.div>
+                  </ContextMenu.Trigger>
+                  {!message.deletedForEveryone && editingMessageId !== message.id && (
+                    <ContextMenu.Portal>
+                      <ContextMenu.Content className="message-context-menu" collisionPadding={12}>
+                        <div className="context-reactions" aria-label="빠른 반응">
+                          {QUICK_REACTIONS.map((emoji) => (
+                            <ContextMenu.Item
+                              key={`${message.id}-ctx-${emoji}`}
+                              className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'ctx-emoji active' : 'ctx-emoji'}
+                              onSelect={() => toggleMessageReaction(message, emoji)}
                             >
-                              <span>{reaction.emoji}</span>
-                              <strong>{reaction.count}</strong>
-                            </button>
+                              {emoji}
+                            </ContextMenu.Item>
                           ))}
                         </div>
-                      )}
-                      <Popover.Root>
-                        <div className="message-actions">
-                          <Popover.Trigger asChild>
-                            <button className="message-more-button" type="button" title="메시지 더보기" aria-label="메시지 더보기">
-                              <MoreHorizontal size={16} aria-hidden />
-                            </button>
-                          </Popover.Trigger>
-                        </div>
-                        <Popover.Portal>
-                          <Popover.Content
-                            className="message-action-popover"
-                            side="bottom"
-                            align="end"
-                            sideOffset={6}
-                            collisionPadding={12}
-                            onOpenAutoFocus={(event) => event.preventDefault()}
-                          >
-                            <div className="quick-reactions" aria-label="빠른 반응">
-                              {QUICK_REACTIONS.map((emoji) => (
-                                <button
-                                  key={`${message.id}-${emoji}`}
-                                  type="button"
-                                  className={message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe) ? 'active' : ''}
-                                  onClick={() => toggleMessageReaction(message, emoji)}
-                                  title={`${emoji} 반응`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                            <div className="message-command-list">
-                              {message.senderEmail === user.email && (
-                                <span className="read-state">{deliveryStatusLabel(message)}</span>
-                              )}
-                              {message.senderEmail === user.email && message.content && (
-                                <button onClick={() => startEditingMessage(message)} type="button"><Pencil size={13} aria-hidden />수정</button>
-                              )}
-                              <button onClick={() => setReplyTarget(message)} type="button">답장</button>
-                              <button onClick={() => hideMessageForMe(message)} type="button">나에게 삭제</button>
-                              {message.senderEmail === user.email && <button onClick={() => deleteMessageForEveryone(message)} type="button">모두에게 삭제</button>}
-                            </div>
-                          </Popover.Content>
-                        </Popover.Portal>
-                      </Popover.Root>
-                    </>
+                        <ContextMenu.Separator className="context-sep" />
+                        {message.senderEmail === user.email && (
+                          <div className="context-read-state">{deliveryStatusLabel(message)}</div>
+                        )}
+                        {message.senderEmail === user.email && message.content && (
+                          <ContextMenu.Item className="ctx-item" onSelect={() => startEditingMessage(message)}><Pencil size={14} aria-hidden />수정</ContextMenu.Item>
+                        )}
+                        <ContextMenu.Item className="ctx-item" onSelect={() => setReplyTarget(message)}><Reply size={14} aria-hidden />답장</ContextMenu.Item>
+                        <ContextMenu.Item className="ctx-item" onSelect={() => hideMessageForMe(message)}>나에게 삭제</ContextMenu.Item>
+                        {message.senderEmail === user.email && (
+                          <ContextMenu.Item className="ctx-item danger" onSelect={() => deleteMessageForEveryone(message)}><Trash2 size={14} aria-hidden />모두에게 삭제</ContextMenu.Item>
+                        )}
+                      </ContextMenu.Content>
+                    </ContextMenu.Portal>
                   )}
-                </motion.article>
+                </ContextMenu.Root>
                 );
               })}
             </div>
