@@ -3,26 +3,97 @@ import { motion } from 'motion/react';
 import { ExternalLink, Newspaper, RefreshCcw, Share2 } from 'lucide-react';
 
 type NewsCategory = { code: string; label: string };
-export type NewsItem = { id: string; title: string; url: string; press: string | null; thumbnail: string | null };
+export type NewsItem = {
+  id: string;
+  title: string;
+  url: string;
+  press: string | null;
+  thumbnail: string | null;
+  description: string | null;
+};
 
 const NEWS_ROOT = '/api/news';
+const DISPLAY = 20;
+const MAX_START = 181; // 무한 스크롤 상한(네이버 start 한계 + 과도한 페이징 방지)
 const PULL_THRESHOLD = 64;
 const MAX_PULL = 92;
+
+// og:image 지연 로딩 캐시(url → 이미지 URL, 또는 null = 조회했지만 이미지 없음)
+const ogImageCache = new Map<string, string | null>();
+
+/**
+ * 뉴스 검색 API는 썸네일을 주지 않으므로, 카드가 화면에 보일 때(IntersectionObserver) 링크 프리뷰
+ * 엔드포인트로 기사 og:image를 지연 조회해 채운다. 보이는 카드만 요청 + 캐시로 중복/부하를 줄인다.
+ */
+function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) {
+  const [image, setImage] = useState<string | null>(fallback ?? ogImageCache.get(url) ?? null);
+  const ref = useRef<HTMLDivElement>(null);
+  const requested = useRef(false);
+
+  useEffect(() => {
+    if (fallback) return;
+    if (ogImageCache.has(url)) {
+      setImage(ogImageCache.get(url) ?? null);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting) || requested.current) return;
+        requested.current = true;
+        observer.disconnect();
+        fetch(`${NEWS_ROOT}/link-preview?url=${encodeURIComponent(url)}`)
+          .then((response) => (response.status === 200 ? response.json() : null))
+          .then((data: { image?: string } | null) => {
+            const img = data && data.image ? data.image : null;
+            ogImageCache.set(url, img);
+            setImage(img);
+          })
+          .catch(() => {
+            ogImageCache.set(url, null);
+          });
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [url, fallback]);
+
+  if (image) {
+    return (
+      <div className="news-card-thumb">
+        <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+      </div>
+    );
+  }
+  return (
+    <div className="news-card-thumb news-card-thumb--empty" ref={ref} aria-hidden>
+      <Newspaper aria-hidden />
+    </div>
+  );
+}
 
 export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
   const [categories, setCategories] = useState<NewsCategory[]>([]);
   const [active, setActive] = useState<string>('');
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pull, setPull] = useState(0);
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const reqRef = useRef(0);
+  const nextStartRef = useRef(1);
+  const loadingRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const refreshingRef = useRef(false);
   const touchStartY = useRef<number | null>(null);
   const wheelAccum = useRef(0);
   const wheelResetTimer = useRef<number | undefined>(undefined);
-  const refreshingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,52 +112,85 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     };
   }, []);
 
-  const runFeed = useCallback((category: string, refresh: boolean) => {
+  const loadPage = useCallback((category: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
     if (!category) return Promise.resolve();
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    const suffix = refresh ? '&refresh=true' : '';
-    return fetch(`${NEWS_ROOT}/feed?category=${encodeURIComponent(category)}${suffix}`)
+    const myReq = mode === 'replace' ? ++reqRef.current : reqRef.current;
+    if (mode === 'append') {
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else if (refresh) {
+      refreshingRef.current = true;
+      setRefreshing(true);
+    } else {
+      loadingRef.current = true;
+      setLoading(true);
+      setError(null);
+    }
+    const url = `${NEWS_ROOT}/feed?category=${encodeURIComponent(category)}`
+      + `&start=${startAt}&display=${DISPLAY}${refresh ? '&refresh=true' : ''}`;
+    return fetch(url)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data: { items: NewsItem[] }) => {
-        setItems(Array.isArray(data.items) ? data.items : []);
+        if (myReq !== reqRef.current) return; // 카테고리/새로고침으로 무효화된 응답 폐기
+        const list = Array.isArray(data.items) ? data.items : [];
+        if (mode === 'append') {
+          setItems((prev) => {
+            const seen = new Set(prev.map((n) => n.id));
+            return [...prev, ...list.filter((n) => !seen.has(n.id))];
+          });
+        } else {
+          setItems(list);
+        }
+        nextStartRef.current = startAt + DISPLAY;
+        setHasMore(list.length >= DISPLAY && startAt + DISPLAY <= MAX_START);
       })
       .catch(() => {
+        if (myReq !== reqRef.current) return;
+        if (mode === 'append') {
+          setHasMore(false);
+          return;
+        }
         setError('뉴스를 불러오지 못했습니다.');
-        if (!refresh) setItems([]);
+        setItems([]);
       })
       .finally(() => {
+        loadingRef.current = false;
+        loadingMoreRef.current = false;
+        refreshingRef.current = false;
         setLoading(false);
+        setLoadingMore(false);
         setRefreshing(false);
+        setPull(0);
+        wheelAccum.current = 0;
       });
   }, []);
 
+  // 카테고리 변경 → 처음부터 다시
   useEffect(() => {
     if (!active) return;
-    let cancelled = false;
+    nextStartRef.current = 1;
+    setHasMore(true);
     setItems([]);
-    runFeed(active, false).finally(() => {
-      if (cancelled) return;
-    });
-    // 카테고리 전환 시 당김 상태 초기화
     setPull(0);
     wheelAccum.current = 0;
+    loadPage(active, 1, 'replace', false);
     return () => {
-      cancelled = true;
       if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
     };
-  }, [active, runFeed]);
+  }, [active, loadPage]);
+
+  function loadMore() {
+    if (!hasMore || loadingRef.current || loadingMoreRef.current || refreshingRef.current || !active) return;
+    loadPage(active, nextStartRef.current, 'append', false);
+  }
 
   const triggerRefresh = useCallback(() => {
-    if (refreshingRef.current || !active) return;
-    refreshingRef.current = true;
-    setPull(0);
-    wheelAccum.current = 0;
-    runFeed(active, true).finally(() => {
-      refreshingRef.current = false;
-    });
-  }, [active, runFeed]);
+    if (refreshingRef.current || loadingRef.current || !active) return;
+    nextStartRef.current = 1;
+    setHasMore(true);
+    setItems([]);
+    loadPage(active, 1, 'replace', true);
+  }, [active, loadPage]);
 
   // 데스크톱: 최상단에서 위로 휠 → 당김/새로고침
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -99,7 +203,6 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
         triggerRefresh();
         return;
       }
-      // 휠은 손 떼는 이벤트가 없으므로, 스크롤이 멈추면 곧바로 당김을 원위치로 되돌린다.
       if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
       wheelResetTimer.current = window.setTimeout(() => {
         if (!refreshingRef.current) {
@@ -130,6 +233,15 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     else setPull(0);
   }
 
+  // 아래로 스크롤 → 더 불러오기(쇼핑 탭과 동일한 서버 페이지네이션)
+  function handleScroll() {
+    const el = rootRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 340) {
+      loadMore();
+    }
+  }
+
   const indicatorHeight = refreshing ? 46 : pull;
   const armed = pull >= PULL_THRESHOLD;
 
@@ -137,6 +249,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     <div
       className="news-feed-root"
       ref={rootRef}
+      onScroll={handleScroll}
       onWheel={handleWheel}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -176,7 +289,6 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
         <div className="news-list">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="news-card news-card--skeleton" aria-hidden>
-              <div className="news-card-thumb" />
               <div className="news-card-body">
                 <span className="skeleton-line" />
                 <span className="skeleton-line short" />
@@ -189,7 +301,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       {!loading && error && (
         <div className="news-empty">
           <p>{error}</p>
-          <button type="button" className="news-retry" onClick={() => runFeed(active, true)}>
+          <button type="button" className="news-retry" onClick={() => loadPage(active, 1, 'replace', true)}>
             <RefreshCcw size={15} aria-hidden /> 다시 시도
           </button>
         </div>
@@ -202,54 +314,48 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       )}
 
       {!loading && !error && items.length > 0 && (
-        <div className="news-list">
-          {items.map((item, index) => (
-            <motion.div
-              key={item.id}
-              className="news-card-wrap"
-              initial={{ y: 10 }}
-              animate={{ y: 0 }}
-              transition={{ duration: 0.28, delay: Math.min(index * 0.02, 0.3) }}
-              whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
-              whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
-            >
-              <a
-                className="news-card"
-                href={item.url}
-                target="_blank"
-                rel="noreferrer noopener"
+        <>
+          <div className="news-list">
+            {items.map((item, index) => (
+              <motion.div
+                key={`${item.id}-${index}`}
+                className="news-card-wrap"
+                initial={{ y: 10 }}
+                animate={{ y: 0 }}
+                transition={{ duration: 0.28, delay: Math.min((index % DISPLAY) * 0.02, 0.3) }}
+                whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
+                whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
               >
-                {item.thumbnail ? (
-                  <div className="news-card-thumb">
-                    <img src={item.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                <a className="news-card" href={item.url} target="_blank" rel="noreferrer noopener">
+                  <NewsThumb url={item.url} fallback={item.thumbnail} />
+                  <div className="news-card-body">
+                    <strong className="news-card-title">{item.title}</strong>
+                    {item.description && <p className="news-card-desc">{item.description}</p>}
+                    <span className="news-card-meta">
+                      {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
+                    </span>
                   </div>
-                ) : (
-                  <div className="news-card-thumb news-card-thumb--empty" aria-hidden>
-                    <Newspaper aria-hidden />
-                  </div>
+                </a>
+                {onShare && (
+                  <button
+                    type="button"
+                    className="news-share-btn"
+                    title="채팅으로 공유"
+                    aria-label={`${item.title} 채팅으로 공유`}
+                    onClick={() => onShare(item)}
+                  >
+                    <Share2 size={15} aria-hidden />
+                    <span>공유</span>
+                  </button>
                 )}
-                <div className="news-card-body">
-                  <strong className="news-card-title">{item.title}</strong>
-                  <span className="news-card-meta">
-                    {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
-                  </span>
-                </div>
-              </a>
-              {onShare && (
-                <button
-                  type="button"
-                  className="news-share-btn"
-                  title="채팅으로 공유"
-                  aria-label={`${item.title} 채팅으로 공유`}
-                  onClick={() => onShare(item)}
-                >
-                  <Share2 size={15} aria-hidden />
-                  <span>공유</span>
-                </button>
-              )}
-            </motion.div>
-          ))}
-        </div>
+              </motion.div>
+            ))}
+          </div>
+          <div className="shop-more">
+            {loadingMore && <span className="shop-more-loading"><RefreshCcw size={14} aria-hidden /> 더 불러오는 중…</span>}
+            {!loadingMore && !hasMore && <span className="shop-more-end">모든 뉴스를 불러왔어요</span>}
+          </div>
+        </>
       )}
     </div>
   );
