@@ -14,8 +14,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
+@Slf4j
 public class NaverOAuthController {
     private static final String STATE_COOKIE = "naver_oauth_state";
 
@@ -58,7 +60,7 @@ public class NaverOAuthController {
     }
 
     @GetMapping("/oauth2/callback/naver")
-    public ResponseEntity<String> callback(
+    public ResponseEntity<?> callback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String error,
@@ -66,42 +68,61 @@ public class NaverOAuthController {
             @CookieValue(name = STATE_COOKIE, required = false) String expectedState
     ) {
         if (error != null && !error.isBlank()) {
-            String detail = errorDescription == null ? error : errorDescription;
-            return errorPageTemplate.badRequest("네이버 로그인 실패", "네이버 인증이 취소되었거나 실패했습니다: " + detail, frontendRedirectUri);
+            return redirectToFrontend("provider error: " + (errorDescription == null ? error : errorDescription));
         }
         if (code == null || code.isBlank()) {
-            return errorPageTemplate.badRequest("네이버 로그인 실패", "네이버 인증 정보를 받지 못했습니다.", frontendRedirectUri);
+            return redirectToFrontend("missing authorization code");
         }
         if (expectedState == null || state == null || !expectedState.equals(state)) {
-            return errorPageTemplate.badRequest("네이버 로그인 실패", "보안 검증(state)에 실패했습니다. 다시 시도해주세요.", frontendRedirectUri);
+            // 흔한 케이스: 브라우저가 콜백을 중복 호출해 두 번째 요청이 도착. 이미 성공한 첫 요청이
+            // 1회용 state 쿠키를 지운 뒤라 여기로 온다. 에러 화면 대신 앱으로 돌려보낸다(첫 요청이
+            // 이미 토큰을 프론트에 전달했으므로 사용자는 로그인된 상태로 끝난다).
+            return redirectToFrontend("state validation failed (likely a duplicate or expired callback)");
         }
 
-        AuthResponse authResponse = naverOAuthService.loginWithAuthorizationCode(code, state);
-        String redirectTarget = UriComponentsBuilder.fromUriString(frontendRedirectUri)
-                .fragment("access_token=" + authResponse.accessToken())
-                .build()
-                .toUriString();
-        ResponseCookie clearState = ResponseCookie.from(STATE_COOKIE, "")
+        try {
+            AuthResponse authResponse = naverOAuthService.loginWithAuthorizationCode(code, state);
+            String redirectTarget = UriComponentsBuilder.fromUriString(frontendRedirectUri)
+                    .fragment("access_token=" + authResponse.accessToken())
+                    .build()
+                    .toUriString();
+            String body = """
+                    <!doctype html>
+                    <html lang="ko">
+                    <head><meta charset="UTF-8"><title>네이버 로그인</title></head>
+                    <body>
+                    <script>
+                      location.replace(%s);
+                    </script>
+                    </body>
+                    </html>
+                    """.formatted(jsString(redirectTarget));
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.SET_COOKIE, clearStateCookie().toString())
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(body);
+        } catch (RuntimeException exception) {
+            log.warn("Naver login token/userinfo exchange failed", exception);
+            return redirectToFrontend("token/userinfo exchange failed: " + exception.getMessage());
+        }
+    }
+
+    /** On any callback failure, bounce the browser back to the app instead of showing an error page. */
+    private ResponseEntity<Void> redirectToFrontend(String reason) {
+        log.warn("Naver login callback did not complete ({}). Redirecting to {}.", reason, frontendRedirectUri);
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.SET_COOKIE, clearStateCookie().toString())
+                .header(HttpHeaders.LOCATION, frontendRedirectUri)
+                .build();
+    }
+
+    private ResponseCookie clearStateCookie() {
+        return ResponseCookie.from(STATE_COOKIE, "")
                 .httpOnly(true)
                 .path("/")
                 .maxAge(0)
                 .sameSite("Lax")
                 .build();
-        String body = """
-                <!doctype html>
-                <html lang="ko">
-                <head><meta charset="UTF-8"><title>네이버 로그인</title></head>
-                <body>
-                <script>
-                  location.replace(%s);
-                </script>
-                </body>
-                </html>
-                """.formatted(jsString(redirectTarget));
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, clearState.toString())
-                .contentType(MediaType.TEXT_HTML)
-                .body(body);
     }
 
     private String jsString(String value) {
