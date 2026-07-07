@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
+@Slf4j
 public class KakaoOAuthController {
     private final KakaoOAuthService kakaoOAuthService;
     private final ErrorPageTemplate errorPageTemplate;
@@ -51,38 +53,52 @@ public class KakaoOAuthController {
     }
 
     @GetMapping("/oauth2/callback/kakao")
-    public ResponseEntity<String> callback(
+    public ResponseEntity<?> callback(
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String error,
             @RequestParam(required = false, name = "error_description") String errorDescription
     ) {
         if (error != null && !error.isBlank()) {
-            String detail = errorDescription == null ? error : errorDescription;
-            return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증이 취소되었거나 실패했습니다: " + detail, frontendRedirectUri);
+            return redirectToFrontend("provider error: " + (errorDescription == null ? error : errorDescription));
         }
         if (code == null || code.isBlank()) {
-            return errorPageTemplate.badRequest("카카오 로그인 실패", "카카오 인증 정보를 받지 못했습니다.", frontendRedirectUri);
+            return redirectToFrontend("missing authorization code");
         }
 
-        AuthResponse authResponse = kakaoOAuthService.loginWithAuthorizationCode(code);
-        String redirectTarget = UriComponentsBuilder.fromUriString(frontendRedirectUri)
-                .fragment("access_token=" + authResponse.accessToken())
-                .build()
-                .toUriString();
-        String body = """
-                <!doctype html>
-                <html lang="ko">
-                <head><meta charset="UTF-8"><title>카카오 로그인</title></head>
-                <body>
-                <script>
-                  location.replace(%s);
-                </script>
-                </body>
-                </html>
-                """.formatted(jsString(redirectTarget));
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_HTML)
-                .body(body);
+        try {
+            AuthResponse authResponse = kakaoOAuthService.loginWithAuthorizationCode(code);
+            String redirectTarget = UriComponentsBuilder.fromUriString(frontendRedirectUri)
+                    .fragment("access_token=" + authResponse.accessToken())
+                    .build()
+                    .toUriString();
+            String body = """
+                    <!doctype html>
+                    <html lang="ko">
+                    <head><meta charset="UTF-8"><title>카카오 로그인</title></head>
+                    <body>
+                    <script>
+                      location.replace(%s);
+                    </script>
+                    </body>
+                    </html>
+                    """.formatted(jsString(redirectTarget));
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(body);
+        } catch (RuntimeException exception) {
+            // 흔한 케이스: 브라우저가 콜백을 중복 호출 → 두 번째 요청의 코드는 이미 사용돼 토큰 교환 실패.
+            // 첫 요청이 이미 로그인을 성공시켰으므로 에러 화면 대신 앱으로 돌려보낸다.
+            log.warn("Kakao login token/userinfo exchange failed", exception);
+            return redirectToFrontend("token/userinfo exchange failed: " + exception.getMessage());
+        }
+    }
+
+    /** On any callback failure, bounce the browser back to the app instead of showing an error page. */
+    private ResponseEntity<Void> redirectToFrontend(String reason) {
+        log.warn("Kakao login callback did not complete ({}). Redirecting to {}.", reason, frontendRedirectUri);
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.LOCATION, frontendRedirectUri)
+                .build();
     }
 
     private String jsString(String value) {
