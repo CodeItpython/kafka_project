@@ -68,14 +68,22 @@ public class ShoppingService {
     }
 
     private List<ProductResponse> fetch(String query, int display, int start, String sort) {
-        NaverSearchResponse response = naverClient.search(query, clampDisplay(display), start, sort);
+        List<ProductResponse> products = fetchRaw(query, sort, display, start);
+        // 요청 경로: 조회된 상품을 Elasticsearch에 비동기 색인 → 검색 인덱스가 실카탈로그로 채워진다.
+        productIndexService.indexQuietly(products);
+        return products;
+    }
+
+    /**
+     * Naver에서 상품을 가져와 정규화만 한다(ES 색인 부작용 없음).
+     * Spring Batch 카탈로그 색인 잡의 Reader처럼, 색인을 Writer가 담당하는 경로에서 사용한다.
+     */
+    public List<ProductResponse> fetchRaw(String query, String sort, int display, int start) {
+        NaverSearchResponse response = naverClient.search(query, clampDisplay(display), clampStart(start), normalizeSort(sort));
         if (response == null || response.items() == null) {
             return List.of();
         }
-        List<ProductResponse> products = response.items().stream().map(ShoppingService::normalize).toList();
-        // 조회된 상품을 Elasticsearch에 비동기 색인 → 검색 인덱스가 실카탈로그로 채워진다.
-        productIndexService.indexQuietly(products);
-        return products;
+        return response.items().stream().map(ShoppingService::normalize).toList();
     }
 
     private static ProductResponse normalize(NaverSearchResponse.Item item) {
