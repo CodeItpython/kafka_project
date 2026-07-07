@@ -36,10 +36,12 @@ public class NewsController {
     @GetMapping("/feed")
     public FeedResponse feed(
             @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "start", required = false, defaultValue = "1") int start,
+            @RequestParam(name = "display", required = false, defaultValue = "20") int display,
             @RequestParam(name = "refresh", required = false, defaultValue = "false") boolean refresh
     ) {
         NewsCategory resolved = NewsCategory.fromCode(category);
-        List<NewsItem> items = newsService.feed(resolved, refresh);
+        List<NewsItem> items = newsService.feed(resolved, start, display, refresh);
         return new FeedResponse(resolved.code(), resolved.label(), items.size(), items);
     }
 
