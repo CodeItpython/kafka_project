@@ -245,7 +245,6 @@ p {
 .profile-card p,
 .profile-card small,
 .conversation-header p,
-.bubble-meta span,
 .room-item small,
 .contact-list small,
 .profile-history-list small,
@@ -2169,6 +2168,7 @@ input:focus {
 .message-edit-panel {
   display: grid;
   gap: 8px;
+  width: min(440px, 78vw);
 }
 
 .message-edit-panel textarea {
@@ -2299,20 +2299,15 @@ input:focus {
   to { opacity: 1; transform: scale(1); }
 }
 
-.reaction-strip,
-.quick-reactions {
+.reaction-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-}
-
-.reaction-strip {
   margin-top: 8px;
 }
 
-.reaction-strip button,
-.quick-reactions button {
+.reaction-strip button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2329,29 +2324,25 @@ input:focus {
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 
-.reaction-strip button:hover,
-.quick-reactions button:hover {
+.reaction-strip button:hover {
   transform: translateY(-1px);
   border-color: #b4d5ff;
   background: #f5f4fe;
 }
 
-.reaction-strip button.active,
-.quick-reactions button.active {
+.reaction-strip button.active {
   border-color: #5b53eb;
   color: #5b53eb;
   background: #eeecfe;
 }
 
-.chat-row.mine .chat-bubble .reaction-strip button,
-.chat-row.mine .chat-bubble .quick-reactions button {
+.chat-row.mine .chat-bubble .reaction-strip button {
   border-color: rgba(255, 255, 255, 0.22);
   color: #ffffff;
   background: rgba(255, 255, 255, 0.12);
 }
 
-.chat-row.mine .chat-bubble .reaction-strip button.active,
-.chat-row.mine .chat-bubble .quick-reactions button.active {
+.chat-row.mine .chat-bubble .reaction-strip button.active {
   border-color: rgba(255, 255, 255, 0.72);
   background: rgba(255, 255, 255, 0.22);
 }
@@ -2696,9 +2687,13 @@ input:focus {
     max-width: 92%;
   }
 
-  /* 모바일엔 hover가 없으므로 hover 툴바는 숨기고, 길게 누르기(우클릭) 메뉴로 대체 */
+  /* 모바일엔 hover가 없으므로 빠른 액션(답장/공감)을 상시 노출해 탭으로 접근.
+     (수정/삭제 등 나머지는 길게 누르기 → 컨텍스트 메뉴) */
   .message-actions {
-    display: none;
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
   }
 
   .composer {
