@@ -18,6 +18,62 @@ const MAX_START = 181; // 무한 스크롤 상한(네이버 start 한계 + 과�
 const PULL_THRESHOLD = 64;
 const MAX_PULL = 92;
 
+// og:image 지연 로딩 캐시(url → 이미지 URL, 또는 null = 조회했지만 이미지 없음)
+const ogImageCache = new Map<string, string | null>();
+
+/**
+ * 뉴스 검색 API는 썸네일을 주지 않으므로, 카드가 화면에 보일 때(IntersectionObserver) 링크 프리뷰
+ * 엔드포인트로 기사 og:image를 지연 조회해 채운다. 보이는 카드만 요청 + 캐시로 중복/부하를 줄인다.
+ */
+function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) {
+  const [image, setImage] = useState<string | null>(fallback ?? ogImageCache.get(url) ?? null);
+  const ref = useRef<HTMLDivElement>(null);
+  const requested = useRef(false);
+
+  useEffect(() => {
+    if (fallback) return;
+    if (ogImageCache.has(url)) {
+      setImage(ogImageCache.get(url) ?? null);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting) || requested.current) return;
+        requested.current = true;
+        observer.disconnect();
+        fetch(`${NEWS_ROOT}/link-preview?url=${encodeURIComponent(url)}`)
+          .then((response) => (response.status === 200 ? response.json() : null))
+          .then((data: { image?: string } | null) => {
+            const img = data && data.image ? data.image : null;
+            ogImageCache.set(url, img);
+            setImage(img);
+          })
+          .catch(() => {
+            ogImageCache.set(url, null);
+          });
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [url, fallback]);
+
+  if (image) {
+    return (
+      <div className="news-card-thumb">
+        <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+      </div>
+    );
+  }
+  return (
+    <div className="news-card-thumb news-card-thumb--empty" ref={ref} aria-hidden>
+      <Newspaper aria-hidden />
+    </div>
+  );
+}
+
 export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
   const [categories, setCategories] = useState<NewsCategory[]>([]);
   const [active, setActive] = useState<string>('');
@@ -271,15 +327,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
                 whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
               >
                 <a className="news-card" href={item.url} target="_blank" rel="noreferrer noopener">
-                  {item.thumbnail ? (
-                    <div className="news-card-thumb">
-                      <img src={item.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                    </div>
-                  ) : (
-                    <div className="news-card-thumb news-card-thumb--empty" aria-hidden>
-                      <Newspaper aria-hidden />
-                    </div>
-                  )}
+                  <NewsThumb url={item.url} fallback={item.thumbnail} />
                   <div className="news-card-body">
                     <strong className="news-card-title">{item.title}</strong>
                     {item.description && <p className="news-card-desc">{item.description}</p>}
