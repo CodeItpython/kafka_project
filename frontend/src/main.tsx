@@ -2613,7 +2613,6 @@ function App() {
                 </button>
               </div>
               <div>
-                  <p className="eyebrow">{selectedRoom?.type === 'DIRECT' ? 'Private message' : 'Kafka message stream'}</p>
                   <h2>{selectedRoom?.name ?? '대화를 선택하세요'}</h2>
                   <p>{selectedRoom?.description ?? '친구를 선택하면 1:1 채팅방이 열립니다.'}</p>
                   <div className="presence-line">
