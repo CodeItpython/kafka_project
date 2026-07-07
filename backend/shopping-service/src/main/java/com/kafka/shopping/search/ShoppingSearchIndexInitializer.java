@@ -1,5 +1,6 @@
 package com.kafka.shopping.search;
 
+import com.kafka.shopping.batch.CatalogIndexLauncher;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,14 +23,14 @@ import org.springframework.stereotype.Component;
 public class ShoppingSearchIndexInitializer {
     private final ElasticsearchOperations elasticsearchOperations;
     private final SearchProperties properties;
-    private final CatalogWarmupService catalogWarmupService;
+    private final CatalogIndexLauncher catalogIndexLauncher;
 
     @EventListener(ApplicationReadyEvent.class)
     public void initialize() {
         boolean productsReady = ensureIndex(ProductDocument.class, "title", "search_as_you_type");
         ensureIndex(SearchLogDocument.class, "keyword", "keyword");
         if (productsReady && properties.isWarmOnStartup()) {
-            catalogWarmupService.warmAsync();
+            catalogIndexLauncher.launch("startup");
         }
     }
 
