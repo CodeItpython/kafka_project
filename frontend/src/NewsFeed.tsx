@@ -394,9 +394,12 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
         )}
       </div>
 
-      <header className="news-header">
-        <h2>뉴스</h2>
-        <p className="muted">네이버 뉴스에서 모은 주요 소식이에요. 위로 당기면 새로고침돼요.</p>
+      <header className="news-hero">
+        <div className="news-hero-copy">
+          <span className="news-hero-eyebrow">NAVER NEWS</span>
+          <h2>#헤드라인</h2>
+          <p>네이버 뉴스에서 모은 주요 소식이에요. 위로 당기면 새로고침돼요.</p>
+        </div>
       </header>
 
       <div className="news-searchbar">
