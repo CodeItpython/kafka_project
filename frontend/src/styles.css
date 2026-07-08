@@ -312,6 +312,42 @@ p {
 }
 .signup-cta:hover { background: #e9e6ff; border-color: #b9b3f7; }
 
+/* 로그인 폼과 회원가입/소셜 버튼을 구분하는 구분선 */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 14px;
+  color: #8b93a7;
+  font-size: 12px;
+  font-weight: 800;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(140, 147, 167, 0.35);
+}
+
+/* 회원가입 + 카카오 + 네이버를 같은 간격으로 묶음 */
+.auth-alt-actions {
+  display: grid;
+  gap: 10px;
+}
+.auth-alt-actions .signup-cta,
+.auth-alt-actions .kakao-button,
+.auth-alt-actions .naver-button {
+  margin-top: 0;
+}
+
+/* 카카오톡 말풍선 마크 (버튼 텍스트 앞) */
+.kakao-mark {
+  display: inline-grid;
+  place-items: center;
+  color: #3c1e1e;
+}
+
 .signup-backdrop {
   position: fixed;
   inset: 0;
@@ -658,6 +694,10 @@ input:focus {
   margin-top: 12px;
   color: #191600;
   background: #fee500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .naver-button {
