@@ -1,0 +1,33 @@
+package com.example.kafka.news;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.IndexOperations;
+import org.springframework.stereotype.Component;
+
+/**
+ * {@code news-articles} 인덱스를 애노테이션 매핑(contentNori=nori)으로 생성한다.
+ * ES가 없으면 조용히 넘어가고(뉴스 피드/검색은 Naver로 계속 동작), ES 복구 시 다음 기동에 재시도된다.
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class NewsSearchIndexInitializer {
+    private final ElasticsearchOperations elasticsearchOperations;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void initialize() {
+        try {
+            IndexOperations indexOperations = elasticsearchOperations.indexOps(NewsDocument.class);
+            if (!indexOperations.exists()) {
+                indexOperations.create();
+            }
+            indexOperations.putMapping(indexOperations.createMapping(NewsDocument.class));
+        } catch (RuntimeException exception) {
+            log.warn("News search index not ready (retried once ES is reachable). Cause: {}", exception.getMessage());
+        }
+    }
+}

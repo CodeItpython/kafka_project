@@ -19,7 +19,9 @@ spec:
         fsGroup: 1000
       containers:
         - name: elasticsearch
-          image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
+          # 한국어 형태소분석기(nori) 포함 커스텀 이미지 — 연관검색어(significant_text)용.
+          # `docker compose build elasticsearch`로 빌드 후 클러스터에 로드(kind/minikube load).
+          image: kafka-elasticsearch:local
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9200

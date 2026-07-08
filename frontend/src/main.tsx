@@ -313,6 +313,34 @@ const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
 // 메시지 시간 포맷터는 한 번만 생성(렌더마다 메시지 수만큼 Intl 생성 방지)
 const MESSAGE_TIME_FORMAT = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' });
 
+// 배송 상태 라벨(순수 함수) — App 밖 모듈 스코프에 둬 행마다 prop으로 넘기지 않고
+// MessageRow 내부에서 직접 계산한다.
+function deliveryStatusLabel(message: ChatMessage) {
+  if (message.readCount > 0 || message.deliveryStatus === 'READ') {
+    return `읽음 ${Math.max(message.readCount, 1)}`;
+  }
+  if (message.deliveredCount > 0 || message.deliveryStatus === 'DELIVERED') {
+    return `전달됨 ${Math.max(message.deliveredCount, 1)}`;
+  }
+  return '전송됨';
+}
+
+// 반응 배열이 렌더에 영향 주는 필드 기준으로 같은지 판정(withReadCounts의 참조 보존용).
+function reactionsShallowEqual(a: MessageReaction[], b: MessageReaction[]) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (
+      a[index].emoji !== b[index].emoji ||
+      a[index].count !== b[index].count ||
+      a[index].reactedByMe !== b[index].reactedByMe
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function samePresence(a: RoomPresence, b: RoomPresence) {
   return a.onlineUsers.length === b.onlineUsers.length
     && a.typingUsers.length === b.typingUsers.length
@@ -329,6 +357,21 @@ const SAMPLE_USERS = [
 
 function App() {
   const [mode, setMode] = useState<Mode>('login');
+  // 회원가입 모달(동의 → 이메일 인증 → 비밀번호 → 완료)
+  const [signupOpen, setSignupOpen] = useState(false);
+  const [signupStep, setSignupStep] = useState(1);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupCodeSent, setSignupCodeSent] = useState(false);
+  const [signupName, setSignupName] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
+  const [signupResult, setSignupResult] = useState<AuthResponse | null>(null);
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupError, setSignupError] = useState('');
   const [email, setEmail] = useState(SAMPLE_USERS[0].email);
   const [name, setName] = useState(SAMPLE_USERS[0].name);
   const [password, setPassword] = useState('password123');
@@ -432,6 +475,9 @@ function App() {
   // 도착했을 때 그새 방을 바꿨는지 판별해 stale 응답이 다른 방을 덮어쓰지 않게 한다.
   const selectedRoomIdRef = useRef(selectedRoomId);
   selectedRoomIdRef.current = selectedRoomId;
+  // 인터벌/구독 effect가 이 값들 때문에 재생성되지 않도록 렌더마다 최신값을 ref에 보관해 읽는다.
+  const contactQueryRef = useRef(contactQuery);
+  contactQueryRef.current = contactQuery;
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
   const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
@@ -451,7 +497,12 @@ function App() {
   const roomSearchResults = chatSearchTerm
     ? rooms.filter((room) => room.name.toLowerCase().includes(chatSearchTerm))
     : [];
-  const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
+  const inviteOptions = useMemo(() => {
+    // 렌더마다(입력 한 글자마다) O(연락처×참가자) 이중 필터 + toLowerCase가 돌던 것을
+    // 참가자 이메일 Set으로 O(연락처+참가자)로 낮추고 useMemo로 고정.
+    const participantEmails = new Set(roomParticipants.map((participant) => participant.email.toLowerCase()));
+    return contacts.filter((contact) => !participantEmails.has(contact.email.toLowerCase()));
+  }, [contacts, roomParticipants]);
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
   const emailCodeDigits = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? '');
@@ -536,6 +587,91 @@ function App() {
     setProfileName(data.user.name);
     setProfileStatus(data.user.statusMessage ?? '');
     setStatus(`${data.user.name}님으로 로그인되었습니다.`);
+  }
+
+  function openSignup() {
+    setSignupStep(1);
+    setAgreeTerms(false);
+    setAgreePrivacy(false);
+    setAgreeMarketing(false);
+    setSignupEmail('');
+    setSignupCode('');
+    setSignupCodeSent(false);
+    setSignupName('');
+    setSignupPassword('');
+    setSignupPasswordConfirm('');
+    setSignupResult(null);
+    setSignupError('');
+    setSignupOpen(true);
+  }
+
+  async function sendSignupCode() {
+    if (!signupEmail.trim()) {
+      setSignupError('이메일을 입력해주세요.');
+      return;
+    }
+    setSignupBusy(true);
+    setSignupError('');
+    try {
+      await request<void>('/auth/email/code', { method: 'POST', body: JSON.stringify({ email: signupEmail.trim() }) });
+      setSignupCodeSent(true);
+    } catch (error) {
+      setSignupError(readableError(error, '인증코드를 보내지 못했습니다.'));
+    } finally {
+      setSignupBusy(false);
+    }
+  }
+
+  async function verifySignupEmail() {
+    const verificationCode = signupCode.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (verificationCode.length !== EMAIL_CODE_LENGTH) {
+      setSignupError('6자리 인증코드를 입력해주세요.');
+      return;
+    }
+    setSignupBusy(true);
+    setSignupError('');
+    try {
+      await request<void>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ email: signupEmail.trim(), code: verificationCode }) });
+      setSignupStep(3);
+    } catch (error) {
+      setSignupError(readableError(error, '이메일 인증에 실패했습니다.'));
+    } finally {
+      setSignupBusy(false);
+    }
+  }
+
+  async function completeSignup() {
+    if (!signupName.trim()) {
+      setSignupError('이름을 입력해주세요.');
+      return;
+    }
+    if (signupPassword.length < 8) {
+      setSignupError('비밀번호는 8자 이상이어야 합니다.');
+      return;
+    }
+    if (signupPassword !== signupPasswordConfirm) {
+      setSignupError('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    setSignupBusy(true);
+    setSignupError('');
+    try {
+      const data = await request<AuthResponse>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email: signupEmail.trim(), password: signupPassword, name: signupName.trim() })
+      });
+      setSignupResult(data);
+      setSignupStep(4);
+    } catch (error) {
+      setSignupError(readableError(error, '가입에 실패했습니다.'));
+    } finally {
+      setSignupBusy(false);
+    }
+  }
+
+  function finishSignup() {
+    if (signupResult) saveSession(signupResult);
+    setSignupOpen(false);
   }
 
   async function submitPasswordFlow(event: FormEvent) {
@@ -786,6 +922,10 @@ function App() {
     window.setTimeout(() => dismissAppToast(toastId), 5200);
   }, [dismissAppToast, inAppNotificationsEnabled, selectedRoomId]);
 
+  // 알림 소켓 effect가 매 방 전환마다 재연결되지 않도록, 최신 showInAppNotification을 ref로 읽는다.
+  const showInAppNotificationRef = useRef(showInAppNotification);
+  showInAppNotificationRef.current = showInAppNotification;
+
   function openNotificationToast(toast: AppToast) {
     if (toast.notification.targetRoomId) {
       openRoom(toast.notification.targetRoomId);
@@ -826,41 +966,54 @@ function App() {
       ...reaction,
       reactedByMe: reaction.reactorEmails.some((email) => email.toLowerCase() === user.email.toLowerCase())
     }));
-  }, [user]);
+    // user.email만 읽으므로 email 기준으로 고정 — 프로필 저장 등으로 user 객체 참조만
+    // 바뀔 때 withReadCounts→핸들러들이 연쇄로 새 참조가 돼 목록 전체가 리렌더되던 것 방지.
+  }, [user?.email]);
 
   const withReadCounts = useCallback((items: ChatMessage[], receipts: ReadReceipt[]) => {
+    // 수신확인 타임스탬프를 한 번만 epoch로 파싱한다(기존엔 메시지×수신확인마다 new Date 2회 →
+    // O(M×R)의 Date 파싱). 이제 파싱은 M+R회.
+    const readerEpochs: { email: string; epoch: number }[] = [];
+    for (const receipt of receipts) {
+      if (!receipt.lastReadAt) continue;
+      readerEpochs.push({ email: receipt.email.toLowerCase(), epoch: new Date(receipt.lastReadAt).getTime() });
+    }
     return items.map((message) => {
-      const readCount = receipts.filter((receipt) => {
-        if (receipt.email.toLowerCase() === message.senderEmail.toLowerCase() || !receipt.lastReadAt) {
-          return false;
+      const senderLower = message.senderEmail.toLowerCase();
+      const messageEpoch = new Date(message.createdAt).getTime();
+      let readCount = 0;
+      for (const reader of readerEpochs) {
+        if (reader.email !== senderLower && reader.epoch >= messageEpoch) {
+          readCount += 1;
         }
-        return new Date(receipt.lastReadAt).getTime() >= new Date(message.createdAt).getTime();
-      }).length;
+      }
       const deliveredCount = message.deliveredCount ?? 0;
       const deliveryStatus = readCount > 0
         ? 'READ' as const
         : deliveredCount > 0 || message.deliveryStatus === 'DELIVERED'
           ? 'DELIVERED' as const
           : 'SENT' as const;
+      const reactions = normalizeReactions(message.reactions ?? []);
+      // 값이 그대로면 같은 객체 참조를 반환 — 수신확인 브로드캐스트(누군가 읽을 때마다 발생)마다
+      // 변화 없는 행까지 새 객체가 돼 MessageRow(memo) 전체가 리렌더되던 문제를 막는다.
+      if (
+        message.readCount === readCount &&
+        message.deliveredCount === deliveredCount &&
+        message.deliveryStatus === deliveryStatus &&
+        Array.isArray(message.reactions) &&
+        reactionsShallowEqual(message.reactions, reactions)
+      ) {
+        return message;
+      }
       return {
         ...message,
         readCount,
         deliveredCount,
         deliveryStatus,
-        reactions: normalizeReactions(message.reactions ?? [])
+        reactions
       };
     });
   }, [normalizeReactions]);
-
-  function deliveryStatusLabel(message: ChatMessage) {
-    if (message.readCount > 0 || message.deliveryStatus === 'READ') {
-      return `읽음 ${Math.max(message.readCount, 1)}`;
-    }
-    if (message.deliveredCount > 0 || message.deliveryStatus === 'DELIVERED') {
-      return `전달됨 ${Math.max(message.deliveredCount, 1)}`;
-    }
-    return '전송됨';
-  }
 
   function applyReadReceipts(receipts: ReadReceipt[]) {
     readReceiptsRef.current = receipts;
@@ -871,6 +1024,9 @@ function App() {
   async function loadReadReceipts(roomId: string) {
     if (!roomId) return;
     const data = await request<RoomReadSummary>(`/chat/rooms/${roomId}/read-receipts`);
+    // 응답 대기 중 방을 바꿨다면 stale 수신확인이 현재 방 메시지에 섞이지 않게 무시한다
+    // (loadMessages가 이 함수를 await하므로 방 전환 경쟁의 나머지 절반을 여기서 막는다).
+    if (selectedRoomIdRef.current !== roomId) return;
     applyReadReceipts(data.receipts);
   }
 
@@ -1708,11 +1864,13 @@ function App() {
     if (!token || !user) return;
     const timer = window.setInterval(() => {
       heartbeat()
-        .then(() => loadContacts(contactQuery))
+        .then(() => loadContacts(contactQueryRef.current))
         .catch(() => undefined);
     }, 30000);
     return () => window.clearInterval(timer);
-  }, [token, user?.email, contactQuery]);
+    // contactQuery는 ref로 읽는다 — deps에 넣으면 검색 입력 한 글자마다 인터벌이 재설정돼
+    // 30초 하트비트가 타이핑 중 한 번도 못 나가고 프레즌스가 오프라인으로 새던 문제 방지.
+  }, [token, user?.email]);
 
   useEffect(() => {
     if (selectedRoomId) {
@@ -1745,6 +1903,9 @@ function App() {
     const force = forceLatestMessageScrollRef.current;
     const behavior: ScrollBehavior = force ? 'auto' : 'smooth';
     let attempts = 0;
+    let rafId = 0;
+    let secondRafId = 0;
+    let timeoutId = 0;
     const runScroll = () => {
       const messageList = messageListRef.current;
       // 방 전환은 AnimatePresence mode="wait"라 이전 화면이 빠져나간 뒤에야
@@ -1753,24 +1914,31 @@ function App() {
       if (!messageList) {
         if (force && attempts < 40) {
           attempts += 1;
-          window.requestAnimationFrame(runScroll);
+          rafId = window.requestAnimationFrame(runScroll);
         }
         return;
       }
       scrollLatestMessageIntoView(behavior);
-      window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
+      secondRafId = window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
       if (force) {
         forceLatestMessageScrollRef.current = false;
         // 첨부 이미지 로딩 등으로 뒤늦게 높이가 늘어나는 경우 대비(사용자가
         // 위로 스크롤하지 않았을 때만 다시 맨 아래로 고정).
-        window.setTimeout(() => {
+        timeoutId = window.setTimeout(() => {
           if (shouldStickToLatestMessageRef.current) {
             scrollLatestMessageIntoView('auto');
           }
         }, 160);
       }
     };
-    window.requestAnimationFrame(runScroll);
+    rafId = window.requestAnimationFrame(runScroll);
+    // 방 전환/새 메시지로 effect가 재실행되거나 언마운트될 때 대기 중인 rAF 재시도 루프와
+    // 지연 타이머를 취소한다(중첩 루프 누적·언마운트 후 실행 방지).
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      if (secondRafId) window.cancelAnimationFrame(secondRafId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
   }, [latestMessageId, selectedRoomId]);
 
   useEffect(() => {
@@ -1877,15 +2045,18 @@ function App() {
       onConnect: () => {
         client.subscribe(notificationTopic, (frame: IMessage) => {
           const notification = JSON.parse(frame.body) as UserNotification;
+          // 알림 토픽은 방과 무관하게 전역이다. selectedRoomId/showInAppNotification을 deps에 두면
+          // 방 전환마다 소켓이 끊겼다 재연결(핸드셰이크)돼 재연결 창에서 알림이 유실되므로 ref로 읽는다.
+          const currentRoomId = selectedRoomIdRef.current;
           setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)].slice(0, 30));
           setNotificationUnreadCount((current) => current + (notification.read ? 0 : 1));
-          if (notification.targetRoomId !== selectedRoomId) {
+          if (notification.targetRoomId !== currentRoomId) {
             setRooms((current) => current.map((room) => room.id === notification.targetRoomId ? { ...room, unreadCount: room.unreadCount + 1 } : room));
           }
-          if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== selectedRoomId) {
+          if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== currentRoomId) {
             markMessageDelivered(notification.targetRoomId, notification.targetMessageId).catch(() => undefined);
           }
-          showInAppNotification(notification);
+          showInAppNotificationRef.current(notification);
         });
       }
     });
@@ -1893,7 +2064,7 @@ function App() {
     return () => {
       client.deactivate();
     };
-  }, [notificationTopic, selectedRoomId, showInAppNotification, token]);
+  }, [notificationTopic, token]);
 
   if (!user) {
     if (authStage === 'landing') {
@@ -1970,56 +2141,112 @@ function App() {
             ))}
           </div>
 
-          <div className="mode-tabs" role="tablist" aria-label="로그인 방식">
-            <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>일반</button>
-            <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>가입</button>
-            <button className={mode === 'email' ? 'active' : ''} onClick={() => setMode('email')}>이메일</button>
-          </div>
+          <form className="auth-form" onSubmit={submitPasswordFlow}>
+            <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
+            <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} required /></label>
+            <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />로그인</button>
+          </form>
 
-          <AnimatePresence mode="wait">
-            {mode === 'email' ? (
-              <motion.form key="email" onSubmit={submitEmailFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
-                <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
-                <label>이름<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-                <div className="email-code-panel">
-                  <div className="email-code-title">
-                    <span>인증코드</span>
-                    <small>{loading && code.length === EMAIL_CODE_LENGTH ? '확인 중' : '6자리 숫자 입력 시 자동 확인'}</small>
-                  </div>
-                  <div className="otp-inputs" aria-label="6자리 이메일 인증코드">
-                    {emailCodeDigits.map((digit, index) => (
-                      <input
-                        key={`email-code-${index}`}
-                        ref={(element) => { codeInputRefs.current[index] = element; }}
-                        value={digit}
-                        onChange={(event) => handleCodeDigitChange(index, event.target.value)}
-                        onKeyDown={(event) => handleCodeKeyDown(index, event)}
-                        onPaste={handleCodePaste}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                        maxLength={1}
-                        aria-label={`인증코드 ${index + 1}번째 숫자`}
-                      />
-                    ))}
-                  </div>
-                  <button type="button" className="icon-button" onClick={sendCode} disabled={loading} title="인증코드 발송"><Mail size={19} aria-hidden /></button>
-                </div>
-                <p className="hint">메일함에서 6자리 인증코드를 확인하세요.</p>
-              </motion.form>
-            ) : (
-              <motion.form key={mode} onSubmit={submitPasswordFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
-                <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
-                {mode === 'register' && <label>이름<input value={name} onChange={(event) => setName(event.target.value)} required /></label>}
-                <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} required /></label>
-                <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />{mode === 'register' ? '가입하고 로그인' : '로그인'}</button>
-              </motion.form>
-            )}
-          </AnimatePresence>
-
+          <button type="button" className="signup-cta" onClick={openSignup}>이메일로 회원가입</button>
           <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
           <button className="naver-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/naver/authorize`; }}><span className="naver-mark" aria-hidden>N</span>네이버로 로그인</button>
           {status && <p className="notice">{status}</p>}
+
+          <AnimatePresence>
+            {signupOpen && (
+              <motion.div className="signup-backdrop" role="presentation" onClick={() => setSignupOpen(false)}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div className="signup-modal" role="dialog" aria-modal="true" aria-label="회원가입"
+                  onClick={(event) => event.stopPropagation()}
+                  initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
+                  <header className="signup-modal-head">
+                    <div className="signup-steps" aria-hidden>
+                      {[1, 2, 3, 4].map((step) => (
+                        <span key={step} className={step === signupStep ? 'active' : step < signupStep ? 'done' : ''} />
+                      ))}
+                    </div>
+                    <button type="button" className="signup-close" onClick={() => setSignupOpen(false)} aria-label="닫기"><X size={18} aria-hidden /></button>
+                  </header>
+
+                  <AnimatePresence mode="wait">
+                    {signupStep === 1 && (
+                      <motion.div key="s1" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>약관에 동의해 주세요</h2>
+                        <p className="signup-sub">서비스 이용을 위해 아래 약관 동의가 필요해요.</p>
+                        <label className="agree-row agree-all">
+                          <input type="checkbox" checked={agreeTerms && agreePrivacy && agreeMarketing}
+                            onChange={(event) => { const value = event.target.checked; setAgreeTerms(value); setAgreePrivacy(value); setAgreeMarketing(value); }} />
+                          <span>전체 동의</span>
+                        </label>
+                        <label className="agree-row">
+                          <input type="checkbox" checked={agreeTerms} onChange={(event) => setAgreeTerms(event.target.checked)} />
+                          <span><b>[필수]</b> 서비스 이용약관 동의</span>
+                        </label>
+                        <label className="agree-row">
+                          <input type="checkbox" checked={agreePrivacy} onChange={(event) => setAgreePrivacy(event.target.checked)} />
+                          <span><b>[필수]</b> 개인정보 수집·이용 동의</span>
+                        </label>
+                        <label className="agree-row">
+                          <input type="checkbox" checked={agreeMarketing} onChange={(event) => setAgreeMarketing(event.target.checked)} />
+                          <span><b className="optional">[선택]</b> 마케팅 정보 수신 동의</span>
+                        </label>
+                        <div className="signup-actions">
+                          <button type="button" className="primary-button" disabled={!agreeTerms || !agreePrivacy} onClick={() => { setSignupError(''); setSignupStep(2); }}>다음</button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {signupStep === 2 && (
+                      <motion.div key="s2" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>이메일을 인증해 주세요</h2>
+                        <p className="signup-sub">가입에 사용할 이메일로 6자리 인증코드를 보내드려요.</p>
+                        <div className="signup-email-row">
+                          <input type="email" value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)} placeholder="you@example.com" />
+                          <button type="button" className="ghost-button" onClick={sendSignupCode} disabled={signupBusy || !signupEmail.trim()}>{signupCodeSent ? '재발송' : '코드 받기'}</button>
+                        </div>
+                        {signupCodeSent && (
+                          <>
+                            <input className="signup-code-input" value={signupCode} onChange={(event) => setSignupCode(event.target.value.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH))} inputMode="numeric" placeholder="6자리 인증코드" maxLength={EMAIL_CODE_LENGTH} />
+                            <p className="signup-sub">메일함에서 인증코드를 확인하세요.</p>
+                          </>
+                        )}
+                        <div className="signup-actions">
+                          <button type="button" className="ghost-button" onClick={() => { setSignupError(''); setSignupStep(1); }}>이전</button>
+                          <button type="button" className="primary-button" disabled={signupBusy || !signupCodeSent || signupCode.length !== EMAIL_CODE_LENGTH} onClick={verifySignupEmail}>인증하고 다음</button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {signupStep === 3 && (
+                      <motion.div key="s3" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>비밀번호를 설정해 주세요</h2>
+                        <p className="signup-sub"><b>{signupEmail}</b> 인증 완료! 계정 정보를 입력하세요.</p>
+                        <label className="signup-field">이름<input value={signupName} onChange={(event) => setSignupName(event.target.value)} placeholder="이름" /></label>
+                        <label className="signup-field">비밀번호<input type="password" value={signupPassword} onChange={(event) => setSignupPassword(event.target.value)} placeholder="8자 이상" /></label>
+                        <label className="signup-field">비밀번호 확인<input type="password" value={signupPasswordConfirm} onChange={(event) => setSignupPasswordConfirm(event.target.value)} placeholder="다시 입력" /></label>
+                        <div className="signup-actions">
+                          <button type="button" className="ghost-button" onClick={() => { setSignupError(''); setSignupStep(2); }}>이전</button>
+                          <button type="button" className="primary-button" disabled={signupBusy} onClick={completeSignup}>가입 완료</button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {signupStep === 4 && (
+                      <motion.div key="s4" className="signup-step signup-done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                        <div className="signup-done-badge"><CheckCircle2 size={44} aria-hidden /></div>
+                        <h2>가입이 완료되었어요 🎉</h2>
+                        <p className="signup-sub">{signupResult?.user?.name ?? ''}님, 환영해요!</p>
+                        <button type="button" className="primary-button" onClick={finishSignup}>시작하기</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {signupError && <p className="signup-error">{signupError}</p>}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           </motion.section>
         </div>
       </main>
@@ -2805,7 +3032,6 @@ function App() {
                         animateOnMount={false}
                         // 편집 중인 행에만 editingDraft를 넘겨 편집 키 입력이 다른 행을 리렌더하지 않게 한다.
                         editingDraft={isEditing ? editingDraft : undefined}
-                        deliveryLabel={deliveryStatusLabel(message)}
                         onEditDraftChange={setEditingDraft}
                         onSaveEdit={editMessage}
                         onCancelEdit={cancelEditingMessage}
@@ -3166,7 +3392,6 @@ type MessageRowProps = {
   isMine: boolean;
   isEditing: boolean;
   editingDraft?: string;
-  deliveryLabel: string;
   // 가상 스크롤에서는 행이 스크롤 시마다 mount/unmount 되므로 진입 애니메이션을 끈다.
   animateOnMount?: boolean;
   onEditDraftChange: (value: string) => void;
@@ -3189,7 +3414,6 @@ const MessageRow = React.memo(function MessageRow({
   isMine,
   isEditing,
   editingDraft,
-  deliveryLabel,
   animateOnMount = true,
   onEditDraftChange,
   onSaveEdit,
@@ -3203,6 +3427,7 @@ const MessageRow = React.memo(function MessageRow({
 }: MessageRowProps) {
   const isDeleted = message.deletedForEveryone;
   const linkUrl = isDeleted ? null : firstMessageUrl(message.content);
+  const deliveryLabel = deliveryStatusLabel(message);
   const draftValue = editingDraft ?? '';
   const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
   return (

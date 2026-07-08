@@ -296,9 +296,138 @@ p {
   box-shadow: 0 8px 18px rgba(70, 80, 140, 0.14);
 }
 
+/* ===================== 회원가입 CTA + 다단계 모달 ===================== */
+/* 카카오/네이버 위에 놓이는 이메일 회원가입 버튼 */
+.signup-cta {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #d4d1fb;
+  border-radius: 14px;
+  color: #5b53eb;
+  background: #f2f0ff;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.signup-cta:hover { background: #e9e6ff; border-color: #b9b3f7; }
+
+.signup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(25, 31, 40, 0.42);
+  backdrop-filter: blur(4px);
+}
+.signup-modal {
+  width: min(400px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 28px 70px rgba(25, 31, 40, 0.3);
+  text-align: left;
+}
+.signup-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.signup-steps { display: flex; gap: 6px; }
+.signup-steps span {
+  width: 22px;
+  height: 5px;
+  border-radius: 999px;
+  background: #e3e7f2;
+  transition: background 0.2s ease;
+}
+.signup-steps span.active { background: #5b53eb; }
+.signup-steps span.done { background: #b7b2f5; }
+.signup-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  color: #6b7280;
+  background: #f2f4f8;
+  cursor: pointer;
+}
+.signup-close:hover { background: #e6e9f2; }
+
+.signup-step h2 { margin: 0 0 4px; font-size: 20px; font-weight: 900; color: #191f28; }
+.signup-sub { margin: 0 0 14px; color: #6b7280; font-size: 13px; line-height: 1.5; }
+.signup-sub b { color: #4e5968; }
+
+.agree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  color: #2a2f45;
+  font-size: 14px;
+  cursor: pointer;
+}
+.agree-row:hover { background: #f7f8fc; }
+.agree-row input { width: 18px; height: 18px; accent-color: #5b53eb; }
+.agree-row b { color: #5b53eb; font-weight: 800; margin-right: 2px; }
+.agree-row b.optional { color: #9aa0c2; }
+.agree-all {
+  border: 1px solid #e3e7f2;
+  margin-bottom: 6px;
+  font-weight: 800;
+}
+
+.signup-field { display: grid; gap: 6px; margin-bottom: 12px; color: #4e5968; font-size: 13px; font-weight: 700; }
+.signup-field input, .signup-email-row input, .signup-code-input {
+  width: 100%;
+  border: 1px solid #d1d6e0;
+  border-radius: 12px;
+  padding: 11px 13px;
+  font: inherit;
+  color: #191f28;
+  background: #fff;
+}
+.signup-field input:focus, .signup-email-row input:focus, .signup-code-input:focus {
+  outline: 0;
+  border-color: #5b53eb;
+}
+.signup-email-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.signup-email-row input { flex: 1; }
+.signup-code-input { letter-spacing: 6px; text-align: center; font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+
+.signup-actions { display: flex; gap: 8px; margin-top: 18px; }
+.signup-actions .primary-button { flex: 1; }
+.ghost-button {
+  border: 1px solid #d1d6e0;
+  border-radius: 999px;
+  padding: 0 16px;
+  min-height: 44px;
+  color: #4e5968;
+  background: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ghost-button:hover:not(:disabled) { background: #f5f6fa; }
+.ghost-button:disabled { opacity: 0.5; cursor: default; }
+
+.signup-done { text-align: center; padding: 8px 0; }
+.signup-done-badge { display: grid; place-items: center; margin: 6px auto 10px; color: #22c55e; }
+.signup-done .primary-button { width: 100%; margin-top: 8px; }
+.signup-error { margin-top: 12px; color: #e5484d; font-size: 13px; text-align: center; }
+
 .mode-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 3px;
   padding: 4px;
   border-radius: 14px;
@@ -2864,6 +2993,44 @@ input:focus {
 .news-header h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #20233f; }
 .news-header .muted { font-size: 13px; }
 
+.news-searchbar { margin: 8px 16px 2px; }
+.news-search-form {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid #e3e7f2; border-radius: 999px;
+  background: #fff; color: #8b93a7;
+}
+.news-search-form:focus-within { border-color: #8b8ff0; box-shadow: 0 0 0 3px rgba(139, 143, 240, 0.16); }
+.news-search-form input {
+  flex: 1; border: 0; outline: 0; background: transparent;
+  font-size: 14px; color: #191f28; min-width: 0;
+}
+.news-search-form input::placeholder { color: #b0b6c3; }
+.news-search-form input::-webkit-search-cancel-button { display: none; }
+.news-search-clear {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border: 0; border-radius: 50%;
+  background: #eef0f5; color: #6b7280; cursor: pointer; flex-shrink: 0;
+}
+.news-search-submit {
+  flex-shrink: 0; border: 0; border-radius: 999px;
+  padding: 8px 15px; background: #5b53eb; color: #fff;
+  font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.news-related {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px; flex-wrap: wrap;
+}
+.news-related-label { font-size: 11px; font-weight: 900; color: #5b53eb; white-space: nowrap; }
+.news-related-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.news-related-chip {
+  border: 1px solid #e3e7f2; border-radius: 999px;
+  padding: 5px 12px; background: #fff; color: #3d4453;
+  font-size: 12.5px; font-weight: 700; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.news-related-chip:hover { background: #f2f2fe; border-color: #8b8ff0; color: #5b53eb; }
+
 .news-catbar {
   position: sticky;
   top: 0;
@@ -3598,6 +3765,22 @@ input:focus {
   padding: 8px 15px; background: #5b53eb; color: #fff;
   font-size: 13px; font-weight: 800; cursor: pointer;
 }
+.shop-related {
+  flex: 1 1 100%;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 2px; flex-wrap: wrap;
+}
+.shop-related-label {
+  font-size: 11px; font-weight: 900; color: #5b53eb; white-space: nowrap;
+}
+.shop-related-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.shop-related-chip {
+  border: 1px solid #e3e7f2; border-radius: 999px;
+  padding: 5px 12px; background: #fff; color: #3d4453;
+  font-size: 12.5px; font-weight: 700; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.shop-related-chip:hover { background: #f2f2fe; border-color: #8b8ff0; color: #5b53eb; }
 .shop-popular {
   position: relative;
   display: flex; align-items: center; gap: 10px;

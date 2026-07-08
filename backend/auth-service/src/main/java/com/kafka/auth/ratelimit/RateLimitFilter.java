@@ -101,6 +101,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                         || "/api/auth/login".equals(path)
                         || "/api/auth/email/code".equals(path)
                         || "/api/auth/email/login".equals(path)
+                        || "/api/auth/email/verify".equals(path)
         )) {
             return true;
         }
