@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { ExternalLink, Newspaper, RefreshCcw, Search, Share2, X } from 'lucide-react';
 
 type NewsCategory = { code: string; label: string };
@@ -83,6 +83,7 @@ function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) 
 }
 
 export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
+  const reduceMotion = useReducedMotion();
   const [categories, setCategories] = useState<NewsCategory[]>([]);
   const [active, setActive] = useState<string>('');
   const [items, setItems] = useState<NewsItem[]>([]);
@@ -459,18 +460,29 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       </div>
 
       <div className="news-catbar" role="tablist" aria-label="뉴스 카테고리">
-        {categories.map((category) => (
-          <button
-            key={category.code}
-            type="button"
-            role="tab"
-            aria-selected={!searching && active === category.code}
-            className={!searching && active === category.code ? 'active' : ''}
-            onClick={() => selectCategory(category.code)}
-          >
-            {category.label}
-          </button>
-        ))}
+        {categories.map((category) => {
+          const isActive = !searching && active === category.code;
+          return (
+            <button
+              key={category.code}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={isActive ? 'active' : ''}
+              onClick={() => selectCategory(category.code)}
+            >
+              {isActive && (
+                <motion.span
+                  className="news-cat-pill"
+                  layoutId="news-cat-pill"
+                  transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 36, mass: 0.7 }}
+                  aria-hidden
+                />
+              )}
+              <span className="news-cat-label">{category.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {loading && (

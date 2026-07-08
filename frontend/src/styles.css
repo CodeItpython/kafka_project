@@ -3127,39 +3127,42 @@ input:focus {
   z-index: 3;
   display: flex;
   gap: 2px;
-  overflow-x: auto;
-  padding: 2px 8px 0;
+  padding: 6px 8px;
   border-bottom: 1px solid rgba(150, 155, 190, 0.2);
   background: rgba(238, 240, 247, 0.94);
   backdrop-filter: blur(10px);
-  scrollbar-width: none;
 }
-.news-catbar::-webkit-scrollbar { display: none; }
+/* 카테고리 탭을 전체 너비에 균등 분배 */
 .news-catbar button {
   position: relative;
-  flex: 0 0 auto;
-  padding: 13px 14px 14px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 9px 4px;
   border: 0;
   background: transparent;
   color: #97a0bd;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
-  transition: color 0.15s ease;
+  text-align: center;
+  transition: color 0.25s ease;
 }
 .news-catbar button.active {
-  color: #20233f;
+  color: #ffffff;
   font-weight: 800;
 }
-.news-catbar button.active::after {
-  content: '';
+.news-cat-label {
+  position: relative;
+  z-index: 1;
+}
+/* 선택 탭 뒤에서 미끄러지는 인디고 필(layoutId 매직 슬라이드) */
+.news-cat-pill {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: -1px;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
-  background: linear-gradient(90deg, #6d66ef, #5b53eb);
+  inset: 3px 2px;
+  z-index: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c74ff, #5b53eb);
+  box-shadow: 0 6px 16px rgba(91, 83, 235, 0.32);
 }
 
 .news-list { display: grid; gap: 12px; padding: 6px 16px; }
