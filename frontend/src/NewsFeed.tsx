@@ -96,6 +96,10 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
   const [input, setInput] = useState('');
   const [term, setTerm] = useState(''); // 제출된 검색어(비어 있으면 카테고리 피드)
   const [related, setRelated] = useState<string[]>([]); // 연관검색어
+  const [suggestions, setSuggestions] = useState<string[]>([]); // 자동완성 후보(입력 중)
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestActive, setSuggestActive] = useState(-1);
+  const suppressSuggestRef = useRef(false); // 항목 선택/제출 직후 재열림 방지
   const searching = term.trim().length > 0;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -216,6 +220,38 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     };
   }, [term]);
 
+  // 자동완성: 입력 중(input) prefix로 후보를 디바운스 조회. 선택/제출 직후에는 건너뛴다.
+  useEffect(() => {
+    if (suppressSuggestRef.current) {
+      suppressSuggestRef.current = false;
+      return;
+    }
+    const prefix = input.trim();
+    if (!prefix) {
+      setSuggestions([]);
+      setSuggestOpen(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      fetch(`${NEWS_ROOT}/suggest?query=${encodeURIComponent(prefix)}&size=8`)
+        .then((response) => (response.ok ? response.json() : []))
+        .then((data: string[]) => {
+          if (cancelled || !Array.isArray(data)) return;
+          setSuggestions(data);
+          setSuggestOpen(data.length > 0);
+          setSuggestActive(-1);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [input]);
+
   function loadMore() {
     if (!hasMore || loadingRef.current || loadingMoreRef.current || refreshingRef.current || !active) return;
     loadPage(active, term.trim(), nextStartRef.current, 'append', false);
@@ -229,20 +265,53 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     loadPage(active, term.trim(), 1, 'replace', true);
   }, [active, term, loadPage]);
 
+  function closeSuggest() {
+    suppressSuggestRef.current = true;
+    setSuggestOpen(false);
+    setSuggestActive(-1);
+  }
   function submitSearch(event: React.FormEvent) {
     event.preventDefault();
+    closeSuggest();
     setTerm(input.trim());
   }
   function runSearch(keyword: string) {
+    closeSuggest();
     setInput(keyword);
     setTerm(keyword);
     rootRef.current?.scrollTo({ top: 0 });
   }
+  function pickSuggestion(keyword: string) {
+    closeSuggest();
+    setInput(keyword);
+    setTerm(keyword);
+    rootRef.current?.scrollTo({ top: 0 });
+  }
+  function onSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!suggestOpen || suggestions.length === 0) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSuggestActive((index) => (index + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSuggestActive((index) => (index - 1 + suggestions.length) % suggestions.length);
+    } else if (event.key === 'Enter' && suggestActive >= 0) {
+      event.preventDefault();
+      pickSuggestion(suggestions[suggestActive]);
+    } else if (event.key === 'Escape') {
+      setSuggestOpen(false);
+      setSuggestActive(-1);
+    }
+  }
   function clearSearch() {
+    closeSuggest();
+    setSuggestions([]);
     setInput('');
     setTerm('');
   }
   function selectCategory(code: string) {
+    closeSuggest();
+    setSuggestions([]);
     setInput('');
     setTerm('');
     setActive(code);
@@ -333,9 +402,15 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
             type="search"
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onFocus={() => { if (suggestions.length > 0) setSuggestOpen(true); }}
+            onBlur={() => setSuggestOpen(false)}
+            onKeyDown={onSearchKeyDown}
             placeholder="뉴스 검색"
             aria-label="뉴스 검색"
             enterKeyHint="search"
+            role="combobox"
+            aria-expanded={suggestOpen}
+            aria-controls="news-suggest-list"
           />
           {input && (
             <button type="button" className="news-search-clear" onClick={clearSearch} aria-label="검색어 지우기">
@@ -343,6 +418,24 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
             </button>
           )}
           <button type="submit" className="news-search-submit">검색</button>
+          {suggestOpen && suggestions.length > 0 && (
+            <ul className="news-suggest" id="news-suggest-list" role="listbox" aria-label="검색어 자동완성">
+              {suggestions.map((suggestion, index) => (
+                <li key={suggestion} role="option" aria-selected={index === suggestActive}>
+                  <button
+                    type="button"
+                    className={index === suggestActive ? 'news-suggest-item active' : 'news-suggest-item'}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setSuggestActive(index)}
+                    onClick={() => pickSuggestion(suggestion)}
+                  >
+                    <Search size={14} aria-hidden />
+                    <span>{suggestion}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </form>
         {searching && related.length > 0 && (
           <div className="news-related" aria-label="연관검색어">
