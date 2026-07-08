@@ -65,6 +65,8 @@ services:
       dockerfile: Dockerfile
       args:
         SERVICE: news-service
+        # 컨테이너 헬스체크가 쓰는 포트(기본 8890)를 news 실제 포트(8891)에 맞춘다.
+        APP_PORT: "8891"
     image: kafka-news-service:local
     ports:
       - "8891:8891"
