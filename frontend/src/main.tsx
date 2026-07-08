@@ -2147,9 +2147,18 @@ function App() {
             <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />로그인</button>
           </form>
 
-          <button type="button" className="signup-cta" onClick={openSignup}>이메일로 회원가입</button>
-          <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
-          <button className="naver-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/naver/authorize`; }}><span className="naver-mark" aria-hidden>N</span>네이버로 로그인</button>
+          <div className="auth-divider"><span>또는</span></div>
+
+          <div className="auth-alt-actions">
+            <button type="button" className="signup-cta" onClick={openSignup}>이메일로 회원가입</button>
+            <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>
+              <span className="kakao-mark" aria-hidden>
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 3C6.48 3 2 6.58 2 11c0 2.87 1.9 5.39 4.76 6.8-.21.79-.76 2.85-.87 3.29-.14.55.2.54.43.39.18-.12 2.85-1.94 4-2.72.53.08 1.09.12 1.68.12 5.52 0 10-3.58 10-8S17.52 3 12 3z"/></svg>
+              </span>
+              카카오로 로그인
+            </button>
+            <button className="naver-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/naver/authorize`; }}><span className="naver-mark" aria-hidden>N</span>네이버로 로그인</button>
+          </div>
           {status && <p className="notice">{status}</p>}
 
           <AnimatePresence>
