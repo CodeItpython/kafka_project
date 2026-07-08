@@ -1,0 +1,4 @@
+# 병렬 세션(FE/BE)이 같은 append-only 파일에 각자 줄을 추가할 때
+# 충돌 대신 양쪽을 자동으로 이어붙이도록 union 병합 드라이버 사용.
+# 주의: 코드/JSON/lock 파일에는 절대 쓰지 말 것(내용이 손상됨). append-only 로그 전용.
+docs/logs/** merge=union
