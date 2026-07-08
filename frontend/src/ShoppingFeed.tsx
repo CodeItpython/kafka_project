@@ -65,6 +65,7 @@ export default function ShoppingFeed({
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestActive, setSuggestActive] = useState(-1);
   const suppressSuggestRef = useRef(false); // 항목 선택/제출 직후 입력 변경으로 드롭다운이 다시 열리는 것 방지
+  const suggestSeqRef = useRef(0); // 진행 중 자동완성 요청 세대 — 닫은 뒤 도착한 stale 응답이 다시 열지 못하게
 
   const rootRef = useRef<HTMLDivElement>(null);
   const reqRef = useRef(0);
@@ -159,11 +160,13 @@ export default function ShoppingFeed({
       return;
     }
     let cancelled = false;
+    const seq = suggestSeqRef.current;
     const timer = window.setTimeout(() => {
       fetch(`${SHOP_ROOT}/suggest?query=${encodeURIComponent(prefix)}&size=8`)
         .then((response) => (response.ok ? response.json() : []))
         .then((data: string[]) => {
-          if (cancelled || !Array.isArray(data)) return;
+          // 검색 제출/선택으로 닫힌 뒤 도착한 응답은 무시(엔터 후 드롭다운 재노출 방지).
+          if (cancelled || seq !== suggestSeqRef.current || !Array.isArray(data)) return;
           setSuggestions(data);
           setSuggestOpen(data.length > 0);
           setSuggestActive(-1);
@@ -280,6 +283,7 @@ export default function ShoppingFeed({
 
   function closeSuggest() {
     suppressSuggestRef.current = true;
+    suggestSeqRef.current += 1; // 진행 중 자동완성 요청 무효화(닫은 뒤 재노출 방지)
     setSuggestOpen(false);
     setSuggestActive(-1);
   }
