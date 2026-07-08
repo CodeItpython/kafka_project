@@ -42,13 +42,17 @@ const vertexShader = /* glsl */ `
 
   void main(){
     vec3 pos = morph(uProgress);
-    float wobble = sin(uTime * 0.7 + aSeed * 6.2831) * 0.05;
+    float wobble = sin(uTime * 0.75 + aSeed * 6.2831) * 0.07;
     pos += normalize(pos + 0.0001) * wobble;
     pos.xy += uMouse * (0.22 + aSeed * 0.28);
     vT = clamp(uProgress, 0.0, 1.0);
-    vGlow = 0.5 + aSeed * 0.85;
+    // 개별 파티클이 이따금 번쩍이는 반짝임(twinkle) — pow로 날카로운 피크
+    float twinkle = pow(max(0.0, sin(uTime * 1.7 + aSeed * 43.0)), 14.0);
+    vGlow = 0.5 + aSeed * 0.85 + twinkle * 2.2;
+    // 전체가 은은하게 숨쉬듯 커졌다 작아지는 크기 브리딩
+    float breathe = 1.0 + sin(uTime * 0.9) * 0.06;
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-    gl_PointSize = uSize * aScale * uPixelRatio * (1.0 / -mv.z);
+    gl_PointSize = uSize * aScale * uPixelRatio * breathe * (1.0 / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -184,7 +188,7 @@ function Particles() {
     (u.uMouse.value as THREE.Vector2).set(pointer.x, pointer.y);
 
     if (groupRef.current) {
-      const spin = prefersReducedMotion ? 0.01 : 0.06;
+      const spin = prefersReducedMotion ? 0.01 : 0.075;
       groupRef.current.rotation.y += delta * spin;
       groupRef.current.rotation.x += (pointer.y * 0.2 - groupRef.current.rotation.x) * Math.min(1, delta * 2);
     }
@@ -219,7 +223,7 @@ export default function LandingScene() {
     >
       <Particles />
       <EffectComposer>
-        <Bloom mipmapBlur intensity={1.1} luminanceThreshold={0.02} luminanceSmoothing={0.3} radius={0.85} />
+        <Bloom mipmapBlur intensity={1.45} luminanceThreshold={0.015} luminanceSmoothing={0.28} radius={0.95} />
       </EffectComposer>
     </Canvas>
   );

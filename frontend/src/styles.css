@@ -3421,8 +3421,18 @@ input:focus {
   border-radius: 27px;
   background: conic-gradient(from 0deg, #7c74ff, #67e8f9, #a855f7, #f472b6, #7c74ff);
   filter: blur(13px);
-  opacity: 0.5;
-  animation: landingRingSpin 6s linear infinite;
+  opacity: 0.55;
+  animation: landingRingSpin 5s linear infinite;
+}
+/* 아이콘에서 바깥으로 퍼지며 사라지는 레이더 핑 (transform은 pseudo 고유 → 등장 애니메이션과 충돌 없음) */
+.landing-feature-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 22px;
+  border: 1.5px solid rgba(143, 233, 255, 0.7);
+  animation: landingIconPing 2.8s ease-out infinite;
 }
 .landing-feature-title {
   margin: 0;
@@ -3492,17 +3502,21 @@ input:focus {
 
 /* 제목에 흐르는 그라디언트 시머 (배경 위치만 애니메이트 → 등장 transform과 충돌 없음) */
 .landing-shimmer {
-  background-image: linear-gradient(100deg, #ffffff 18%, #c8c2ff 38%, #8fe9ff 52%, #ffffff 68%, #c8c2ff 88%);
+  background-image: linear-gradient(100deg, #ffffff 10%, #b5adff 30%, #6fe6ff 46%, #ffffff 58%, #dcb8ff 74%, #ffffff 92%);
   background-size: 220% auto;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: landingShimmer 6.5s linear infinite;
+  animation: landingShimmer 4.5s linear infinite;
 }
 
 @keyframes landingShimmer {
   to { background-position: 220% center; }
+}
+@keyframes landingIconPing {
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(1.7); opacity: 0; }
 }
 @keyframes landingRingSpin {
   to { transform: rotate(1turn); }
@@ -3524,6 +3538,7 @@ input:focus {
   .landing-shimmer,
   .landing-feature-icon,
   .landing-feature-icon::before,
+  .landing-feature-icon::after,
   .landing-start,
   .landing-start::before {
     animation: none;
