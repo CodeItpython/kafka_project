@@ -68,11 +68,16 @@ services:
         # 컨테이너 헬스체크가 쓰는 포트(기본 8890)를 news 실제 포트(8891)에 맞춘다.
         APP_PORT: "8891"
     image: kafka-news-service:local
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
     ports:
       - "8891:8891"
     environment:
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       NEWS_CACHE_TTL_SECONDS: ${NEWS_CACHE_TTL_SECONDS:-180}
+      # 기사 색인 + 연관검색어(significant_text)용. ES가 없어도 피드/검색은 Naver로 동작.
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       # 네이버 검색 API 자격증명(쇼핑과 동일 값 재사용) — .env로 주입, 깃 커밋 금지.
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}

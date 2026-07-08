@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ExternalLink, Newspaper, RefreshCcw, Share2 } from 'lucide-react';
+import { ExternalLink, Newspaper, RefreshCcw, Search, Share2, X } from 'lucide-react';
 
 type NewsCategory = { code: string; label: string };
 export type NewsItem = {
@@ -93,6 +93,11 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
   const [error, setError] = useState<string | null>(null);
   const [pull, setPull] = useState(0);
 
+  const [input, setInput] = useState('');
+  const [term, setTerm] = useState(''); // 제출된 검색어(비어 있으면 카테고리 피드)
+  const [related, setRelated] = useState<string[]>([]); // 연관검색어
+  const searching = term.trim().length > 0;
+
   const rootRef = useRef<HTMLDivElement>(null);
   const reqRef = useRef(0);
   const nextStartRef = useRef(1);
@@ -120,8 +125,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     };
   }, []);
 
-  const loadPage = useCallback((category: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
-    if (!category) return Promise.resolve();
+  const loadPage = useCallback((category: string, keyword: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
+    if (!category && !keyword) return Promise.resolve();
     const myReq = mode === 'replace' ? ++reqRef.current : reqRef.current;
     if (mode === 'append') {
       loadingMoreRef.current = true;
@@ -134,8 +139,10 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       setLoading(true);
       setError(null);
     }
-    const url = `${NEWS_ROOT}/feed?category=${encodeURIComponent(category)}`
-      + `&start=${startAt}&display=${DISPLAY}${refresh ? '&refresh=true' : ''}`;
+    const url = keyword
+      ? `${NEWS_ROOT}/search?query=${encodeURIComponent(keyword)}&start=${startAt}&display=${DISPLAY}`
+      : `${NEWS_ROOT}/feed?category=${encodeURIComponent(category)}`
+        + `&start=${startAt}&display=${DISPLAY}${refresh ? '&refresh=true' : ''}`;
     return fetch(url)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data: { items: NewsItem[] }) => {
@@ -174,7 +181,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       });
   }, []);
 
-  // 카테고리 변경 → 처음부터 다시
+  // 카테고리/검색어 변경 → 처음부터 다시
   useEffect(() => {
     if (!active) return;
     nextStartRef.current = 1;
@@ -182,15 +189,36 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     setItems([]);
     setPull(0);
     wheelAccum.current = 0;
-    loadPage(active, 1, 'replace', false);
+    loadPage(active, term.trim(), 1, 'replace', false);
     return () => {
       if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
     };
-  }, [active, loadPage]);
+  }, [active, term, loadPage]);
+
+  // 연관검색어: 검색어가 제출되면 ES significant_text 결과를 가져온다(카테고리 피드일 땐 비움)
+  useEffect(() => {
+    const keyword = term.trim();
+    if (!keyword) {
+      setRelated([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${NEWS_ROOT}/related?query=${encodeURIComponent(keyword)}&size=8`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: string[]) => {
+        if (!cancelled && Array.isArray(data)) setRelated(data);
+      })
+      .catch(() => {
+        if (!cancelled) setRelated([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [term]);
 
   function loadMore() {
     if (!hasMore || loadingRef.current || loadingMoreRef.current || refreshingRef.current || !active) return;
-    loadPage(active, nextStartRef.current, 'append', false);
+    loadPage(active, term.trim(), nextStartRef.current, 'append', false);
   }
 
   const triggerRefresh = useCallback(() => {
@@ -198,8 +226,27 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
     nextStartRef.current = 1;
     setHasMore(true);
     setItems([]);
-    loadPage(active, 1, 'replace', true);
-  }, [active, loadPage]);
+    loadPage(active, term.trim(), 1, 'replace', true);
+  }, [active, term, loadPage]);
+
+  function submitSearch(event: React.FormEvent) {
+    event.preventDefault();
+    setTerm(input.trim());
+  }
+  function runSearch(keyword: string) {
+    setInput(keyword);
+    setTerm(keyword);
+    rootRef.current?.scrollTo({ top: 0 });
+  }
+  function clearSearch() {
+    setInput('');
+    setTerm('');
+  }
+  function selectCategory(code: string) {
+    setInput('');
+    setTerm('');
+    setActive(code);
+  }
 
   // 데스크톱: 최상단에서 위로 휠 → 당김/새로고침
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
@@ -279,15 +326,47 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
         <p className="muted">네이버 뉴스에서 모은 주요 소식이에요. 위로 당기면 새로고침돼요.</p>
       </header>
 
+      <div className="news-searchbar">
+        <form className="news-search-form" onSubmit={submitSearch} role="search">
+          <Search size={16} aria-hidden />
+          <input
+            type="search"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="뉴스 검색"
+            aria-label="뉴스 검색"
+            enterKeyHint="search"
+          />
+          {input && (
+            <button type="button" className="news-search-clear" onClick={clearSearch} aria-label="검색어 지우기">
+              <X size={15} aria-hidden />
+            </button>
+          )}
+          <button type="submit" className="news-search-submit">검색</button>
+        </form>
+        {searching && related.length > 0 && (
+          <div className="news-related" aria-label="연관검색어">
+            <span className="news-related-label">연관검색어</span>
+            <div className="news-related-chips">
+              {related.map((keyword) => (
+                <button key={keyword} type="button" className="news-related-chip" onClick={() => runSearch(keyword)}>
+                  {keyword}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="news-catbar" role="tablist" aria-label="뉴스 카테고리">
         {categories.map((category) => (
           <button
             key={category.code}
             type="button"
             role="tab"
-            aria-selected={active === category.code}
-            className={active === category.code ? 'active' : ''}
-            onClick={() => setActive(category.code)}
+            aria-selected={!searching && active === category.code}
+            className={!searching && active === category.code ? 'active' : ''}
+            onClick={() => selectCategory(category.code)}
           >
             {category.label}
           </button>
@@ -310,7 +389,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       {!loading && error && (
         <div className="news-empty">
           <p>{error}</p>
-          <button type="button" className="news-retry" onClick={() => loadPage(active, 1, 'replace', true)}>
+          <button type="button" className="news-retry" onClick={() => loadPage(active, term.trim(), 1, 'replace', true)}>
             <RefreshCcw size={15} aria-hidden /> 다시 시도
           </button>
         </div>
@@ -318,7 +397,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
 
       {!loading && !error && items.length === 0 && (
         <div className="news-empty">
-          <p>표시할 뉴스가 없습니다.</p>
+          <p>{searching ? '검색 결과가 없습니다.' : '표시할 뉴스가 없습니다.'}</p>
         </div>
       )}
 
@@ -362,7 +441,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
           </div>
           <div className="shop-more">
             {loadingMore && <span className="shop-more-loading"><RefreshCcw size={14} aria-hidden /> 더 불러오는 중…</span>}
-            {!loadingMore && !hasMore && <span className="shop-more-end">모든 뉴스를 불러왔어요</span>}
+            {!loadingMore && !hasMore && <span className="shop-more-end">{searching ? '검색 결과를 모두 불러왔어요' : '모든 뉴스를 불러왔어요'}</span>}
           </div>
         </>
       )}
