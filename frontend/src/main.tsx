@@ -309,6 +309,15 @@ type DltReplayResponse = {
 const API_ROOT = '/api';
 const EMAIL_CODE_LENGTH = 6;
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
+// 메시지 시간 포맷터는 한 번만 생성(렌더마다 메시지 수만큼 Intl 생성 방지)
+const MESSAGE_TIME_FORMAT = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' });
+
+function samePresence(a: RoomPresence, b: RoomPresence) {
+  return a.onlineUsers.length === b.onlineUsers.length
+    && a.typingUsers.length === b.typingUsers.length
+    && a.onlineUsers.every((user, index) => user === b.onlineUsers[index])
+    && a.typingUsers.every((user, index) => user === b.typingUsers[index]);
+}
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
   { email: 'minji@example.com', name: '민지' },
@@ -343,6 +352,7 @@ function App() {
   const [roomName, setRoomName] = useState('프로젝트 채팅방');
   const [roomDescription, setRoomDescription] = useState('Kafka 이벤트로 메시지를 주고받는 공간');
   const [draft, setDraft] = useState('');
+  const lastTypingSentRef = useRef(0);
   const [roomQuery, setRoomQuery] = useState('');
   const [contactQuery, setContactQuery] = useState('');
   const [messageQuery, setMessageQuery] = useState('');
@@ -977,7 +987,9 @@ function App() {
   async function loadPresence(roomId: string) {
     if (!roomId) return;
     const data = await request<RoomPresence>(`/chat/rooms/${roomId}/presence`);
-    setPresence(data);
+    // 2.5초 폴링이 매번 새 객체를 주므로, 내용이 같으면 setState를 건너뛰어
+    // 불필요한 전체 리렌더(메시지 목록 포함)를 막는다.
+    setPresence((prev) => samePresence(prev, data) ? prev : data);
   }
 
   async function loadRoomParticipants(roomId: string) {
@@ -1455,6 +1467,10 @@ function App() {
       setStatus('수정할 메시지 내용을 입력해주세요.');
       return;
     }
+    if (content === (message.content ?? '').trim()) {
+      cancelEditingMessage();
+      return;
+    }
     try {
       const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}`, {
         method: 'PATCH',
@@ -1479,6 +1495,17 @@ function App() {
       setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
     } catch (error) {
       setStatus(readableError(error, '반응을 저장하지 못했습니다.'));
+    }
+  }
+
+  async function copyMessageText(text: string) {
+    if (!text) return;
+    try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      setStatus('메시지를 복사했어요.');
+    } catch {
+      setStatus('복사할 수 없어요. 메시지를 길게 눌러 선택해 주세요.');
     }
   }
 
@@ -1715,7 +1742,13 @@ function App() {
       pushTyping(false);
       return;
     }
-    pushTyping(true);
+    // 키 입력마다 typing=true POST를 보내지 않고, 마지막 전송 후 1.5s 지났을 때만 전송.
+    // (입력 종료 감지용 typing=false 타이머는 매 입력마다 갱신해 인디케이터 동작은 동일)
+    const now = Date.now();
+    if (now - lastTypingSentRef.current > 1500) {
+      lastTypingSentRef.current = now;
+      pushTyping(true);
+    }
     const timer = window.setTimeout(() => pushTyping(false), 1800);
     return () => window.clearTimeout(timer);
   }, [draft, selectedRoomId, token]);
@@ -2608,7 +2641,7 @@ function App() {
           >
             <header className="conversation-header">
               <div className="header-navigation">
-                <button className="back-button" type="button" onClick={() => setSelectedRoomId('')} title="채팅방 목록으로 돌아가기">
+                <button className="back-button" type="button" onClick={() => { setSelectedRoomId(''); cancelEditingMessage(); }} title="채팅방 목록으로 돌아가기">
                   <ArrowLeft size={19} aria-hidden />
                   <span>채팅방 목록</span>
                 </button>
@@ -2695,18 +2728,20 @@ function App() {
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
               {messages.map((message) => {
                 const linkUrl = message.deletedForEveryone ? null : firstMessageUrl(message.content);
-                const isMine = message.senderEmail === user.email;
+                const isMine = message.senderEmail?.toLowerCase() === user.email?.toLowerCase();
+                const isDeleted = message.deletedForEveryone;
+                const isEditing = editingMessageId === message.id;
                 const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
                 return (
                 <ContextMenu.Root key={message.id}>
-                  <ContextMenu.Trigger asChild disabled={message.deletedForEveryone || editingMessageId === message.id}>
+                  <ContextMenu.Trigger asChild disabled={isDeleted || isEditing}>
                     <motion.div
                       className={isMine ? 'chat-row mine' : 'chat-row'}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                     >
                       {!isMine && <strong className="bubble-sender">{message.senderName}</strong>}
-                      {editingMessageId === message.id ? (
+                      {isEditing && !isDeleted ? (
                         <div className="message-edit-panel">
                           <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} maxLength={2000} autoFocus />
                           <div>
@@ -2717,7 +2752,7 @@ function App() {
                       ) : (
                         <div className="bubble-cluster">
                           <article className="chat-bubble">
-                            {message.deletedForEveryone ? (
+                            {isDeleted ? (
                               <p className="deleted-message">삭제된 메시지입니다.</p>
                             ) : (
                               <>
@@ -2754,8 +2789,8 @@ function App() {
                               </>
                             )}
                           </article>
-                          <time className="bubble-time">{new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}</time>
-                          {!message.deletedForEveryone && (
+                          <time className="bubble-time">{MESSAGE_TIME_FORMAT.format(new Date(message.createdAt))}</time>
+                          {!isDeleted && (
                             <div className="message-actions">
                               <button className="msg-quick-btn" type="button" title="답장" aria-label="답장" onClick={() => setReplyTarget(message)}>
                                 <Reply size={16} aria-hidden />
@@ -2788,7 +2823,7 @@ function App() {
                       )}
                     </motion.div>
                   </ContextMenu.Trigger>
-                  {!message.deletedForEveryone && editingMessageId !== message.id && (
+                  {!isDeleted && !isEditing && (
                     <ContextMenu.Portal>
                       <ContextMenu.Content className="message-context-menu" collisionPadding={12}>
                         <div className="context-reactions" aria-label="빠른 반응">
@@ -2807,7 +2842,7 @@ function App() {
                           <div className="context-read-state">{deliveryStatusLabel(message)}</div>
                         )}
                         {message.content && (
-                          <ContextMenu.Item className="ctx-item" onSelect={() => navigator.clipboard?.writeText(message.content ?? '')}><Copy size={14} aria-hidden />복사</ContextMenu.Item>
+                          <ContextMenu.Item className="ctx-item" onSelect={() => copyMessageText(message.content ?? '')}><Copy size={14} aria-hidden />복사</ContextMenu.Item>
                         )}
                         {isMine && message.content && (
                           <ContextMenu.Item className="ctx-item" onSelect={() => startEditingMessage(message)}><Pencil size={14} aria-hidden />수정</ContextMenu.Item>
