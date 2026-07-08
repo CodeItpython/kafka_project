@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class NewsService {
     private static final int MAX_DISPLAY = 100;
+    private static final int MAX_CACHE_ENTRIES = 512;
 
     private final NaverNewsApiClient client;
     private final long ttlSeconds;
@@ -41,9 +42,20 @@ public class NewsService {
         }
 
         List<NewsItem> fresh = fetch(category, normalizedDisplay, normalizedStart);
-        if (fresh.isEmpty() && entry != null) {
-            log.info("Serving stale news cache for key={} (fresh fetch empty)", key);
-            return entry.items;
+        if (fresh.isEmpty()) {
+            // 빈 결과는 캐시하지 않는다: 일시적 API 실패가 TTL 동안 피드를 빈 채로 고정하는 것을 방지.
+            if (entry != null) {
+                log.info("Serving stale news cache for key={} (fresh fetch empty)", key);
+                return entry.items;
+            }
+            return fresh;
+        }
+        // 캐시는 (category,start,display)별로 커져 무한 증가할 수 있으므로 상한을 두고 만료분부터 정리.
+        if (cache.size() >= MAX_CACHE_ENTRIES) {
+            cache.entrySet().removeIf(existing -> !existing.getValue().expiresAt().isAfter(now));
+            if (cache.size() >= MAX_CACHE_ENTRIES) {
+                cache.clear();
+            }
         }
         cache.put(key, new CacheEntry(fresh, now.plus(Duration.ofSeconds(ttlSeconds))));
         return fresh;
@@ -54,7 +66,10 @@ public class NewsService {
         if (response == null || response.items() == null) {
             return List.of();
         }
-        return response.items().stream().map(NewsService::toItem).toList();
+        return response.items().stream()
+                .map(NewsService::toItem)
+                .filter(item -> item.url() != null && !item.url().isBlank())
+                .toList();
     }
 
     private static NewsItem toItem(NaverNewsResponse.Item item) {
@@ -77,10 +92,10 @@ public class NewsService {
         return raw.replaceAll("<[^>]+>", "")
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
-                .replace("&amp;", "&")
                 .replace("&quot;", "\"")
                 .replace("&#39;", "'")
                 .replace("&apos;", "'")
+                .replace("&amp;", "&") // &amp;는 마지막에 해제해야 이중 이스케이프(&amp;quot; 등)가 한 단계만 풀린다
                 .trim();
     }
 
