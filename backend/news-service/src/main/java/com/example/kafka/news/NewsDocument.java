@@ -25,6 +25,10 @@ public class NewsDocument {
     @Field(type = FieldType.Keyword, index = false)
     private String title;
 
+    // 제목을 search_as_you_type으로 색인 — 자동완성(prefix) 전용.
+    @Field(type = FieldType.Search_As_You_Type, maxShingleSize = 3)
+    private String titleSuggest;
+
     // 제목+요약을 nori로 분석한 필드 — 연관검색어(significant_text) 대상.
     @Field(type = FieldType.Text, analyzer = "nori")
     private String contentNori;
@@ -38,6 +42,7 @@ public class NewsDocument {
     public NewsDocument(String id, String title, String contentNori, String category, Instant indexedAt) {
         this.id = id;
         this.title = title;
+        this.titleSuggest = title;
         this.contentNori = contentNori;
         this.category = category;
         this.indexedAt = indexedAt;
