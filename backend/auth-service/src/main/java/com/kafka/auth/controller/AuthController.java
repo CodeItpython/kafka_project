@@ -5,6 +5,7 @@ import com.kafka.auth.dto.AuthDtos.ChangeEmailRequest;
 import com.kafka.auth.dto.AuthDtos.EmailCodeRequest;
 import com.kafka.auth.dto.AuthDtos.EmailCodeResponse;
 import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
+import com.kafka.auth.dto.AuthDtos.EmailVerifyRequest;
 import com.kafka.auth.dto.AuthDtos.KakaoGuideResponse;
 import com.kafka.auth.dto.AuthDtos.LoginRequest;
 import com.kafka.auth.dto.AuthDtos.RegisterRequest;
@@ -59,6 +60,12 @@ public class AuthController {
     @PostMapping("/email/login")
     public ResponseEntity<AuthResponse> loginWithEmailCode(@Valid @RequestBody EmailLoginRequest request) {
         return ResponseEntity.ok(authService.loginWithEmailCode(request));
+    }
+
+    @PostMapping("/email/verify")
+    public ResponseEntity<Void> verifyEmailForSignup(@Valid @RequestBody EmailVerifyRequest request) {
+        authService.verifyEmailForSignup(request.email(), request.code());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")

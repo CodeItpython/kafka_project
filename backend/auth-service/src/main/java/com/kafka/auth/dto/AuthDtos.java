@@ -41,6 +41,13 @@ public final class AuthDtos {
     ) {
     }
 
+    /** 회원가입 중 이메일 소유 확인(로그인/계정생성 없이 코드만 검증). */
+    public record EmailVerifyRequest(
+            @Email @NotBlank String email,
+            @NotBlank @Pattern(regexp = "\\d{6}", message = "인증코드는 6자리 숫자입니다.") String code
+    ) {
+    }
+
     public record AuthResponse(
             String accessToken,
             String tokenType,
