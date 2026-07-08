@@ -60,6 +60,7 @@ export default function ShoppingFeed({
   const [term, setTerm] = useState(''); // 제출된 검색어(비어 있으면 카테고리 피드)
   const [popular, setPopular] = useState<PopularKeyword[]>([]);
   const [popIdx, setPopIdx] = useState(0);
+  const [related, setRelated] = useState<string[]>([]); // 연관검색어(검색 시)
 
   const rootRef = useRef<HTMLDivElement>(null);
   const reqRef = useRef(0);
@@ -119,6 +120,27 @@ export default function ShoppingFeed({
     }, ROLL_INTERVAL);
     return () => window.clearInterval(timer);
   }, [popular.length]);
+
+  // 연관검색어: 검색어가 제출되면 ES significant_text 결과를 가져온다(카테고리 피드일 땐 비움)
+  useEffect(() => {
+    const keyword = term.trim();
+    if (!keyword) {
+      setRelated([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${SHOP_ROOT}/related?query=${encodeURIComponent(keyword)}&size=8`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: string[]) => {
+        if (!cancelled && Array.isArray(data)) setRelated(data);
+      })
+      .catch(() => {
+        if (!cancelled) setRelated([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [term]);
 
   const loadPage = useCallback(
     (category: string, sortCode: string, keyword: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
@@ -379,6 +401,24 @@ export default function ShoppingFeed({
                 >
                   <b className={keyword.rank <= 3 ? 'shop-popular-rank hot' : 'shop-popular-rank'}>{keyword.rank}</b>
                   <span className="shop-popular-kw">{keyword.keyword}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {searching && related.length > 0 && (
+          <div className="shop-related" aria-label="연관검색어">
+            <span className="shop-related-label">연관검색어</span>
+            <div className="shop-related-chips">
+              {related.map((keyword) => (
+                <button
+                  key={keyword}
+                  type="button"
+                  className="shop-related-chip"
+                  onClick={() => runSearch(keyword)}
+                >
+                  {keyword}
                 </button>
               ))}
             </div>

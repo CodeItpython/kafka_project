@@ -26,6 +26,11 @@ public class ProductDocument {
     @Field(type = FieldType.Search_As_You_Type, maxShingleSize = 3)
     private String title;
 
+    // title을 한국어 형태소(nori)로 분석한 사본. 연관검색어(significant_text) 집계 전용 —
+    // search_as_you_type인 title은 형태소 분석이 안 돼 이 필드를 별도로 둔다.
+    @Field(type = FieldType.Text, analyzer = "nori")
+    private String titleNori;
+
     @Field(type = FieldType.Text)
     private String brand;
 
@@ -60,6 +65,7 @@ public class ProductDocument {
     ) {
         this.productId = productId;
         this.title = title;
+        this.titleNori = title;
         this.brand = brand;
         this.mallName = mallName;
         this.category = category;
