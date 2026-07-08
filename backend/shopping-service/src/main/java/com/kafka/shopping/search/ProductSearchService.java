@@ -55,8 +55,9 @@ public class ProductSearchService {
     private final ShoppingService shoppingService;
 
     /**
-     * 자동완성: 입력 중인 prefix로 상품 제목(search_as_you_type)을 bool_prefix 매칭해 후보 제목을
-     * 중복 제거해 돌려준다. 색인이 비었거나 ES가 없으면 빈 목록(프론트가 드롭다운을 숨김).
+     * 자동완성: 입력 중인 prefix로 상품 제목(search_as_you_type)을 bool_prefix 매칭해 짧은 구절 후보를
+     * 돌려준다. ES 색인에 그 prefix가 아직 없으면(처음 치는 브랜드 등) Naver로 보강한다 —
+     * ShoppingService.search가 Naver 결과를 색인까지 하므로 다음 입력부터는 ES로 즉시 커버된다.
      */
     public List<String> suggest(String prefix, int size) {
         String normalized = prefix == null ? "" : prefix.trim();
@@ -64,6 +65,8 @@ public class ProductSearchService {
             return List.of();
         }
         int limit = Math.max(1, Math.min(size, 10));
+        String prefixLower = normalized.toLowerCase(Locale.ROOT);
+        List<String> result = new ArrayList<>();
         try {
             NativeQuery nativeQuery = NativeQuery.builder()
                     .withQuery(root -> root.multiMatch(multiMatch -> multiMatch
@@ -72,38 +75,71 @@ public class ProductSearchService {
                             .fields(SUGGEST_FIELDS)))
                     .withPageable(PageRequest.of(0, Math.max(limit * 3, 20)))
                     .build();
-            String prefixLower = normalized.toLowerCase(Locale.ROOT);
-            return elasticsearchOperations.search(nativeQuery, ProductDocument.class)
+            elasticsearchOperations.search(nativeQuery, ProductDocument.class)
                     .stream()
                     .map(hit -> hit.getContent().getTitle())
                     .filter(title -> title != null && !title.isBlank())
-                    .map(title -> shortenForSuggest(title, prefixLower))
-                    .filter(suggestion -> suggestion != null && !suggestion.isBlank())
-                    .distinct()
-                    .limit(limit)
-                    .toList();
+                    .forEach(title -> addSuggestion(result, shortenForSuggest(title, prefixLower), limit));
         } catch (RuntimeException exception) {
-            log.debug("Suggest unavailable: {}", exception.getMessage());
-            return List.of();
+            log.debug("Suggest (ES) unavailable: {}", exception.getMessage());
         }
+        if (result.isEmpty()) {
+            try {
+                for (ProductResponse product : shoppingService.search(normalized, "sim", 20, 1, false)) {
+                    if (product.title() != null) {
+                        addSuggestion(result, shortenForSuggest(product.title(), prefixLower), limit);
+                    }
+                    if (result.size() >= limit) {
+                        break;
+                    }
+                }
+            } catch (RuntimeException exception) {
+                log.debug("Suggest (Naver fallback) unavailable: {}", exception.getMessage());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static void addSuggestion(List<String> result, String suggestion, int limit) {
+        if (suggestion == null || suggestion.isBlank() || result.size() >= limit || result.contains(suggestion)) {
+            return;
+        }
+        result.add(suggestion);
     }
 
     /**
-     * 긴 상품 제목에서 자동완성용 짧은 키워드를 뽑는다: prefix가 포함된 첫 단어(짧으면 다음 단어까지)를
-     * 취해 대괄호 태그/후행 구두점을 정리. 매칭 단어가 없으면 첫 단어로 폴백.
+     * 상품 제목에서 자동완성 구절을 뽑는다: prefix가 든 토큰 + 다음 "의미있는" 토큰 하나를 붙여 구절로
+     * 만든다(단어 하나만 나오지 않게). 공백+문장부호로 토큰화하고, 모델코드/숫자성 다음 토큰은 붙이지 않는다.
      */
     private static String shortenForSuggest(String title, String prefixLower) {
-        String[] words = title.trim().split("\\s+");
-        for (int index = 0; index < words.length; index++) {
-            String cleaned = words[index].replaceAll("^\\[[^\\]]*\\]", "").replaceAll("[,.\\]\\[()]+$", "").trim();
-            if (!cleaned.isBlank() && cleaned.toLowerCase(Locale.ROOT).contains(prefixLower)) {
-                if (cleaned.length() < 3 && index + 1 < words.length) {
-                    cleaned = (cleaned + " " + words[index + 1].replaceAll("[,.\\]\\[()]+$", "")).trim();
+        String[] tokens = title.split("[\\s\\[\\]()\"'…·,.]+");
+        for (int index = 0; index < tokens.length; index++) {
+            String token = tokens[index].trim();
+            if (token.isBlank() || !token.toLowerCase(Locale.ROOT).contains(prefixLower)) {
+                continue;
+            }
+            if (index + 1 < tokens.length) {
+                String next = tokens[index + 1].trim();
+                if (isMeaningfulNext(next) && (token + " " + next).length() <= 16) {
+                    return token + " " + next;
                 }
-                return cleaned;
+            }
+            return token;
+        }
+        for (String token : tokens) {
+            if (!token.isBlank()) {
+                return token.trim();
             }
         }
-        return words.length > 0 ? words[0].replaceAll("^\\[[^\\]]*\\]", "").trim() : "";
+        return "";
+    }
+
+    /** 구절에 붙일 다음 토큰이 의미있는지(순수 모델코드/숫자성 토큰은 제외). */
+    private static boolean isMeaningfulNext(String token) {
+        if (token.length() < 2) {
+            return false;
+        }
+        return !(token.matches("[A-Za-z0-9\\-]+") && token.matches(".*[0-9].*"));
     }
 
     public List<ProductResponse> search(String query, String sort, int display, int start) {
