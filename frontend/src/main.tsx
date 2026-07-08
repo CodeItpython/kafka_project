@@ -356,6 +356,21 @@ const SAMPLE_USERS = [
 
 function App() {
   const [mode, setMode] = useState<Mode>('login');
+  // 회원가입 모달(동의 → 이메일 인증 → 비밀번호 → 완료)
+  const [signupOpen, setSignupOpen] = useState(false);
+  const [signupStep, setSignupStep] = useState(1);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupCodeSent, setSignupCodeSent] = useState(false);
+  const [signupName, setSignupName] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
+  const [signupResult, setSignupResult] = useState<AuthResponse | null>(null);
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupError, setSignupError] = useState('');
   const [email, setEmail] = useState(SAMPLE_USERS[0].email);
   const [name, setName] = useState(SAMPLE_USERS[0].name);
   const [password, setPassword] = useState('password123');
@@ -547,6 +562,91 @@ function App() {
     setProfileName(data.user.name);
     setProfileStatus(data.user.statusMessage ?? '');
     setStatus(`${data.user.name}님으로 로그인되었습니다.`);
+  }
+
+  function openSignup() {
+    setSignupStep(1);
+    setAgreeTerms(false);
+    setAgreePrivacy(false);
+    setAgreeMarketing(false);
+    setSignupEmail('');
+    setSignupCode('');
+    setSignupCodeSent(false);
+    setSignupName('');
+    setSignupPassword('');
+    setSignupPasswordConfirm('');
+    setSignupResult(null);
+    setSignupError('');
+    setSignupOpen(true);
+  }
+
+  async function sendSignupCode() {
+    if (!signupEmail.trim()) {
+      setSignupError('이메일을 입력해주세요.');
+      return;
+    }
+    setSignupBusy(true);
+    setSignupError('');
+    try {
+      await request<void>('/auth/email/code', { method: 'POST', body: JSON.stringify({ email: signupEmail.trim() }) });
+      setSignupCodeSent(true);
+    } catch (error) {
+      setSignupError(readableError(error, '인증코드를 보내지 못했습니다.'));
+    } finally {
+      setSignupBusy(false);
+    }
+  }
+
+  async function verifySignupEmail() {
+    const verificationCode = signupCode.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
+    if (verificationCode.length !== EMAIL_CODE_LENGTH) {
+      setSignupError('6자리 인증코드를 입력해주세요.');
+      return;
+    }
+    setSignupBusy(true);
+    setSignupError('');
+    try {
+      await request<void>('/auth/email/verify', { method: 'POST', body: JSON.stringify({ email: signupEmail.trim(), code: verificationCode }) });
+      setSignupStep(3);
+    } catch (error) {
+      setSignupError(readableError(error, '이메일 인증에 실패했습니다.'));
+    } finally {
+      setSignupBusy(false);
+    }
+  }
+
+  async function completeSignup() {
+    if (!signupName.trim()) {
+      setSignupError('이름을 입력해주세요.');
+      return;
+    }
+    if (signupPassword.length < 8) {
+      setSignupError('비밀번호는 8자 이상이어야 합니다.');
+      return;
+    }
+    if (signupPassword !== signupPasswordConfirm) {
+      setSignupError('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    setSignupBusy(true);
+    setSignupError('');
+    try {
+      const data = await request<AuthResponse>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email: signupEmail.trim(), password: signupPassword, name: signupName.trim() })
+      });
+      setSignupResult(data);
+      setSignupStep(4);
+    } catch (error) {
+      setSignupError(readableError(error, '가입에 실패했습니다.'));
+    } finally {
+      setSignupBusy(false);
+    }
+  }
+
+  function finishSignup() {
+    if (signupResult) saveSession(signupResult);
+    setSignupOpen(false);
   }
 
   async function submitPasswordFlow(event: FormEvent) {
@@ -2009,7 +2109,6 @@ function App() {
 
           <div className="mode-tabs" role="tablist" aria-label="로그인 방식">
             <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>일반</button>
-            <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>가입</button>
             <button className={mode === 'email' ? 'active' : ''} onClick={() => setMode('email')}>이메일</button>
           </div>
 
@@ -2056,7 +2155,104 @@ function App() {
 
           <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
           <button className="naver-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/naver/authorize`; }}><span className="naver-mark" aria-hidden>N</span>네이버로 로그인</button>
+          <p className="signup-hint">계정이 없으신가요? <button type="button" className="signup-link" onClick={openSignup}>이메일로 회원가입</button></p>
           {status && <p className="notice">{status}</p>}
+
+          <AnimatePresence>
+            {signupOpen && (
+              <motion.div className="signup-backdrop" role="presentation" onClick={() => setSignupOpen(false)}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div className="signup-modal" role="dialog" aria-modal="true" aria-label="회원가입"
+                  onClick={(event) => event.stopPropagation()}
+                  initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
+                  <header className="signup-modal-head">
+                    <div className="signup-steps" aria-hidden>
+                      {[1, 2, 3, 4].map((step) => (
+                        <span key={step} className={step === signupStep ? 'active' : step < signupStep ? 'done' : ''} />
+                      ))}
+                    </div>
+                    <button type="button" className="signup-close" onClick={() => setSignupOpen(false)} aria-label="닫기"><X size={18} aria-hidden /></button>
+                  </header>
+
+                  <AnimatePresence mode="wait">
+                    {signupStep === 1 && (
+                      <motion.div key="s1" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>약관에 동의해 주세요</h2>
+                        <p className="signup-sub">서비스 이용을 위해 아래 약관 동의가 필요해요.</p>
+                        <label className="agree-row agree-all">
+                          <input type="checkbox" checked={agreeTerms && agreePrivacy && agreeMarketing}
+                            onChange={(event) => { const value = event.target.checked; setAgreeTerms(value); setAgreePrivacy(value); setAgreeMarketing(value); }} />
+                          <span>전체 동의</span>
+                        </label>
+                        <label className="agree-row">
+                          <input type="checkbox" checked={agreeTerms} onChange={(event) => setAgreeTerms(event.target.checked)} />
+                          <span><b>[필수]</b> 서비스 이용약관 동의</span>
+                        </label>
+                        <label className="agree-row">
+                          <input type="checkbox" checked={agreePrivacy} onChange={(event) => setAgreePrivacy(event.target.checked)} />
+                          <span><b>[필수]</b> 개인정보 수집·이용 동의</span>
+                        </label>
+                        <label className="agree-row">
+                          <input type="checkbox" checked={agreeMarketing} onChange={(event) => setAgreeMarketing(event.target.checked)} />
+                          <span><b className="optional">[선택]</b> 마케팅 정보 수신 동의</span>
+                        </label>
+                        <div className="signup-actions">
+                          <button type="button" className="primary-button" disabled={!agreeTerms || !agreePrivacy} onClick={() => { setSignupError(''); setSignupStep(2); }}>다음</button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {signupStep === 2 && (
+                      <motion.div key="s2" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>이메일을 인증해 주세요</h2>
+                        <p className="signup-sub">가입에 사용할 이메일로 6자리 인증코드를 보내드려요.</p>
+                        <div className="signup-email-row">
+                          <input type="email" value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)} placeholder="you@example.com" />
+                          <button type="button" className="ghost-button" onClick={sendSignupCode} disabled={signupBusy || !signupEmail.trim()}>{signupCodeSent ? '재발송' : '코드 받기'}</button>
+                        </div>
+                        {signupCodeSent && (
+                          <>
+                            <input className="signup-code-input" value={signupCode} onChange={(event) => setSignupCode(event.target.value.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH))} inputMode="numeric" placeholder="6자리 인증코드" maxLength={EMAIL_CODE_LENGTH} />
+                            <p className="signup-sub">메일함에서 인증코드를 확인하세요.</p>
+                          </>
+                        )}
+                        <div className="signup-actions">
+                          <button type="button" className="ghost-button" onClick={() => { setSignupError(''); setSignupStep(1); }}>이전</button>
+                          <button type="button" className="primary-button" disabled={signupBusy || !signupCodeSent || signupCode.length !== EMAIL_CODE_LENGTH} onClick={verifySignupEmail}>인증하고 다음</button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {signupStep === 3 && (
+                      <motion.div key="s3" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>비밀번호를 설정해 주세요</h2>
+                        <p className="signup-sub"><b>{signupEmail}</b> 인증 완료! 계정 정보를 입력하세요.</p>
+                        <label className="signup-field">이름<input value={signupName} onChange={(event) => setSignupName(event.target.value)} placeholder="이름" /></label>
+                        <label className="signup-field">비밀번호<input type="password" value={signupPassword} onChange={(event) => setSignupPassword(event.target.value)} placeholder="8자 이상" /></label>
+                        <label className="signup-field">비밀번호 확인<input type="password" value={signupPasswordConfirm} onChange={(event) => setSignupPasswordConfirm(event.target.value)} placeholder="다시 입력" /></label>
+                        <div className="signup-actions">
+                          <button type="button" className="ghost-button" onClick={() => { setSignupError(''); setSignupStep(2); }}>이전</button>
+                          <button type="button" className="primary-button" disabled={signupBusy} onClick={completeSignup}>가입 완료</button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {signupStep === 4 && (
+                      <motion.div key="s4" className="signup-step signup-done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                        <div className="signup-done-badge"><CheckCircle2 size={44} aria-hidden /></div>
+                        <h2>가입이 완료되었어요 🎉</h2>
+                        <p className="signup-sub">{signupResult?.user?.name ?? ''}님, 환영해요!</p>
+                        <button type="button" className="primary-button" onClick={finishSignup}>시작하기</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {signupError && <p className="signup-error">{signupError}</p>}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           </motion.section>
         </div>
       </main>
