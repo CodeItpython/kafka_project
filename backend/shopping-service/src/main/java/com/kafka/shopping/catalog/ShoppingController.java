@@ -59,6 +59,15 @@ public class ShoppingController {
         return results;
     }
 
+    /** 연관검색어: 시드 검색어와 함께 자주 등장하는 상품 키워드(Elasticsearch significant_text). */
+    @GetMapping("/related")
+    public List<String> related(
+            @RequestParam @NotBlank String query,
+            @RequestParam(defaultValue = "8") int size
+    ) {
+        return productSearchService.relatedKeywords(query, size);
+    }
+
     @GetMapping("/popular-keywords")
     public List<PopularKeywordResponse> popularKeywords() {
         return popularKeywordService.top();

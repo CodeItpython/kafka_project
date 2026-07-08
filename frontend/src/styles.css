@@ -3722,6 +3722,22 @@ input:focus {
   padding: 8px 15px; background: #5b53eb; color: #fff;
   font-size: 13px; font-weight: 800; cursor: pointer;
 }
+.shop-related {
+  flex: 1 1 100%;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 2px; flex-wrap: wrap;
+}
+.shop-related-label {
+  font-size: 11px; font-weight: 900; color: #5b53eb; white-space: nowrap;
+}
+.shop-related-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.shop-related-chip {
+  border: 1px solid #e3e7f2; border-radius: 999px;
+  padding: 5px 12px; background: #fff; color: #3d4453;
+  font-size: 12.5px; font-weight: 700; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.shop-related-chip:hover { background: #f2f2fe; border-color: #8b8ff0; color: #5b53eb; }
 .shop-popular {
   position: relative;
   display: flex; align-items: center; gap: 10px;
