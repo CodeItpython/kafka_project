@@ -172,6 +172,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     image: kafka-frontend:local
+    # 로컬 개발은 vite dev 서버(npm run dev, :8880 HMR)로 돌린다. 기본 `docker compose up`이
+    # 프론트 컨테이너를 되살리지 않도록 프로파일로 격리. 컨테이너로 띄울 땐:
+    #   docker compose --profile container up -d frontend
+    profiles: ["container"]
     depends_on:
       - auth-service
       - chat-service
