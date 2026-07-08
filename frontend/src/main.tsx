@@ -2107,55 +2107,15 @@ function App() {
             ))}
           </div>
 
-          <div className="mode-tabs" role="tablist" aria-label="로그인 방식">
-            <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>일반</button>
-            <button className={mode === 'email' ? 'active' : ''} onClick={() => setMode('email')}>이메일</button>
-          </div>
+          <form className="auth-form" onSubmit={submitPasswordFlow}>
+            <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
+            <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} required /></label>
+            <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />로그인</button>
+          </form>
 
-          <AnimatePresence mode="wait">
-            {mode === 'email' ? (
-              <motion.form key="email" onSubmit={submitEmailFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
-                <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
-                <label>이름<input value={name} onChange={(event) => setName(event.target.value)} required /></label>
-                <div className="email-code-panel">
-                  <div className="email-code-title">
-                    <span>인증코드</span>
-                    <small>{loading && code.length === EMAIL_CODE_LENGTH ? '확인 중' : '6자리 숫자 입력 시 자동 확인'}</small>
-                  </div>
-                  <div className="otp-inputs" aria-label="6자리 이메일 인증코드">
-                    {emailCodeDigits.map((digit, index) => (
-                      <input
-                        key={`email-code-${index}`}
-                        ref={(element) => { codeInputRefs.current[index] = element; }}
-                        value={digit}
-                        onChange={(event) => handleCodeDigitChange(index, event.target.value)}
-                        onKeyDown={(event) => handleCodeKeyDown(index, event)}
-                        onPaste={handleCodePaste}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                        maxLength={1}
-                        aria-label={`인증코드 ${index + 1}번째 숫자`}
-                      />
-                    ))}
-                  </div>
-                  <button type="button" className="icon-button" onClick={sendCode} disabled={loading} title="인증코드 발송"><Mail size={19} aria-hidden /></button>
-                </div>
-                <p className="hint">메일함에서 6자리 인증코드를 확인하세요.</p>
-              </motion.form>
-            ) : (
-              <motion.form key={mode} onSubmit={submitPasswordFlow} className="auth-form" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
-                <label>이메일<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required /></label>
-                {mode === 'register' && <label>이름<input value={name} onChange={(event) => setName(event.target.value)} required /></label>}
-                <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} required /></label>
-                <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />{mode === 'register' ? '가입하고 로그인' : '로그인'}</button>
-              </motion.form>
-            )}
-          </AnimatePresence>
-
+          <button type="button" className="signup-cta" onClick={openSignup}>이메일로 회원가입</button>
           <button className="kakao-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/kakao/authorize`; }}>카카오로 로그인</button>
           <button className="naver-button" type="button" onClick={() => { window.location.href = `${API_ROOT}/auth/oauth/naver/authorize`; }}><span className="naver-mark" aria-hidden>N</span>네이버로 로그인</button>
-          <p className="signup-hint">계정이 없으신가요? <button type="button" className="signup-link" onClick={openSignup}>이메일로 회원가입</button></p>
           {status && <p className="notice">{status}</p>}
 
           <AnimatePresence>
