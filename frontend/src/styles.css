@@ -423,7 +423,7 @@ p {
 }
 
 .signup-field { display: grid; gap: 6px; margin-bottom: 12px; color: #4e5968; font-size: 13px; font-weight: 700; }
-.signup-field input, .signup-email-row input, .signup-code-input {
+.signup-field input, .signup-email-row input {
   width: 100%;
   border: 1px solid #d1d6e0;
   border-radius: 12px;
@@ -432,13 +432,49 @@ p {
   color: #191f28;
   background: #fff;
 }
-.signup-field input:focus, .signup-email-row input:focus, .signup-code-input:focus {
+.signup-field input:focus, .signup-email-row input:focus {
   outline: 0;
   border-color: #5b53eb;
 }
 .signup-email-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .signup-email-row input { flex: 1; }
-.signup-code-input { letter-spacing: 6px; text-align: center; font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+
+/* 6자리 인증코드를 한 칸씩 나눠 입력받는 박스형 OTP */
+.otp-input { display: flex; gap: 8px; margin: 4px 0 10px; }
+.otp-cell {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 0;
+  border: 1px solid #d1d6e0;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 800;
+  color: #191f28;
+  background: #fff;
+}
+.otp-cell:focus {
+  outline: 0;
+  border-color: #5b53eb;
+  box-shadow: 0 0 0 3px rgba(91, 83, 235, 0.16);
+}
+
+/* 회원가입 모달은 밝은 카드다. 3D 로그인 셸의 어두운 input 규칙
+   (.auth-shell--3d .auth-panel input → 흰색 글자)이 특이도로 이겨
+   흰 배경에 흰 글자가 되던 문제를 여기서 되돌린다. */
+.auth-shell--3d .auth-panel .signup-modal input {
+  color: #191f28;
+  background: #fff;
+  border-color: #d1d6e0;
+}
+.auth-shell--3d .auth-panel .signup-modal input::placeholder {
+  color: #9aa0c2;
+}
+.auth-shell--3d .auth-panel .signup-modal input:focus {
+  border-color: #5b53eb;
+  background: #fff;
+}
 
 .signup-actions { display: flex; gap: 8px; margin-top: 18px; }
 .signup-actions .primary-button { flex: 1; }
