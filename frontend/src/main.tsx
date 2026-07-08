@@ -423,6 +423,10 @@ function App() {
   const pullDistanceRef = useRef(0);
   const pullWheelReleaseTimerRef = useRef<number | null>(null);
   const lastAutoSubmittedCodeRef = useRef('');
+  // 현재 열려 있는 방 id를 렌더마다 최신값으로 유지 — loadMessages의 비동기 응답이
+  // 도착했을 때 그새 방을 바꿨는지 판별해 stale 응답이 다른 방을 덮어쓰지 않게 한다.
+  const selectedRoomIdRef = useRef(selectedRoomId);
+  selectedRoomIdRef.current = selectedRoomId;
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
   const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
@@ -455,7 +459,10 @@ function App() {
     return '다시 오신 걸 환영해요';
   }, [mode]);
 
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // 채팅 메시지 행(MessageRow)에 넘기는 핸들러들이 안정적인 참조를 갖도록
+  // request/withReadCounts/readableError도 useCallback으로 고정한다. 이들이
+  // 매 렌더 새 함수였다면 핸들러 useCallback deps가 매번 바뀌어 memo가 무력화된다.
+  const request = useCallback(async <T,>(path: string, init?: RequestInit): Promise<T> => {
     const isFormData = init?.body instanceof FormData;
     const response = await fetch(`${API_ROOT}${path}`, {
       ...init,
@@ -470,9 +477,9 @@ function App() {
       throw new ApiClientError(data ?? {}, '요청을 처리하지 못했습니다.');
     }
     return data as T;
-  }
+  }, [token]);
 
-  function readableError(error: unknown, fallback = '잠시 후 다시 시도해주세요.') {
+  const readableError = useCallback((error: unknown, fallback = '잠시 후 다시 시도해주세요.') => {
     if (error instanceof ApiClientError) {
       if (error.code === 'VALIDATION_FAILED') {
         return error.details[0] ?? '입력한 정보를 다시 확인해주세요.';
@@ -489,7 +496,7 @@ function App() {
       return error.message;
     }
     return fallback;
-  }
+  }, []);
 
   function chooseSample(sample: { email: string; name: string }) {
     setEmail(sample.email);
@@ -784,7 +791,19 @@ function App() {
     return request<SearchSuggestion[]>(`/chat/suggestions?scope=${scope}&query=${encodeURIComponent(query.trim())}`);
   }
 
-  function withReadCounts(items: ChatMessage[], receipts: ReadReceipt[]) {
+  // withReadCounts가 의존하므로 먼저 선언한다(useCallback deps 참조는 렌더 시점에
+  // 평가되어 TDZ에 걸리기 때문). user가 바뀔 때만 새 참조가 만들어진다.
+  const normalizeReactions = useCallback((reactions: MessageReaction[]) => {
+    if (!user) {
+      return reactions;
+    }
+    return reactions.map((reaction) => ({
+      ...reaction,
+      reactedByMe: reaction.reactorEmails.some((email) => email.toLowerCase() === user.email.toLowerCase())
+    }));
+  }, [user]);
+
+  const withReadCounts = useCallback((items: ChatMessage[], receipts: ReadReceipt[]) => {
     return items.map((message) => {
       const readCount = receipts.filter((receipt) => {
         if (receipt.email.toLowerCase() === message.senderEmail.toLowerCase() || !receipt.lastReadAt) {
@@ -806,7 +825,7 @@ function App() {
         reactions: normalizeReactions(message.reactions ?? [])
       };
     });
-  }
+  }, [normalizeReactions]);
 
   function deliveryStatusLabel(message: ChatMessage) {
     if (message.readCount > 0 || message.deliveryStatus === 'READ') {
@@ -816,16 +835,6 @@ function App() {
       return `전달됨 ${Math.max(message.deliveredCount, 1)}`;
     }
     return '전송됨';
-  }
-
-  function normalizeReactions(reactions: MessageReaction[]) {
-    if (!user) {
-      return reactions;
-    }
-    return reactions.map((reaction) => ({
-      ...reaction,
-      reactedByMe: reaction.reactorEmails.some((email) => email.toLowerCase() === user.email.toLowerCase())
-    }));
   }
 
   function applyReadReceipts(receipts: ReadReceipt[]) {
@@ -870,6 +879,9 @@ function App() {
   async function loadMessages(roomId: string) {
     if (!roomId) return;
     const data = await request<ChatMessage[]>(`/chat/rooms/${roomId}/messages`);
+    // 응답을 기다리는 사이 방을 바꿨다면(빠른 방 전환, 전송 후 350ms 지연 재조회 등)
+    // 이 결과는 stale이므로 현재 방 메시지를 덮어쓰지 않는다.
+    if (selectedRoomIdRef.current !== roomId) return;
     setMessages(withReadCounts(data, readReceiptsRef.current));
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     await loadReadReceipts(roomId);
@@ -1417,7 +1429,7 @@ function App() {
     }
   }
 
-  async function hideMessageForMe(message: ChatMessage) {
+  const hideMessageForMe = useCallback(async (message: ChatMessage) => {
     try {
       await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/me`, { method: 'DELETE' });
       setMessages((current) => current.filter((item) => item.id !== message.id));
@@ -1425,7 +1437,7 @@ function App() {
     } catch (error) {
       setStatus(readableError(error, '메시지를 삭제하지 못했습니다.'));
     }
-  }
+  }, [request, readableError]);
 
   async function clearRoomMessagesForMe() {
     if (!selectedRoomId) return;
@@ -1439,7 +1451,7 @@ function App() {
     }
   }
 
-  async function deleteMessageForEveryone(message: ChatMessage) {
+  const deleteMessageForEveryone = useCallback(async (message: ChatMessage) => {
     try {
       const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/everyone`, { method: 'DELETE' });
       const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
@@ -1448,21 +1460,23 @@ function App() {
     } catch (error) {
       setStatus(readableError(error, '모두에게 삭제하지 못했습니다.'));
     }
-  }
+  }, [request, withReadCounts, readableError]);
 
-  function startEditingMessage(message: ChatMessage) {
+  const startEditingMessage = useCallback((message: ChatMessage) => {
     setReplyTarget(null);
     setEditingMessageId(message.id);
     setEditingDraft(message.content);
-  }
+  }, []);
 
-  function cancelEditingMessage() {
+  const cancelEditingMessage = useCallback(() => {
     setEditingMessageId('');
     setEditingDraft('');
-  }
+  }, []);
 
-  async function editMessage(message: ChatMessage) {
-    const content = editingDraft.trim();
+  // 저장할 내용을 인자로 받는다 — editingDraft(App state)를 클로저로 캡처하면
+  // 편집 중 키 입력마다 editMessage 참조가 바뀌어 모든 행이 리렌더된다.
+  const editMessage = useCallback(async (message: ChatMessage, rawContent: string) => {
+    const content = rawContent.trim();
     if (!content) {
       setStatus('수정할 메시지 내용을 입력해주세요.');
       return;
@@ -1483,9 +1497,9 @@ function App() {
     } catch (error) {
       setStatus(readableError(error, '메시지를 수정하지 못했습니다.'));
     }
-  }
+  }, [request, withReadCounts, readableError, cancelEditingMessage]);
 
-  async function toggleMessageReaction(message: ChatMessage, emoji: string) {
+  const toggleMessageReaction = useCallback(async (message: ChatMessage, emoji: string) => {
     try {
       const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/reactions`, {
         method: 'POST',
@@ -1496,9 +1510,9 @@ function App() {
     } catch (error) {
       setStatus(readableError(error, '반응을 저장하지 못했습니다.'));
     }
-  }
+  }, [request, withReadCounts, readableError]);
 
-  async function copyMessageText(text: string) {
+  const copyMessageText = useCallback(async (text: string) => {
     if (!text) return;
     try {
       if (!navigator.clipboard) throw new Error('clipboard unavailable');
@@ -1507,7 +1521,7 @@ function App() {
     } catch {
       setStatus('복사할 수 없어요. 메시지를 길게 눌러 선택해 주세요.');
     }
-  }
+  }, []);
 
   function selectAttachment(file: File | null) {
     clearAttachment();
@@ -2727,135 +2741,27 @@ function App() {
               )}
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
               {messages.map((message) => {
-                const linkUrl = message.deletedForEveryone ? null : firstMessageUrl(message.content);
                 const isMine = message.senderEmail?.toLowerCase() === user.email?.toLowerCase();
-                const isDeleted = message.deletedForEveryone;
                 const isEditing = editingMessageId === message.id;
-                const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
                 return (
-                <ContextMenu.Root key={message.id}>
-                  <ContextMenu.Trigger asChild disabled={isDeleted || isEditing}>
-                    <motion.div
-                      className={isMine ? 'chat-row mine' : 'chat-row'}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      {!isMine && <strong className="bubble-sender">{message.senderName}</strong>}
-                      {isEditing && !isDeleted ? (
-                        <div className="message-edit-panel">
-                          <textarea value={editingDraft} onChange={(event) => setEditingDraft(event.target.value)} maxLength={2000} autoFocus />
-                          <div>
-                            <button type="button" onClick={cancelEditingMessage}>취소</button>
-                            <button type="button" onClick={() => editMessage(message)} disabled={!editingDraft.trim()}>저장</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bubble-cluster">
-                          <article className="chat-bubble">
-                            {isDeleted ? (
-                              <p className="deleted-message">삭제된 메시지입니다.</p>
-                            ) : (
-                              <>
-                                {message.replyToMessageId && (
-                                  <div className="reply-preview">
-                                    <strong>{message.replyToSenderName ?? '메시지'}</strong>
-                                    <span>{message.replyToContent ?? '원본 메시지'}</span>
-                                  </div>
-                                )}
-                                {message.attachmentUrl && (
-                                  <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
-                                    <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
-                                  </a>
-                                )}
-                                {message.content && <p>{message.content}</p>}
-                                {linkUrl && <MessageLinkPreview url={linkUrl} />}
-                                {message.editedAt && <span className="edited-label">수정됨</span>}
-                                {message.reactions.length > 0 && (
-                                  <div className="reaction-strip" aria-label="메시지 반응">
-                                    {message.reactions.map((reaction) => (
-                                      <button
-                                        key={`${message.id}-${reaction.emoji}`}
-                                        type="button"
-                                        className={reaction.reactedByMe ? 'active' : ''}
-                                        onClick={() => toggleMessageReaction(message, reaction.emoji)}
-                                        title={`${reaction.emoji} ${reaction.count}명`}
-                                      >
-                                        <span>{reaction.emoji}</span>
-                                        <strong>{reaction.count}</strong>
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </article>
-                          <time className="bubble-time">{MESSAGE_TIME_FORMAT.format(new Date(message.createdAt))}</time>
-                          {!isDeleted && (
-                            <div className="message-actions">
-                              <button className="msg-quick-btn" type="button" title="답장" aria-label="답장" onClick={() => setReplyTarget(message)}>
-                                <Reply size={16} aria-hidden />
-                              </button>
-                              <Popover.Root>
-                                <Popover.Trigger asChild>
-                                  <button className="msg-quick-btn" type="button" title="공감" aria-label="공감 남기기">
-                                    <SmilePlus size={16} aria-hidden />
-                                  </button>
-                                </Popover.Trigger>
-                                <Popover.Portal>
-                                  <Popover.Content className="reaction-picker" side="top" align="center" sideOffset={8} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()}>
-                                    {QUICK_REACTIONS.map((emoji) => (
-                                      <button
-                                        key={`${message.id}-pick-${emoji}`}
-                                        type="button"
-                                        className={hasMyReaction(emoji) ? 'active' : ''}
-                                        onClick={() => toggleMessageReaction(message, emoji)}
-                                        title={`${emoji} 반응`}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
-                                  </Popover.Content>
-                                </Popover.Portal>
-                              </Popover.Root>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </motion.div>
-                  </ContextMenu.Trigger>
-                  {!isDeleted && !isEditing && (
-                    <ContextMenu.Portal>
-                      <ContextMenu.Content className="message-context-menu" collisionPadding={12}>
-                        <div className="context-reactions" aria-label="빠른 반응">
-                          {QUICK_REACTIONS.map((emoji) => (
-                            <ContextMenu.Item
-                              key={`${message.id}-ctx-${emoji}`}
-                              className={hasMyReaction(emoji) ? 'ctx-emoji active' : 'ctx-emoji'}
-                              onSelect={() => toggleMessageReaction(message, emoji)}
-                            >
-                              {emoji}
-                            </ContextMenu.Item>
-                          ))}
-                        </div>
-                        <ContextMenu.Separator className="context-sep" />
-                        {isMine && (
-                          <div className="context-read-state">{deliveryStatusLabel(message)}</div>
-                        )}
-                        {message.content && (
-                          <ContextMenu.Item className="ctx-item" onSelect={() => copyMessageText(message.content ?? '')}><Copy size={14} aria-hidden />복사</ContextMenu.Item>
-                        )}
-                        {isMine && message.content && (
-                          <ContextMenu.Item className="ctx-item" onSelect={() => startEditingMessage(message)}><Pencil size={14} aria-hidden />수정</ContextMenu.Item>
-                        )}
-                        <ContextMenu.Item className="ctx-item" onSelect={() => setReplyTarget(message)}><Reply size={14} aria-hidden />답장</ContextMenu.Item>
-                        <ContextMenu.Item className="ctx-item" onSelect={() => hideMessageForMe(message)}>나에게 삭제</ContextMenu.Item>
-                        {isMine && (
-                          <ContextMenu.Item className="ctx-item danger" onSelect={() => deleteMessageForEveryone(message)}><Trash2 size={14} aria-hidden />모두에게 삭제</ContextMenu.Item>
-                        )}
-                      </ContextMenu.Content>
-                    </ContextMenu.Portal>
-                  )}
-                </ContextMenu.Root>
+                  <MessageRow
+                    key={message.id}
+                    message={message}
+                    isMine={isMine}
+                    isEditing={isEditing}
+                    // 편집 중인 행에만 editingDraft를 넘겨 편집 키 입력이 다른 행을 리렌더하지 않게 한다.
+                    editingDraft={isEditing ? editingDraft : undefined}
+                    deliveryLabel={deliveryStatusLabel(message)}
+                    onEditDraftChange={setEditingDraft}
+                    onSaveEdit={editMessage}
+                    onCancelEdit={cancelEditingMessage}
+                    onStartEdit={startEditingMessage}
+                    onToggleReaction={toggleMessageReaction}
+                    onReply={setReplyTarget}
+                    onHide={hideMessageForMe}
+                    onDeleteForEveryone={deleteMessageForEveryone}
+                    onCopy={copyMessageText}
+                  />
                 );
               })}
             </div>
@@ -3198,6 +3104,174 @@ function ProfileHistoryList({ history }: { history: ProfileHistory[] }) {
     </div>
   );
 }
+
+type MessageRowProps = {
+  message: ChatMessage;
+  isMine: boolean;
+  isEditing: boolean;
+  editingDraft?: string;
+  deliveryLabel: string;
+  onEditDraftChange: (value: string) => void;
+  onSaveEdit: (message: ChatMessage, content: string) => void;
+  onCancelEdit: () => void;
+  onStartEdit: (message: ChatMessage) => void;
+  onToggleReaction: (message: ChatMessage, emoji: string) => void;
+  onReply: (message: ChatMessage) => void;
+  onHide: (message: ChatMessage) => void;
+  onDeleteForEveryone: (message: ChatMessage) => void;
+  onCopy: (text: string) => void;
+};
+
+// 메시지 한 줄. React.memo로 감싸 props가 바뀐 행만 리렌더한다.
+// composer의 draft(App state)는 여기로 전달되지 않으므로 입력 중 목록이 리렌더되지 않고,
+// editingDraft는 편집 중인 행에만 넘겨 편집 키 입력도 그 행만 리렌더한다.
+// 핸들러들은 App에서 useCallback으로 안정화돼 있어야 memo가 실제로 동작한다.
+const MessageRow = React.memo(function MessageRow({
+  message,
+  isMine,
+  isEditing,
+  editingDraft,
+  deliveryLabel,
+  onEditDraftChange,
+  onSaveEdit,
+  onCancelEdit,
+  onStartEdit,
+  onToggleReaction,
+  onReply,
+  onHide,
+  onDeleteForEveryone,
+  onCopy
+}: MessageRowProps) {
+  const isDeleted = message.deletedForEveryone;
+  const linkUrl = isDeleted ? null : firstMessageUrl(message.content);
+  const draftValue = editingDraft ?? '';
+  const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild disabled={isDeleted || isEditing}>
+        <motion.div
+          className={isMine ? 'chat-row mine' : 'chat-row'}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {!isMine && <strong className="bubble-sender">{message.senderName}</strong>}
+          {isEditing && !isDeleted ? (
+            <div className="message-edit-panel">
+              <textarea value={draftValue} onChange={(event) => onEditDraftChange(event.target.value)} maxLength={2000} autoFocus />
+              <div>
+                <button type="button" onClick={onCancelEdit}>취소</button>
+                <button type="button" onClick={() => onSaveEdit(message, draftValue)} disabled={!draftValue.trim()}>저장</button>
+              </div>
+            </div>
+          ) : (
+            <div className="bubble-cluster">
+              <article className="chat-bubble">
+                {isDeleted ? (
+                  <p className="deleted-message">삭제된 메시지입니다.</p>
+                ) : (
+                  <>
+                    {message.replyToMessageId && (
+                      <div className="reply-preview">
+                        <strong>{message.replyToSenderName ?? '메시지'}</strong>
+                        <span>{message.replyToContent ?? '원본 메시지'}</span>
+                      </div>
+                    )}
+                    {message.attachmentUrl && (
+                      <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
+                        <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
+                      </a>
+                    )}
+                    {message.content && <p>{message.content}</p>}
+                    {linkUrl && <MessageLinkPreview url={linkUrl} />}
+                    {message.editedAt && <span className="edited-label">수정됨</span>}
+                    {message.reactions.length > 0 && (
+                      <div className="reaction-strip" aria-label="메시지 반응">
+                        {message.reactions.map((reaction) => (
+                          <button
+                            key={`${message.id}-${reaction.emoji}`}
+                            type="button"
+                            className={reaction.reactedByMe ? 'active' : ''}
+                            onClick={() => onToggleReaction(message, reaction.emoji)}
+                            title={`${reaction.emoji} ${reaction.count}명`}
+                          >
+                            <span>{reaction.emoji}</span>
+                            <strong>{reaction.count}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </article>
+              <time className="bubble-time">{MESSAGE_TIME_FORMAT.format(new Date(message.createdAt))}</time>
+              {!isDeleted && (
+                <div className="message-actions">
+                  <button className="msg-quick-btn" type="button" title="답장" aria-label="답장" onClick={() => onReply(message)}>
+                    <Reply size={16} aria-hidden />
+                  </button>
+                  <Popover.Root>
+                    <Popover.Trigger asChild>
+                      <button className="msg-quick-btn" type="button" title="공감" aria-label="공감 남기기">
+                        <SmilePlus size={16} aria-hidden />
+                      </button>
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Content className="reaction-picker" side="top" align="center" sideOffset={8} collisionPadding={12} onOpenAutoFocus={(event) => event.preventDefault()}>
+                        {QUICK_REACTIONS.map((emoji) => (
+                          <button
+                            key={`${message.id}-pick-${emoji}`}
+                            type="button"
+                            className={hasMyReaction(emoji) ? 'active' : ''}
+                            onClick={() => onToggleReaction(message, emoji)}
+                            title={`${emoji} 반응`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </Popover.Content>
+                    </Popover.Portal>
+                  </Popover.Root>
+                </div>
+              )}
+            </div>
+          )}
+        </motion.div>
+      </ContextMenu.Trigger>
+      {!isDeleted && !isEditing && (
+        <ContextMenu.Portal>
+          <ContextMenu.Content className="message-context-menu" collisionPadding={12}>
+            <div className="context-reactions" aria-label="빠른 반응">
+              {QUICK_REACTIONS.map((emoji) => (
+                <ContextMenu.Item
+                  key={`${message.id}-ctx-${emoji}`}
+                  className={hasMyReaction(emoji) ? 'ctx-emoji active' : 'ctx-emoji'}
+                  onSelect={() => onToggleReaction(message, emoji)}
+                >
+                  {emoji}
+                </ContextMenu.Item>
+              ))}
+            </div>
+            <ContextMenu.Separator className="context-sep" />
+            {isMine && (
+              <div className="context-read-state">{deliveryLabel}</div>
+            )}
+            {message.content && (
+              <ContextMenu.Item className="ctx-item" onSelect={() => onCopy(message.content ?? '')}><Copy size={14} aria-hidden />복사</ContextMenu.Item>
+            )}
+            {isMine && message.content && (
+              <ContextMenu.Item className="ctx-item" onSelect={() => onStartEdit(message)}><Pencil size={14} aria-hidden />수정</ContextMenu.Item>
+            )}
+            <ContextMenu.Item className="ctx-item" onSelect={() => onReply(message)}><Reply size={14} aria-hidden />답장</ContextMenu.Item>
+            <ContextMenu.Item className="ctx-item" onSelect={() => onHide(message)}>나에게 삭제</ContextMenu.Item>
+            {isMine && (
+              <ContextMenu.Item className="ctx-item danger" onSelect={() => onDeleteForEveryone(message)}><Trash2 size={14} aria-hidden />모두에게 삭제</ContextMenu.Item>
+            )}
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      )}
+    </ContextMenu.Root>
+  );
+});
 
 function RoomList({
   rooms,
