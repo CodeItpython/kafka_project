@@ -1943,6 +1943,7 @@ input:focus {
 }
 
 .message-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -1953,6 +1954,12 @@ input:focus {
   padding: 18px 12px;
   overscroll-behavior: contain;
   touch-action: pan-y;
+}
+
+/* 가상 스크롤: spacer가 전체 높이를 차지하고, 각 행은 절대배치로 translateY 된다. */
+.message-virtual-row {
+  /* flex gap(9px)이 절대배치 행에는 적용되지 않으므로 행마다 간격을 준다(측정에 포함됨). */
+  padding-bottom: 9px;
 }
 
 .pull-refresh-indicator {
