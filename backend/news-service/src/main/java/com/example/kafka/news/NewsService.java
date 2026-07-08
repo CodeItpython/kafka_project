@@ -22,11 +22,17 @@ public class NewsService {
     private static final int MAX_CACHE_ENTRIES = 512;
 
     private final NaverNewsApiClient client;
+    private final NewsIndexService newsIndexService;
     private final long ttlSeconds;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
-    public NewsService(NaverNewsApiClient client, @Value("${app.news.cache-ttl-seconds:180}") long ttlSeconds) {
+    public NewsService(
+            NaverNewsApiClient client,
+            NewsIndexService newsIndexService,
+            @Value("${app.news.cache-ttl-seconds:180}") long ttlSeconds
+    ) {
         this.client = client;
+        this.newsIndexService = newsIndexService;
         this.ttlSeconds = ttlSeconds;
     }
 
@@ -50,6 +56,8 @@ public class NewsService {
             }
             return fresh;
         }
+        // 가져온 기사를 Elasticsearch에 비동기 색인 → 연관검색어 집계의 코퍼스가 채워진다.
+        newsIndexService.indexQuietly(fresh, category.code());
         // 캐시는 (category,start,display)별로 커져 무한 증가할 수 있으므로 상한을 두고 만료분부터 정리.
         if (cache.size() >= MAX_CACHE_ENTRIES) {
             cache.entrySet().removeIf(existing -> !existing.getValue().expiresAt().isAfter(now));
@@ -59,6 +67,25 @@ public class NewsService {
         }
         cache.put(key, new CacheEntry(fresh, now.plus(Duration.ofSeconds(ttlSeconds))));
         return fresh;
+    }
+
+    /** 자유 검색어 뉴스 검색(Naver "검색" API, 정확도순). 결과는 ES에 색인해 연관검색어 코퍼스를 채운다. */
+    public List<NewsItem> search(String query, int start, int display) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        NaverNewsResponse response = client.search(query.trim(), clampDisplay(display), clampStart(start), "sim");
+        if (response == null || response.items() == null) {
+            return List.of();
+        }
+        List<NewsItem> items = response.items().stream()
+                .map(NewsService::toItem)
+                .filter(item -> item.url() != null && !item.url().isBlank())
+                .toList();
+        if (!items.isEmpty()) {
+            newsIndexService.indexQuietly(items, "search");
+        }
+        return items;
     }
 
     private List<NewsItem> fetch(NewsCategory category, int display, int start) {
