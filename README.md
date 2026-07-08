@@ -96,11 +96,23 @@ Kubernetes는 `k8s/secrets.example.yaml`의 `auth-secrets`에 `smtp-host`, `smtp
 
 ## Docker Compose
 
-전체 서비스를 Docker Compose로 실행하려면 아래 명령을 사용합니다.
+기본 기동은 **앱 서비스 + 데이터스토어**만 올립니다(로컬 CPU 절약). 무거운 CI·관측 스택은 Compose 프로필로 분리되어 필요할 때만 켭니다.
 
 ```bash
-docker compose up --build
+# 기본: auth/news/chat/shopping/frontend + postgres·kafka·mongodb·redis·minio·elasticsearch
+docker compose up -d --build
+
+# + 관측 스택(logstash·kibana·prometheus·tempo·grafana)
+docker compose --profile observability up -d
+
+# + CI(jenkins)
+docker compose --profile ci up -d
+
+# 전부(기존 "전체 기동"과 동일)
+docker compose --profile ci --profile observability up -d --build
 ```
+
+> 개별 프로필 서비스는 이름을 명시해도 켜집니다(예: `docker compose up -d kibana`).
 
 주요 포트는 다음과 같습니다.
 
