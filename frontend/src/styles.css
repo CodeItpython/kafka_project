@@ -3399,6 +3399,8 @@ input:focus {
 
 .landing-feature-inner { display: grid; gap: 16px; justify-items: center; max-width: 560px; }
 .landing-feature-icon {
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   width: 66px;
@@ -3408,6 +3410,19 @@ input:focus {
   background: linear-gradient(150deg, rgba(124, 116, 255, 0.28), rgba(103, 232, 249, 0.18));
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 14px 44px rgba(91, 83, 235, 0.3);
+  animation: landingIconPulse 3.4s ease-in-out infinite;
+}
+/* 아이콘 뒤에서 도는 컬러 글로우 링 (transform은 pseudo 고유 → 등장 애니메이션과 충돌 없음) */
+.landing-feature-icon::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  border-radius: 27px;
+  background: conic-gradient(from 0deg, #7c74ff, #67e8f9, #a855f7, #f472b6, #7c74ff);
+  filter: blur(13px);
+  opacity: 0.5;
+  animation: landingRingSpin 6s linear infinite;
 }
 .landing-feature-title {
   margin: 0;
@@ -3434,6 +3449,8 @@ input:focus {
   color: #ffffff;
 }
 .landing-start {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -3446,9 +3463,23 @@ input:focus {
   font-size: 16px;
   font-weight: 800;
   box-shadow: 0 16px 42px rgba(91, 83, 235, 0.45);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  /* transform 리프트는 motion(whileHover)이 담당 → CSS transition에서 transform 제외 */
+  transition: box-shadow 0.15s ease;
+  animation: landingCtaGlow 2.6s ease-in-out infinite;
 }
-.landing-start:hover { transform: translateY(-2px); box-shadow: 0 22px 52px rgba(91, 83, 235, 0.55); }
+.landing-start:hover { box-shadow: 0 22px 56px rgba(124, 116, 255, 0.6); }
+/* 버튼 위를 스치는 빛줄기 */
+.landing-start::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: skewX(-18deg);
+  animation: landingShine 3.2s ease-in-out infinite;
+}
 .landing-login-link {
   border: 0;
   background: transparent;
@@ -3457,6 +3488,48 @@ input:focus {
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* 제목에 흐르는 그라디언트 시머 (배경 위치만 애니메이트 → 등장 transform과 충돌 없음) */
+.landing-shimmer {
+  background-image: linear-gradient(100deg, #ffffff 18%, #c8c2ff 38%, #8fe9ff 52%, #ffffff 68%, #c8c2ff 88%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: landingShimmer 6.5s linear infinite;
+}
+
+@keyframes landingShimmer {
+  to { background-position: 220% center; }
+}
+@keyframes landingRingSpin {
+  to { transform: rotate(1turn); }
+}
+@keyframes landingIconPulse {
+  0%, 100% { box-shadow: 0 14px 44px rgba(91, 83, 235, 0.3); }
+  50% { box-shadow: 0 20px 62px rgba(124, 116, 255, 0.6); }
+}
+@keyframes landingCtaGlow {
+  0%, 100% { box-shadow: 0 16px 42px rgba(91, 83, 235, 0.45); }
+  50% { box-shadow: 0 20px 54px rgba(124, 116, 255, 0.62); }
+}
+@keyframes landingShine {
+  0% { left: -60%; }
+  55%, 100% { left: 130%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-shimmer,
+  .landing-feature-icon,
+  .landing-feature-icon::before,
+  .landing-start,
+  .landing-start::before {
+    animation: none;
+  }
+  /* 시머 정지 시엔 흰색 글자로 또렷하게 */
+  .landing-shimmer { -webkit-text-fill-color: #ffffff; color: #ffffff; }
 }
 
 /* 로그인 화면 '돌아가기' 버튼 */
