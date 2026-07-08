@@ -296,9 +296,140 @@ p {
   box-shadow: 0 8px 18px rgba(70, 80, 140, 0.14);
 }
 
+/* ===================== 회원가입 CTA + 다단계 모달 ===================== */
+.signup-hint {
+  margin-top: 4px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+.signup-link {
+  border: 0;
+  background: transparent;
+  color: #5b53eb;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.signup-link:hover { text-decoration: underline; }
+
+.signup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(25, 31, 40, 0.42);
+  backdrop-filter: blur(4px);
+}
+.signup-modal {
+  width: min(400px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 28px 70px rgba(25, 31, 40, 0.3);
+  text-align: left;
+}
+.signup-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.signup-steps { display: flex; gap: 6px; }
+.signup-steps span {
+  width: 22px;
+  height: 5px;
+  border-radius: 999px;
+  background: #e3e7f2;
+  transition: background 0.2s ease;
+}
+.signup-steps span.active { background: #5b53eb; }
+.signup-steps span.done { background: #b7b2f5; }
+.signup-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  color: #6b7280;
+  background: #f2f4f8;
+  cursor: pointer;
+}
+.signup-close:hover { background: #e6e9f2; }
+
+.signup-step h2 { margin: 0 0 4px; font-size: 20px; font-weight: 900; color: #191f28; }
+.signup-sub { margin: 0 0 14px; color: #6b7280; font-size: 13px; line-height: 1.5; }
+.signup-sub b { color: #4e5968; }
+
+.agree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  color: #2a2f45;
+  font-size: 14px;
+  cursor: pointer;
+}
+.agree-row:hover { background: #f7f8fc; }
+.agree-row input { width: 18px; height: 18px; accent-color: #5b53eb; }
+.agree-row b { color: #5b53eb; font-weight: 800; margin-right: 2px; }
+.agree-row b.optional { color: #9aa0c2; }
+.agree-all {
+  border: 1px solid #e3e7f2;
+  margin-bottom: 6px;
+  font-weight: 800;
+}
+
+.signup-field { display: grid; gap: 6px; margin-bottom: 12px; color: #4e5968; font-size: 13px; font-weight: 700; }
+.signup-field input, .signup-email-row input, .signup-code-input {
+  width: 100%;
+  border: 1px solid #d1d6e0;
+  border-radius: 12px;
+  padding: 11px 13px;
+  font: inherit;
+  color: #191f28;
+  background: #fff;
+}
+.signup-field input:focus, .signup-email-row input:focus, .signup-code-input:focus {
+  outline: 0;
+  border-color: #5b53eb;
+}
+.signup-email-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.signup-email-row input { flex: 1; }
+.signup-code-input { letter-spacing: 6px; text-align: center; font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+
+.signup-actions { display: flex; gap: 8px; margin-top: 18px; }
+.signup-actions .primary-button { flex: 1; }
+.ghost-button {
+  border: 1px solid #d1d6e0;
+  border-radius: 999px;
+  padding: 0 16px;
+  min-height: 44px;
+  color: #4e5968;
+  background: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ghost-button:hover:not(:disabled) { background: #f5f6fa; }
+.ghost-button:disabled { opacity: 0.5; cursor: default; }
+
+.signup-done { text-align: center; padding: 8px 0; }
+.signup-done-badge { display: grid; place-items: center; margin: 6px auto 10px; color: #22c55e; }
+.signup-done .primary-button { width: 100%; margin-top: 8px; }
+.signup-error { margin-top: 12px; color: #e5484d; font-size: 13px; text-align: center; }
+
 .mode-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 3px;
   padding: 4px;
   border-radius: 14px;

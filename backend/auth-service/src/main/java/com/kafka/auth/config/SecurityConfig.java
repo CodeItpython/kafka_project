@@ -45,7 +45,7 @@ public class SecurityConfig {
                         // Service-to-service endpoints — guarded by InternalApiTokenFilter, not user JWT.
                         .requestMatchers("/api/internal/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/profile-images/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/email/code", "/api/auth/email/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/email/code", "/api/auth/email/login", "/api/auth/email/verify").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/oauth/kakao/guide", "/api/auth/oauth/kakao/authorize", "/oauth2/callback/kakao").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/oauth/naver/authorize", "/oauth2/callback/naver").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

@@ -59,6 +59,16 @@ public class AuthService {
         return issueToken(user);
     }
 
+    /** 회원가입 흐름의 이메일 인증 단계: 로그인/계정생성 없이 코드만 검증한다. */
+    @Transactional
+    public void verifyEmailForSignup(String email, String code) {
+        String normalizedEmail = normalizeEmail(email);
+        if (userAccountRepository.existsByEmail(normalizedEmail)) {
+            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+        }
+        verifyEmailCode(normalizedEmail, code);
+    }
+
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         UserAccount user = userAccountRepository.findByEmail(request.email())
