@@ -59,6 +59,15 @@ public class ShoppingController {
         return results;
     }
 
+    /** 자동완성: 입력 중인 prefix로 상품 제목을 bool_prefix 매칭한 후보(Elasticsearch search_as_you_type). */
+    @GetMapping("/suggest")
+    public List<String> suggest(
+            @RequestParam @NotBlank String query,
+            @RequestParam(defaultValue = "8") int size
+    ) {
+        return productSearchService.suggest(query, size);
+    }
+
     /** 연관검색어: 시드 검색어와 함께 자주 등장하는 상품 키워드(Elasticsearch significant_text). */
     @GetMapping("/related")
     public List<String> related(

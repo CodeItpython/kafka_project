@@ -44,8 +44,67 @@ public class ProductSearchService {
     );
     private static final List<String> EXACT_FIELDS = List.of("title^2", "brand");
 
+    private static final List<String> SUGGEST_FIELDS = List.of(
+            "title",
+            "title._2gram",
+            "title._3gram",
+            "title._index_prefix"
+    );
+
     private final ElasticsearchOperations elasticsearchOperations;
     private final ShoppingService shoppingService;
+
+    /**
+     * 자동완성: 입력 중인 prefix로 상품 제목(search_as_you_type)을 bool_prefix 매칭해 후보 제목을
+     * 중복 제거해 돌려준다. 색인이 비었거나 ES가 없으면 빈 목록(프론트가 드롭다운을 숨김).
+     */
+    public List<String> suggest(String prefix, int size) {
+        String normalized = prefix == null ? "" : prefix.trim();
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+        int limit = Math.max(1, Math.min(size, 10));
+        try {
+            NativeQuery nativeQuery = NativeQuery.builder()
+                    .withQuery(root -> root.multiMatch(multiMatch -> multiMatch
+                            .query(normalized)
+                            .type(TextQueryType.BoolPrefix)
+                            .fields(SUGGEST_FIELDS)))
+                    .withPageable(PageRequest.of(0, Math.max(limit * 3, 20)))
+                    .build();
+            String prefixLower = normalized.toLowerCase(Locale.ROOT);
+            return elasticsearchOperations.search(nativeQuery, ProductDocument.class)
+                    .stream()
+                    .map(hit -> hit.getContent().getTitle())
+                    .filter(title -> title != null && !title.isBlank())
+                    .map(title -> shortenForSuggest(title, prefixLower))
+                    .filter(suggestion -> suggestion != null && !suggestion.isBlank())
+                    .distinct()
+                    .limit(limit)
+                    .toList();
+        } catch (RuntimeException exception) {
+            log.debug("Suggest unavailable: {}", exception.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 긴 상품 제목에서 자동완성용 짧은 키워드를 뽑는다: prefix가 포함된 첫 단어(짧으면 다음 단어까지)를
+     * 취해 대괄호 태그/후행 구두점을 정리. 매칭 단어가 없으면 첫 단어로 폴백.
+     */
+    private static String shortenForSuggest(String title, String prefixLower) {
+        String[] words = title.trim().split("\\s+");
+        for (int index = 0; index < words.length; index++) {
+            String cleaned = words[index].replaceAll("^\\[[^\\]]*\\]", "").replaceAll("[,.\\]\\[()]+$", "").trim();
+            if (!cleaned.isBlank() && cleaned.toLowerCase(Locale.ROOT).contains(prefixLower)) {
+                if (cleaned.length() < 3 && index + 1 < words.length) {
+                    cleaned = (cleaned + " " + words[index + 1].replaceAll("[,.\\]\\[()]+$", "")).trim();
+                }
+                return cleaned;
+            }
+        }
+        return words.length > 0 ? words[0].replaceAll("^\\[[^\\]]*\\]", "").trim() : "";
+    }
 
     public List<ProductResponse> search(String query, String sort, int display, int start) {
         String normalized = query == null ? "" : query.trim();

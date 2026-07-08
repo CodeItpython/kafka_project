@@ -38,7 +38,7 @@ public class SecurityConfig {
                         .requestMatchers(EndpointRequest.to("health", "prometheus")).permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
                         // Browsing the catalog is public; the cart requires a signed-in user.
-                        .requestMatchers(HttpMethod.GET, "/api/shopping/categories", "/api/shopping/feed", "/api/shopping/search", "/api/shopping/popular-keywords", "/api/shopping/related").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/shopping/categories", "/api/shopping/feed", "/api/shopping/search", "/api/shopping/popular-keywords", "/api/shopping/related", "/api/shopping/suggest").permitAll()
                         .requestMatchers("/api/shopping/cart/**", "/api/shopping/cart").authenticated()
                         .anyRequest().authenticated()
                 )
