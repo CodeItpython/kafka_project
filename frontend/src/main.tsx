@@ -312,6 +312,34 @@ const QUICK_REACTIONS = ['👍', '❤️', '😂', '👏', '🔥'] as const;
 // 메시지 시간 포맷터는 한 번만 생성(렌더마다 메시지 수만큼 Intl 생성 방지)
 const MESSAGE_TIME_FORMAT = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' });
 
+// 배송 상태 라벨(순수 함수) — App 밖 모듈 스코프에 둬 행마다 prop으로 넘기지 않고
+// MessageRow 내부에서 직접 계산한다.
+function deliveryStatusLabel(message: ChatMessage) {
+  if (message.readCount > 0 || message.deliveryStatus === 'READ') {
+    return `읽음 ${Math.max(message.readCount, 1)}`;
+  }
+  if (message.deliveredCount > 0 || message.deliveryStatus === 'DELIVERED') {
+    return `전달됨 ${Math.max(message.deliveredCount, 1)}`;
+  }
+  return '전송됨';
+}
+
+// 반응 배열이 렌더에 영향 주는 필드 기준으로 같은지 판정(withReadCounts의 참조 보존용).
+function reactionsShallowEqual(a: MessageReaction[], b: MessageReaction[]) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (
+      a[index].emoji !== b[index].emoji ||
+      a[index].count !== b[index].count ||
+      a[index].reactedByMe !== b[index].reactedByMe
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function samePresence(a: RoomPresence, b: RoomPresence) {
   return a.onlineUsers.length === b.onlineUsers.length
     && a.typingUsers.length === b.typingUsers.length
@@ -427,6 +455,9 @@ function App() {
   // 도착했을 때 그새 방을 바꿨는지 판별해 stale 응답이 다른 방을 덮어쓰지 않게 한다.
   const selectedRoomIdRef = useRef(selectedRoomId);
   selectedRoomIdRef.current = selectedRoomId;
+  // 인터벌/구독 effect가 이 값들 때문에 재생성되지 않도록 렌더마다 최신값을 ref에 보관해 읽는다.
+  const contactQueryRef = useRef(contactQuery);
+  contactQueryRef.current = contactQuery;
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
   const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
@@ -446,7 +477,12 @@ function App() {
   const roomSearchResults = chatSearchTerm
     ? rooms.filter((room) => room.name.toLowerCase().includes(chatSearchTerm))
     : [];
-  const inviteOptions = contacts.filter((contact) => !roomParticipants.some((participant) => participant.email.toLowerCase() === contact.email.toLowerCase()));
+  const inviteOptions = useMemo(() => {
+    // 렌더마다(입력 한 글자마다) O(연락처×참가자) 이중 필터 + toLowerCase가 돌던 것을
+    // 참가자 이메일 Set으로 O(연락처+참가자)로 낮추고 useMemo로 고정.
+    const participantEmails = new Set(roomParticipants.map((participant) => participant.email.toLowerCase()));
+    return contacts.filter((contact) => !participantEmails.has(contact.email.toLowerCase()));
+  }, [contacts, roomParticipants]);
   const isAdmin = user?.role === 'ADMIN';
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
   const emailCodeDigits = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? '');
@@ -761,6 +797,10 @@ function App() {
     window.setTimeout(() => dismissAppToast(toastId), 5200);
   }, [dismissAppToast, inAppNotificationsEnabled, selectedRoomId]);
 
+  // 알림 소켓 effect가 매 방 전환마다 재연결되지 않도록, 최신 showInAppNotification을 ref로 읽는다.
+  const showInAppNotificationRef = useRef(showInAppNotification);
+  showInAppNotificationRef.current = showInAppNotification;
+
   function openNotificationToast(toast: AppToast) {
     if (toast.notification.targetRoomId) {
       openRoom(toast.notification.targetRoomId);
@@ -801,41 +841,54 @@ function App() {
       ...reaction,
       reactedByMe: reaction.reactorEmails.some((email) => email.toLowerCase() === user.email.toLowerCase())
     }));
-  }, [user]);
+    // user.email만 읽으므로 email 기준으로 고정 — 프로필 저장 등으로 user 객체 참조만
+    // 바뀔 때 withReadCounts→핸들러들이 연쇄로 새 참조가 돼 목록 전체가 리렌더되던 것 방지.
+  }, [user?.email]);
 
   const withReadCounts = useCallback((items: ChatMessage[], receipts: ReadReceipt[]) => {
+    // 수신확인 타임스탬프를 한 번만 epoch로 파싱한다(기존엔 메시지×수신확인마다 new Date 2회 →
+    // O(M×R)의 Date 파싱). 이제 파싱은 M+R회.
+    const readerEpochs: { email: string; epoch: number }[] = [];
+    for (const receipt of receipts) {
+      if (!receipt.lastReadAt) continue;
+      readerEpochs.push({ email: receipt.email.toLowerCase(), epoch: new Date(receipt.lastReadAt).getTime() });
+    }
     return items.map((message) => {
-      const readCount = receipts.filter((receipt) => {
-        if (receipt.email.toLowerCase() === message.senderEmail.toLowerCase() || !receipt.lastReadAt) {
-          return false;
+      const senderLower = message.senderEmail.toLowerCase();
+      const messageEpoch = new Date(message.createdAt).getTime();
+      let readCount = 0;
+      for (const reader of readerEpochs) {
+        if (reader.email !== senderLower && reader.epoch >= messageEpoch) {
+          readCount += 1;
         }
-        return new Date(receipt.lastReadAt).getTime() >= new Date(message.createdAt).getTime();
-      }).length;
+      }
       const deliveredCount = message.deliveredCount ?? 0;
       const deliveryStatus = readCount > 0
         ? 'READ' as const
         : deliveredCount > 0 || message.deliveryStatus === 'DELIVERED'
           ? 'DELIVERED' as const
           : 'SENT' as const;
+      const reactions = normalizeReactions(message.reactions ?? []);
+      // 값이 그대로면 같은 객체 참조를 반환 — 수신확인 브로드캐스트(누군가 읽을 때마다 발생)마다
+      // 변화 없는 행까지 새 객체가 돼 MessageRow(memo) 전체가 리렌더되던 문제를 막는다.
+      if (
+        message.readCount === readCount &&
+        message.deliveredCount === deliveredCount &&
+        message.deliveryStatus === deliveryStatus &&
+        Array.isArray(message.reactions) &&
+        reactionsShallowEqual(message.reactions, reactions)
+      ) {
+        return message;
+      }
       return {
         ...message,
         readCount,
         deliveredCount,
         deliveryStatus,
-        reactions: normalizeReactions(message.reactions ?? [])
+        reactions
       };
     });
   }, [normalizeReactions]);
-
-  function deliveryStatusLabel(message: ChatMessage) {
-    if (message.readCount > 0 || message.deliveryStatus === 'READ') {
-      return `읽음 ${Math.max(message.readCount, 1)}`;
-    }
-    if (message.deliveredCount > 0 || message.deliveryStatus === 'DELIVERED') {
-      return `전달됨 ${Math.max(message.deliveredCount, 1)}`;
-    }
-    return '전송됨';
-  }
 
   function applyReadReceipts(receipts: ReadReceipt[]) {
     readReceiptsRef.current = receipts;
@@ -846,6 +899,9 @@ function App() {
   async function loadReadReceipts(roomId: string) {
     if (!roomId) return;
     const data = await request<RoomReadSummary>(`/chat/rooms/${roomId}/read-receipts`);
+    // 응답 대기 중 방을 바꿨다면 stale 수신확인이 현재 방 메시지에 섞이지 않게 무시한다
+    // (loadMessages가 이 함수를 await하므로 방 전환 경쟁의 나머지 절반을 여기서 막는다).
+    if (selectedRoomIdRef.current !== roomId) return;
     applyReadReceipts(data.receipts);
   }
 
@@ -1674,11 +1730,13 @@ function App() {
     if (!token || !user) return;
     const timer = window.setInterval(() => {
       heartbeat()
-        .then(() => loadContacts(contactQuery))
+        .then(() => loadContacts(contactQueryRef.current))
         .catch(() => undefined);
     }, 30000);
     return () => window.clearInterval(timer);
-  }, [token, user?.email, contactQuery]);
+    // contactQuery는 ref로 읽는다 — deps에 넣으면 검색 입력 한 글자마다 인터벌이 재설정돼
+    // 30초 하트비트가 타이핑 중 한 번도 못 나가고 프레즌스가 오프라인으로 새던 문제 방지.
+  }, [token, user?.email]);
 
   useEffect(() => {
     if (selectedRoomId) {
@@ -1711,6 +1769,9 @@ function App() {
     const force = forceLatestMessageScrollRef.current;
     const behavior: ScrollBehavior = force ? 'auto' : 'smooth';
     let attempts = 0;
+    let rafId = 0;
+    let secondRafId = 0;
+    let timeoutId = 0;
     const runScroll = () => {
       const messageList = messageListRef.current;
       // 방 전환은 AnimatePresence mode="wait"라 이전 화면이 빠져나간 뒤에야
@@ -1719,24 +1780,31 @@ function App() {
       if (!messageList) {
         if (force && attempts < 40) {
           attempts += 1;
-          window.requestAnimationFrame(runScroll);
+          rafId = window.requestAnimationFrame(runScroll);
         }
         return;
       }
       scrollLatestMessageIntoView(behavior);
-      window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
+      secondRafId = window.requestAnimationFrame(() => scrollLatestMessageIntoView(behavior));
       if (force) {
         forceLatestMessageScrollRef.current = false;
         // 첨부 이미지 로딩 등으로 뒤늦게 높이가 늘어나는 경우 대비(사용자가
         // 위로 스크롤하지 않았을 때만 다시 맨 아래로 고정).
-        window.setTimeout(() => {
+        timeoutId = window.setTimeout(() => {
           if (shouldStickToLatestMessageRef.current) {
             scrollLatestMessageIntoView('auto');
           }
         }, 160);
       }
     };
-    window.requestAnimationFrame(runScroll);
+    rafId = window.requestAnimationFrame(runScroll);
+    // 방 전환/새 메시지로 effect가 재실행되거나 언마운트될 때 대기 중인 rAF 재시도 루프와
+    // 지연 타이머를 취소한다(중첩 루프 누적·언마운트 후 실행 방지).
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      if (secondRafId) window.cancelAnimationFrame(secondRafId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
   }, [latestMessageId, selectedRoomId]);
 
   useEffect(() => {
@@ -1843,15 +1911,18 @@ function App() {
       onConnect: () => {
         client.subscribe(notificationTopic, (frame: IMessage) => {
           const notification = JSON.parse(frame.body) as UserNotification;
+          // 알림 토픽은 방과 무관하게 전역이다. selectedRoomId/showInAppNotification을 deps에 두면
+          // 방 전환마다 소켓이 끊겼다 재연결(핸드셰이크)돼 재연결 창에서 알림이 유실되므로 ref로 읽는다.
+          const currentRoomId = selectedRoomIdRef.current;
           setNotifications((current) => [notification, ...current.filter((item) => item.id !== notification.id)].slice(0, 30));
           setNotificationUnreadCount((current) => current + (notification.read ? 0 : 1));
-          if (notification.targetRoomId !== selectedRoomId) {
+          if (notification.targetRoomId !== currentRoomId) {
             setRooms((current) => current.map((room) => room.id === notification.targetRoomId ? { ...room, unreadCount: room.unreadCount + 1 } : room));
           }
-          if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== selectedRoomId) {
+          if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== currentRoomId) {
             markMessageDelivered(notification.targetRoomId, notification.targetMessageId).catch(() => undefined);
           }
-          showInAppNotification(notification);
+          showInAppNotificationRef.current(notification);
         });
       }
     });
@@ -1859,7 +1930,7 @@ function App() {
     return () => {
       client.deactivate();
     };
-  }, [notificationTopic, selectedRoomId, showInAppNotification, token]);
+  }, [notificationTopic, token]);
 
   if (!user) {
     if (authStage === 'landing') {
@@ -2751,7 +2822,6 @@ function App() {
                     isEditing={isEditing}
                     // 편집 중인 행에만 editingDraft를 넘겨 편집 키 입력이 다른 행을 리렌더하지 않게 한다.
                     editingDraft={isEditing ? editingDraft : undefined}
-                    deliveryLabel={deliveryStatusLabel(message)}
                     onEditDraftChange={setEditingDraft}
                     onSaveEdit={editMessage}
                     onCancelEdit={cancelEditingMessage}
@@ -3110,7 +3180,6 @@ type MessageRowProps = {
   isMine: boolean;
   isEditing: boolean;
   editingDraft?: string;
-  deliveryLabel: string;
   onEditDraftChange: (value: string) => void;
   onSaveEdit: (message: ChatMessage, content: string) => void;
   onCancelEdit: () => void;
@@ -3131,7 +3200,6 @@ const MessageRow = React.memo(function MessageRow({
   isMine,
   isEditing,
   editingDraft,
-  deliveryLabel,
   onEditDraftChange,
   onSaveEdit,
   onCancelEdit,
@@ -3144,6 +3212,7 @@ const MessageRow = React.memo(function MessageRow({
 }: MessageRowProps) {
   const isDeleted = message.deletedForEveryone;
   const linkUrl = isDeleted ? null : firstMessageUrl(message.content);
+  const deliveryLabel = deliveryStatusLabel(message);
   const draftValue = editingDraft ?? '';
   const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
   return (
