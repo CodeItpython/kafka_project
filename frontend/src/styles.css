@@ -3065,9 +3065,6 @@ input:focus {
   font-weight: 800;
 }
 .news-pull-inner.loading svg { animation: spin 850ms linear infinite; }
-.news-header { padding: 14px 16px 4px; }
-.news-header h2 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: #20233f; }
-.news-header .muted { font-size: 13px; }
 
 .news-searchbar { margin: 8px 16px 2px; }
 .news-search-form {
@@ -3888,7 +3885,8 @@ input:focus {
   overscroll-behavior: contain;
   padding-bottom: 88px;
 }
-.shop-hero {
+/* 쇼핑·뉴스 헤더는 동일한 히어로 카드 스타일을 공유한다(탭 간 헤더 일관성). */
+.shop-hero, .news-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3898,9 +3896,9 @@ input:focus {
   border-radius: 18px;
   background: linear-gradient(120deg, #f6f5ff 0%, #fdeef1 100%);
 }
-.shop-hero-eyebrow { font-size: 11px; font-weight: 900; letter-spacing: 0.18em; color: #8b8ff0; }
-.shop-hero-copy h2 { margin: 4px 0 2px; font-size: 26px; font-weight: 900; color: #191f28; }
-.shop-hero-copy p { color: #6b7280; font-size: 13px; }
+.shop-hero-eyebrow, .news-hero-eyebrow { font-size: 11px; font-weight: 900; letter-spacing: 0.18em; color: #8b8ff0; }
+.shop-hero-copy h2, .news-hero-copy h2 { margin: 4px 0 2px; font-size: 26px; font-weight: 900; color: #191f28; }
+.shop-hero-copy p, .news-hero-copy p { color: #6b7280; font-size: 13px; }
 .shop-cart-button {
   position: relative;
   display: grid;
