@@ -13,10 +13,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      logstash:
-        condition: service_started
-      tempo:
-        condition: service_started
     ports:
       - "8890:8890"
     environment:
@@ -102,10 +98,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      logstash:
-        condition: service_started
-      tempo:
-        condition: service_started
     ports:
       - "8892:8892"
     environment:
@@ -150,10 +142,6 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
-      logstash:
-        condition: service_started
-      tempo:
-        condition: service_started
     ports:
       - "8893:8893"
     environment:
@@ -191,6 +179,8 @@ services:
       dockerfile: Dockerfile
     image: kafka-jenkins:local
     container_name: kafka-jenkins
+    # 로컬 앱 개발엔 불필요(무거운 CI + 매분 git 폴링). 필요할 때만: docker compose --profile ci up -d
+    profiles: ["ci"]
     ports:
       - "18081:8080"
       - "50000:50000"
@@ -321,6 +311,7 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:8.15.5
     container_name: kafka-logstash
+    profiles: ["observability"]
     depends_on:
       - elasticsearch
     ports:
@@ -334,6 +325,7 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.5
     container_name: kafka-kibana
+    profiles: ["observability"]
     depends_on:
       - elasticsearch
     ports:
@@ -344,6 +336,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: kafka-prometheus
+    profiles: ["observability"]
     depends_on:
       - auth-service
     ports:
@@ -354,6 +347,7 @@ services:
   tempo:
     image: grafana/tempo:2.6.1
     container_name: kafka-tempo
+    profiles: ["observability"]
     # tempo 이미지는 non-root(uid 10001)로 도는데, named volume(/tmp/tempo)이
     # root 소유라 wal/blocks 디렉터리 생성이 거부됨(permission denied). 로컬 개발용으로
     # root로 실행해 볼륨에 쓰기 가능하게 한다.
@@ -370,6 +364,7 @@ services:
   grafana:
     image: grafana/grafana:11.3.0
     container_name: kafka-grafana
+    profiles: ["observability"]
     depends_on:
       - prometheus
       - tempo
