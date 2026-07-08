@@ -297,22 +297,20 @@ p {
 }
 
 /* ===================== 회원가입 CTA + 다단계 모달 ===================== */
-.signup-hint {
-  margin-top: 4px;
-  text-align: center;
-  color: #6b7280;
-  font-size: 13px;
-}
-.signup-link {
-  border: 0;
-  background: transparent;
+/* 카카오/네이버 위에 놓이는 이메일 회원가입 버튼 */
+.signup-cta {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #d4d1fb;
+  border-radius: 14px;
   color: #5b53eb;
+  background: #f2f0ff;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 0 2px;
+  transition: background 0.14s ease, border-color 0.14s ease;
 }
-.signup-link:hover { text-decoration: underline; }
+.signup-cta:hover { background: #e9e6ff; border-color: #b9b3f7; }
 
 .signup-backdrop {
   position: fixed;
