@@ -1,5 +1,5 @@
 import { Component, ReactNode, Suspense, lazy, useRef } from 'react';
-import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, Variants } from 'motion/react';
 import { ArrowRight, ChevronDown, Link2, MessageCircle, Newspaper, ShoppingBag } from 'lucide-react';
 import { landingScroll } from './LandingScene';
 
@@ -45,6 +45,22 @@ const FEATURES = [
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
+// 등장 애니메이션 — 컨테이너가 자식을 순차(stagger)로 드러낸다.
+const revealGroup: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.11, delayChildren: 0.06 } }
+};
+// 텍스트류: 아래에서 살짝 흐릿하게 떠오름.
+const riseItem: Variants = {
+  hidden: { opacity: 0, y: 34, filter: 'blur(6px)' },
+  show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.65, ease: EASE } }
+};
+// 아이콘: 작게 회전한 채 튀어나오는 스프링 팝.
+const popIcon: Variants = {
+  hidden: { opacity: 0, scale: 0.35, rotate: -35 },
+  show: { opacity: 1, scale: 1, rotate: 0, transition: { type: 'spring', stiffness: 260, damping: 15 } }
+};
+
 export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -65,6 +81,14 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const heroOpacity = useTransform(heroProgress, [0, 0.7], [1, 0]);
   const hintOpacity = useTransform(heroProgress, [0, 0.3], [1, 0]);
 
+  // reduce 모드에선 등장 연출 없이 정적으로 보여준다.
+  const groupOnView = reduce
+    ? {}
+    : { variants: revealGroup, initial: 'hidden', whileInView: 'show', viewport: { root: containerRef, amount: 0.5, once: false } };
+  const groupOnMount = reduce ? {} : { variants: revealGroup, initial: 'hidden', animate: 'show' };
+  const itemV = reduce ? {} : { variants: riseItem };
+  const iconV = reduce ? {} : { variants: popIcon };
+
   return (
     <div className="landing" ref={containerRef}>
       <SceneBoundary>
@@ -76,10 +100,10 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
       <motion.span className="landing-progress" style={{ scaleX: scrollYProgress }} aria-hidden />
 
       <section className="landing-section landing-hero" ref={heroRef}>
-        <motion.div className="landing-hero-inner" style={{ y: heroY, opacity: heroOpacity }}>
-          <p className="landing-eyebrow">KAFKA TALK</p>
-          <h1 className="landing-title">대화가<br />시작되는 곳</h1>
-          <p className="landing-lead">친구와의 순간을 가볍게, 끊김 없이.</p>
+        <motion.div className="landing-hero-inner" style={{ y: heroY, opacity: heroOpacity }} {...groupOnMount}>
+          <motion.p className="landing-eyebrow" {...itemV}>KAFKA TALK</motion.p>
+          <motion.h1 className="landing-title landing-shimmer" {...itemV}>대화가<br />시작되는 곳</motion.h1>
+          <motion.p className="landing-lead" {...itemV}>친구와의 순간을 가볍게, 끊김 없이.</motion.p>
         </motion.div>
         <motion.div className="landing-scroll-hint" style={{ opacity: hintOpacity }} aria-hidden>
           <span>스크롤</span>
@@ -97,38 +121,35 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
         const Icon = feature.icon;
         return (
           <section className="landing-section landing-feature" key={feature.eyebrow}>
-            <motion.div
-              className="landing-feature-inner"
-              initial={{ y: 48 }}
-              whileInView={{ y: 0 }}
-              viewport={{ root: containerRef, amount: 0.5, once: false }}
-              transition={{ duration: 0.8, ease: EASE }}
-            >
-              <span className="landing-feature-icon"><Icon size={26} aria-hidden /></span>
-              <p className="landing-eyebrow">{feature.eyebrow}</p>
-              <h2 className="landing-feature-title">{feature.title}</h2>
-              <p className="landing-feature-desc">{feature.desc}</p>
+            <motion.div className="landing-feature-inner" {...groupOnView}>
+              <motion.span className="landing-feature-icon" {...iconV}>
+                <Icon size={26} aria-hidden />
+              </motion.span>
+              <motion.p className="landing-eyebrow" {...itemV}>{feature.eyebrow}</motion.p>
+              <motion.h2 className="landing-feature-title landing-shimmer" {...itemV}>{feature.title}</motion.h2>
+              <motion.p className="landing-feature-desc" {...itemV}>{feature.desc}</motion.p>
             </motion.div>
           </section>
         );
       })}
 
       <section className="landing-section landing-cta">
-        <motion.div
-          className="landing-cta-inner"
-          initial={{ y: 40 }}
-          whileInView={{ y: 0 }}
-          viewport={{ root: containerRef, amount: 0.5, once: false }}
-          transition={{ duration: 0.7, ease: EASE }}
-        >
-          <h2 className="landing-cta-title">이제,<br />시작해볼까요?</h2>
-          <p className="landing-lead">테스트 계정으로 바로 체험하거나 로그인하세요.</p>
-          <button className="landing-start" type="button" onClick={onStart}>
+        <motion.div className="landing-cta-inner" {...groupOnView}>
+          <motion.h2 className="landing-cta-title landing-shimmer" {...itemV}>이제,<br />시작해볼까요?</motion.h2>
+          <motion.p className="landing-lead" {...itemV}>테스트 계정으로 바로 체험하거나 로그인하세요.</motion.p>
+          <motion.button
+            className="landing-start"
+            type="button"
+            onClick={onStart}
+            {...itemV}
+            whileHover={reduce ? undefined : { y: -3, scale: 1.03 }}
+            whileTap={reduce ? undefined : { scale: 0.96 }}
+          >
             시작하기 <ArrowRight size={18} aria-hidden />
-          </button>
-          <button className="landing-login-link" type="button" onClick={onStart}>
+          </motion.button>
+          <motion.button className="landing-login-link" type="button" onClick={onStart} {...itemV}>
             이미 계정이 있으신가요? 로그인
-          </button>
+          </motion.button>
         </motion.div>
       </section>
     </div>
