@@ -1,6 +1,6 @@
 import { Component, ReactNode, Suspense, lazy, useRef } from 'react';
 import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'motion/react';
-import { ArrowRight, ChevronDown, Link2, MessageCircle, Newspaper } from 'lucide-react';
+import { ArrowRight, ChevronDown, Link2, MessageCircle, Newspaper, ShoppingBag } from 'lucide-react';
 import { landingScroll } from './LandingScene';
 
 const LandingScene = lazy(() => import('./LandingScene'));
@@ -28,6 +28,12 @@ const FEATURES = [
     eyebrow: 'NEWS',
     title: '뉴스도 한눈에',
     desc: '경제·증시·IT·세계까지, 주요 뉴스를 카드로 넘겨보고 원문으로 바로.'
+  },
+  {
+    icon: ShoppingBag,
+    eyebrow: 'SHOPPING',
+    title: '쇼핑까지 한 곳에서',
+    desc: '카테고리별 인기·최저가 상품을 둘러보고, 검색해 장바구니에 바로 담으세요.'
   },
   {
     icon: Link2,
