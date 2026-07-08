@@ -1,7 +1,8 @@
-import React, { ClipboardEvent, FormEvent, KeyboardEvent, TouchEvent, UIEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { ClipboardEvent, FormEvent, KeyboardEvent, TouchEvent, UIEvent, WheelEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Client, IMessage } from '@stomp/stompjs';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowLeft,
   AtSign,
@@ -456,6 +457,10 @@ function App() {
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
   const [emailChangeStatus, setEmailChangeStatus] = useState('');
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  // 가상 리스트: 실제 스크롤 컨테이너는 .message-list, 이 spacer가 전체 높이를 차지하고
+  // 화면에 보이는 행만 절대배치로 렌더한다.
+  const virtualSpacerRef = useRef<HTMLDivElement | null>(null);
+  const [messageListScrollMargin, setMessageListScrollMargin] = useState(0);
   const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const roomDirectoryRef = useRef<HTMLElement | null>(null);
   const readReceiptsRef = useRef<ReadReceipt[]>([]);
@@ -509,6 +514,26 @@ function App() {
     if (mode === 'email') return '이메일 인증 로그인';
     return '다시 오신 걸 환영해요';
   }, [mode]);
+
+  // 메시지 목록 가상 스크롤. 화면에 보이는 행 + overscan 만 DOM에 mount 되어
+  // 방에 메시지가 많아도 렌더/레이아웃 비용이 일정하게 유지된다.
+  // 행 높이는 가변(텍스트/이미지/반응)이라 measureElement로 실제 높이를 측정한다.
+  const messageVirtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => messageListRef.current,
+    estimateSize: () => 72,
+    getItemKey: (index) => messages[index]?.id ?? index,
+    overscan: 8,
+    // spacer 위(패딩·풀리프레시·요약카드·빈상태)의 높이를 좌표계에서 보정.
+    scrollMargin: messageListScrollMargin
+  });
+
+  // spacer 위 컨텐츠 높이가 바뀔 때만 scrollMargin을 다시 측정한다.
+  useLayoutEffect(() => {
+    const spacer = virtualSpacerRef.current;
+    const nextMargin = spacer ? spacer.offsetTop : 0;
+    setMessageListScrollMargin((prev) => (prev === nextMargin ? prev : nextMargin));
+  }, [pullRefreshVisible, conversationSummary, selectedRoomId, messages.length === 0]);
 
   // 채팅 메시지 행(MessageRow)에 넘기는 핸들러들이 안정적인 참조를 갖도록
   // request/withReadCounts/readableError도 useCallback으로 고정한다. 이들이
@@ -1115,6 +1140,15 @@ function App() {
   function scrollLatestMessageIntoView(behavior: ScrollBehavior = 'smooth') {
     const messageList = messageListRef.current;
     if (!messageList) return;
+    // 가상 스크롤에서는 마지막 메시지가 아직 mount/측정 전이라 scrollHeight가 추정치일 수
+    // 있으므로 virtualizer.scrollToIndex로 마지막 항목을 정확히 하단 정렬한다.
+    if (messages.length > 0) {
+      messageVirtualizer.scrollToIndex(messages.length - 1, {
+        align: 'end',
+        behavior: behavior === 'smooth' ? 'smooth' : 'auto'
+      });
+      return;
+    }
     messageList.scrollTo({
       top: messageList.scrollHeight - messageList.clientHeight,
       left: 0,
@@ -2967,29 +3001,51 @@ function App() {
                 </section>
               )}
               {messages.length === 0 && <p className="empty-state">아직 메시지가 없습니다.</p>}
-              {messages.map((message) => {
-                const isMine = message.senderEmail?.toLowerCase() === user.email?.toLowerCase();
-                const isEditing = editingMessageId === message.id;
-                return (
-                  <MessageRow
-                    key={message.id}
-                    message={message}
-                    isMine={isMine}
-                    isEditing={isEditing}
-                    // 편집 중인 행에만 editingDraft를 넘겨 편집 키 입력이 다른 행을 리렌더하지 않게 한다.
-                    editingDraft={isEditing ? editingDraft : undefined}
-                    onEditDraftChange={setEditingDraft}
-                    onSaveEdit={editMessage}
-                    onCancelEdit={cancelEditingMessage}
-                    onStartEdit={startEditingMessage}
-                    onToggleReaction={toggleMessageReaction}
-                    onReply={setReplyTarget}
-                    onHide={hideMessageForMe}
-                    onDeleteForEveryone={deleteMessageForEveryone}
-                    onCopy={copyMessageText}
-                  />
-                );
-              })}
+              <div
+                ref={virtualSpacerRef}
+                className="message-virtual-spacer"
+                style={{ position: 'relative', width: '100%', height: `${messageVirtualizer.getTotalSize()}px`, flexShrink: 0 }}
+              >
+                {messageVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const message = messages[virtualRow.index];
+                  if (!message) return null;
+                  const isMine = message.senderEmail?.toLowerCase() === user.email?.toLowerCase();
+                  const isEditing = editingMessageId === message.id;
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      data-index={virtualRow.index}
+                      ref={messageVirtualizer.measureElement}
+                      className="message-virtual-row"
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start - messageVirtualizer.options.scrollMargin}px)`
+                      }}
+                    >
+                      <MessageRow
+                        message={message}
+                        isMine={isMine}
+                        isEditing={isEditing}
+                        animateOnMount={false}
+                        // 편집 중인 행에만 editingDraft를 넘겨 편집 키 입력이 다른 행을 리렌더하지 않게 한다.
+                        editingDraft={isEditing ? editingDraft : undefined}
+                        onEditDraftChange={setEditingDraft}
+                        onSaveEdit={editMessage}
+                        onCancelEdit={cancelEditingMessage}
+                        onStartEdit={startEditingMessage}
+                        onToggleReaction={toggleMessageReaction}
+                        onReply={setReplyTarget}
+                        onHide={hideMessageForMe}
+                        onDeleteForEveryone={deleteMessageForEveryone}
+                        onCopy={copyMessageText}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <form className="composer" onSubmit={sendMessage}>
@@ -3336,6 +3392,8 @@ type MessageRowProps = {
   isMine: boolean;
   isEditing: boolean;
   editingDraft?: string;
+  // 가상 스크롤에서는 행이 스크롤 시마다 mount/unmount 되므로 진입 애니메이션을 끈다.
+  animateOnMount?: boolean;
   onEditDraftChange: (value: string) => void;
   onSaveEdit: (message: ChatMessage, content: string) => void;
   onCancelEdit: () => void;
@@ -3356,6 +3414,7 @@ const MessageRow = React.memo(function MessageRow({
   isMine,
   isEditing,
   editingDraft,
+  animateOnMount = true,
   onEditDraftChange,
   onSaveEdit,
   onCancelEdit,
@@ -3376,7 +3435,7 @@ const MessageRow = React.memo(function MessageRow({
       <ContextMenu.Trigger asChild disabled={isDeleted || isEditing}>
         <motion.div
           className={isMine ? 'chat-row mine' : 'chat-row'}
-          initial={{ opacity: 0, y: 8 }}
+          initial={animateOnMount ? { opacity: 0, y: 8 } : false}
           animate={{ opacity: 1, y: 0 }}
         >
           {!isMine && <strong className="bubble-sender">{message.senderName}</strong>}
