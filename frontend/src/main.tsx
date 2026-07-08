@@ -355,6 +355,84 @@ const SAMPLE_USERS = [
   { email: 'hyejin@example.com', name: '혜진' }
 ];
 
+// 숫자 인증코드를 한 자리씩 칸에 나눠 입력받는 OTP 인풋. 자체 ref로 칸 이동/붙여넣기/
+// 백스페이스 이동을 처리하고, 값은 부모의 문자열 하나로 제어된다.
+function OtpInput({ length, value, onChange, autoFocus, disabled }: {
+  length: number;
+  value: string;
+  onChange: (next: string) => void;
+  autoFocus?: boolean;
+  disabled?: boolean;
+}) {
+  const cellRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const digits = Array.from({ length }, (_, index) => value[index] ?? '');
+
+  function focusCell(index: number) {
+    const clamped = Math.min(Math.max(index, 0), length - 1);
+    requestAnimationFrame(() => cellRefs.current[clamped]?.focus());
+  }
+
+  function commit(next: string, focusIndex?: number) {
+    onChange(next.replace(/\D/g, '').slice(0, length));
+    if (focusIndex !== undefined) focusCell(focusIndex);
+  }
+
+  function handleChange(index: number, raw: string) {
+    const numeric = raw.replace(/\D/g, '');
+    if (!numeric) {
+      commit(`${value.slice(0, index)}${value.slice(index + 1)}`, index);
+      return;
+    }
+    const next = digits.slice();
+    numeric.slice(0, length - index).split('').forEach((digit, offset) => {
+      next[index + offset] = digit;
+    });
+    commit(next.join(''), Math.min(index + numeric.length, length - 1));
+  }
+
+  function handleKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Backspace' && !digits[index] && index > 0) {
+      event.preventDefault();
+      commit(`${value.slice(0, index - 1)}${value.slice(index)}`, index - 1);
+    } else if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      focusCell(index - 1);
+    } else if (event.key === 'ArrowRight' && index < length - 1) {
+      event.preventDefault();
+      focusCell(index + 1);
+    }
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    commit(pasted, Math.min(pasted.length, length - 1));
+  }
+
+  return (
+    <div className="otp-input" role="group" aria-label={`${length}자리 인증코드`}>
+      {digits.map((digit, index) => (
+        <input
+          key={index}
+          ref={(element) => { cellRefs.current[index] = element; }}
+          className="otp-cell"
+          value={digit}
+          inputMode="numeric"
+          autoComplete={index === 0 ? 'one-time-code' : 'off'}
+          maxLength={1}
+          disabled={disabled}
+          autoFocus={autoFocus && index === 0}
+          aria-label={`${index + 1}번째 자리`}
+          onChange={(event) => handleChange(index, event.target.value)}
+          onKeyDown={(event) => handleKeyDown(index, event)}
+          onPaste={handlePaste}
+          onFocus={(event) => event.target.select()}
+        />
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState<Mode>('login');
   // 회원가입 모달(동의 → 이메일 인증 → 비밀번호 → 완료)
@@ -2216,7 +2294,7 @@ function App() {
                         </div>
                         {signupCodeSent && (
                           <>
-                            <input className="signup-code-input" value={signupCode} onChange={(event) => setSignupCode(event.target.value.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH))} inputMode="numeric" placeholder="6자리 인증코드" maxLength={EMAIL_CODE_LENGTH} />
+                            <OtpInput length={EMAIL_CODE_LENGTH} value={signupCode} onChange={setSignupCode} autoFocus />
                             <p className="signup-sub">메일함에서 인증코드를 확인하세요.</p>
                           </>
                         )}
