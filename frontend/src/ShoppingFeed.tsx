@@ -61,6 +61,10 @@ export default function ShoppingFeed({
   const [popular, setPopular] = useState<PopularKeyword[]>([]);
   const [popIdx, setPopIdx] = useState(0);
   const [related, setRelated] = useState<string[]>([]); // 연관검색어(검색 시)
+  const [suggestions, setSuggestions] = useState<string[]>([]); // 자동완성 후보(입력 중)
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestActive, setSuggestActive] = useState(-1);
+  const suppressSuggestRef = useRef(false); // 항목 선택/제출 직후 입력 변경으로 드롭다운이 다시 열리는 것 방지
 
   const rootRef = useRef<HTMLDivElement>(null);
   const reqRef = useRef(0);
@@ -141,6 +145,38 @@ export default function ShoppingFeed({
       cancelled = true;
     };
   }, [term]);
+
+  // 자동완성: 입력 중(input) prefix로 후보를 디바운스 조회. 항목 선택/제출 직후에는 건너뛴다.
+  useEffect(() => {
+    if (suppressSuggestRef.current) {
+      suppressSuggestRef.current = false;
+      return;
+    }
+    const prefix = input.trim();
+    if (!prefix) {
+      setSuggestions([]);
+      setSuggestOpen(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      fetch(`${SHOP_ROOT}/suggest?query=${encodeURIComponent(prefix)}&size=8`)
+        .then((response) => (response.ok ? response.json() : []))
+        .then((data: string[]) => {
+          if (cancelled || !Array.isArray(data)) return;
+          setSuggestions(data);
+          setSuggestOpen(data.length > 0);
+          setSuggestActive(-1);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [input]);
 
   const loadPage = useCallback(
     (category: string, sortCode: string, keyword: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
@@ -242,23 +278,59 @@ export default function ShoppingFeed({
     loadPage(active, sort, '', rotatedStart, 'replace', true);
   }, [active, sort, term, loadPage]);
 
+  function closeSuggest() {
+    suppressSuggestRef.current = true;
+    setSuggestOpen(false);
+    setSuggestActive(-1);
+  }
+
   function submitSearch(event: React.FormEvent) {
     event.preventDefault();
+    closeSuggest();
     setTerm(input.trim());
   }
 
   function runSearch(keyword: string) {
+    closeSuggest();
     setInput(keyword);
     setTerm(keyword);
     rootRef.current?.scrollTo({ top: 0 });
   }
 
+  function pickSuggestion(keyword: string) {
+    closeSuggest();
+    setInput(keyword);
+    setTerm(keyword);
+    rootRef.current?.scrollTo({ top: 0 });
+  }
+
+  function onSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!suggestOpen || suggestions.length === 0) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSuggestActive((index) => (index + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSuggestActive((index) => (index - 1 + suggestions.length) % suggestions.length);
+    } else if (event.key === 'Enter' && suggestActive >= 0) {
+      event.preventDefault();
+      pickSuggestion(suggestions[suggestActive]);
+    } else if (event.key === 'Escape') {
+      setSuggestOpen(false);
+      setSuggestActive(-1);
+    }
+  }
+
   function clearSearch() {
+    closeSuggest();
+    setSuggestions([]);
     setInput('');
     setTerm('');
   }
 
   function selectCategory(code: string) {
+    closeSuggest();
+    setSuggestions([]);
     setInput('');
     setTerm('');
     setActive(code);
@@ -360,9 +432,15 @@ export default function ShoppingFeed({
             type="search"
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onFocus={() => { if (suggestions.length > 0) setSuggestOpen(true); }}
+            onBlur={() => setSuggestOpen(false)}
+            onKeyDown={onSearchKeyDown}
             placeholder="상품을 검색해보세요"
             aria-label="상품 검색"
             enterKeyHint="search"
+            role="combobox"
+            aria-expanded={suggestOpen}
+            aria-controls="shop-suggest-list"
           />
           {input && (
             <button type="button" className="shop-search-clear" onClick={clearSearch} aria-label="검색어 지우기">
@@ -370,6 +448,24 @@ export default function ShoppingFeed({
             </button>
           )}
           <button type="submit" className="shop-search-submit">검색</button>
+          {suggestOpen && suggestions.length > 0 && (
+            <ul className="shop-suggest" id="shop-suggest-list" role="listbox" aria-label="검색어 자동완성">
+              {suggestions.map((suggestion, index) => (
+                <li key={suggestion} role="option" aria-selected={index === suggestActive}>
+                  <button
+                    type="button"
+                    className={index === suggestActive ? 'shop-suggest-item active' : 'shop-suggest-item'}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setSuggestActive(index)}
+                    onClick={() => pickSuggestion(suggestion)}
+                  >
+                    <Search size={14} aria-hidden />
+                    <span>{suggestion}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </form>
 
         {current && (
