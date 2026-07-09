@@ -35,6 +35,7 @@ import {
   Send,
   Settings,
   Share2,
+  Swords,
   ShoppingBag,
   ShoppingCart,
   Sparkles,
@@ -3334,22 +3335,42 @@ function App() {
                   </button>
                 </Popover.Trigger>
                 <Popover.Portal>
-                  <Popover.Content className="attach-menu" side="top" align="start" sideOffset={8} collisionPadding={12}>
-                    <Popover.Close asChild>
-                      <button type="button" onClick={() => attachPhotoRef.current?.click()}><ImageIcon size={18} aria-hidden /> 사진</button>
-                    </Popover.Close>
-                    <Popover.Close asChild>
-                      <button type="button" onClick={() => attachVideoRef.current?.click()}><Film size={18} aria-hidden /> 동영상</button>
-                    </Popover.Close>
-                    <Popover.Close asChild>
-                      <button type="button" onClick={() => attachFileRef.current?.click()}><FileIcon size={18} aria-hidden /> 파일</button>
-                    </Popover.Close>
-                    <Popover.Close asChild>
-                      <button type="button" onClick={() => setGameOpen(true)}><Gamepad2 size={18} aria-hidden /> 게임</button>
-                    </Popover.Close>
-                    <Popover.Close asChild>
-                      <button type="button" onClick={() => { matchIdRef.current = null; setMatchSession({ matchId: null, game: null }); }}><Gamepad2 size={18} aria-hidden /> 게임 대결</button>
-                    </Popover.Close>
+                  <Popover.Content className="attach-menu" side="top" align="start" sideOffset={10} collisionPadding={12}>
+                    <div className="attach-grid">
+                      <Popover.Close asChild>
+                        <button type="button" className="attach-tile" onClick={() => attachPhotoRef.current?.click()}>
+                          <span className="attach-ic attach-ic-photo"><ImageIcon size={20} aria-hidden /></span>
+                          사진
+                        </button>
+                      </Popover.Close>
+                      <Popover.Close asChild>
+                        <button type="button" className="attach-tile" onClick={() => attachVideoRef.current?.click()}>
+                          <span className="attach-ic attach-ic-video"><Film size={20} aria-hidden /></span>
+                          동영상
+                        </button>
+                      </Popover.Close>
+                      <Popover.Close asChild>
+                        <button type="button" className="attach-tile" onClick={() => attachFileRef.current?.click()}>
+                          <span className="attach-ic attach-ic-file"><FileIcon size={20} aria-hidden /></span>
+                          파일
+                        </button>
+                      </Popover.Close>
+                    </div>
+                    <div className="attach-divider" aria-hidden />
+                    <div className="attach-grid">
+                      <Popover.Close asChild>
+                        <button type="button" className="attach-tile" onClick={() => setGameOpen(true)}>
+                          <span className="attach-ic attach-ic-game"><Gamepad2 size={20} aria-hidden /></span>
+                          게임
+                        </button>
+                      </Popover.Close>
+                      <Popover.Close asChild>
+                        <button type="button" className="attach-tile" onClick={() => { matchIdRef.current = null; setMatchSession({ matchId: null, game: null }); }}>
+                          <span className="attach-ic attach-ic-duel"><Swords size={20} aria-hidden /></span>
+                          게임 대결
+                        </button>
+                      </Popover.Close>
+                    </div>
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
