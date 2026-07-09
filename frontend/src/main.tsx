@@ -520,6 +520,7 @@ function App() {
   const [messagesRefreshing, setMessagesRefreshing] = useState(false);
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const [roomDeleteConfirmOpen, setRoomDeleteConfirmOpen] = useState(false);
+  const [roomMenuOpen, setRoomMenuOpen] = useState(false); // 채팅방 설정 드로어
   const [withdrawConfirmOpen, setWithdrawConfirmOpen] = useState(false);
   // 뉴스 → 채팅 공유
   const [shareItem, setShareItem] = useState<NewsItem | null>(null);
@@ -582,6 +583,17 @@ function App() {
     return contacts.filter((contact) => !participantEmails.has(contact.email.toLowerCase()));
   }, [contacts, roomParticipants]);
   const isAdmin = user?.role === 'ADMIN';
+  // 채팅방 설정 드로어의 "사진·파일" — 로드된 메시지의 첨부를 이미지/파일로 분리.
+  const roomAttachments = useMemo(() => {
+    const photos: ChatMessage[] = [];
+    const files: ChatMessage[] = [];
+    for (const message of messages) {
+      if (message.deletedForEveryone || !message.attachmentUrl) continue;
+      if (!message.attachmentType || message.attachmentType.startsWith('image/')) photos.push(message);
+      else files.push(message);
+    }
+    return { photos, files };
+  }, [messages]);
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
   const emailCodeDigits = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? '');
   const pullRefreshProgress = messagesRefreshing ? 1 : Math.min(1, pullRefreshDistance / 58);
@@ -2990,6 +3002,110 @@ function App() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {roomMenuOpen && selectedRoom && (
+          <motion.div
+            className="room-drawer-backdrop"
+            role="presentation"
+            onClick={() => setRoomMenuOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.aside
+              className="room-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="채팅방 설정"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+            >
+              <header className="room-drawer-head">
+                <strong>채팅방 설정</strong>
+                <button type="button" className="room-drawer-close" onClick={() => setRoomMenuOpen(false)} aria-label="닫기"><X size={18} aria-hidden /></button>
+              </header>
+
+              <div className="room-drawer-body">
+                <div className="room-drawer-info">
+                  <h3>{selectedRoom.name}</h3>
+                  <p>{selectedRoom.type === 'GROUP' ? `참여자 ${roomParticipants.length}명` : '1:1 대화'}</p>
+                </div>
+
+                <section className="room-drawer-section">
+                  <h4><Users size={14} aria-hidden /> 참여자</h4>
+                  <div className="room-drawer-participants">
+                    {roomParticipants.map((participant) => (
+                      <span key={participant.email} className={participant.online ? 'participant-chip online' : 'participant-chip'}>
+                        <ProfileAvatar className="tiny-avatar" name={participant.name} imageUrl={participant.profileImageUrl} />
+                        <strong>{participant.name}</strong>
+                        {participant.owner && <small>방장</small>}
+                      </span>
+                    ))}
+                  </div>
+                  {selectedRoom.type === 'GROUP' && (
+                    <form className="invite-form" onSubmit={inviteParticipant}>
+                      <select value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} disabled={inviteOptions.length === 0}>
+                        <option value="">친구 초대</option>
+                        {inviteOptions.map((contact) => <option key={contact.email} value={contact.email}>{contact.name} · {contact.email}</option>)}
+                      </select>
+                      <button type="submit" disabled={!inviteEmail || loading} title="친구 초대"><UserPlus size={16} aria-hidden /></button>
+                    </form>
+                  )}
+                </section>
+
+                <section className="room-drawer-section">
+                  <h4><Camera size={14} aria-hidden /> 사진{roomAttachments.photos.length > 0 && <span className="room-drawer-count">{roomAttachments.photos.length}</span>}</h4>
+                  {roomAttachments.photos.length > 0 ? (
+                    <div className="room-drawer-photos">
+                      {roomAttachments.photos.slice(0, 12).map((message) => (
+                        <a key={message.id} href={message.attachmentUrl ?? '#'} target="_blank" rel="noreferrer noopener" title={message.attachmentName ?? '사진'}>
+                          <img src={message.attachmentUrl ?? ''} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="room-drawer-empty">주고받은 사진이 없어요.</p>
+                  )}
+                </section>
+
+                {roomAttachments.files.length > 0 && (
+                  <section className="room-drawer-section">
+                    <h4><Paperclip size={14} aria-hidden /> 파일<span className="room-drawer-count">{roomAttachments.files.length}</span></h4>
+                    <ul className="room-drawer-files">
+                      {roomAttachments.files.map((message) => (
+                        <li key={message.id}>
+                          <a href={message.attachmentUrl ?? '#'} target="_blank" rel="noreferrer noopener">
+                            <Paperclip size={13} aria-hidden />
+                            <span>{message.attachmentName ?? '파일'}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </div>
+
+              <div className="room-drawer-actions">
+                <button type="button" onClick={() => { clearRoomMessagesForMe(); setRoomMenuOpen(false); }} disabled={messages.length === 0}>
+                  <Trash2 size={16} aria-hidden /> 대화창 비우기
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => { setRoomMenuOpen(false); if (selectedRoom.type === 'GROUP') { leaveSelectedRoom(); } else { setRoomDeleteConfirmOpen(true); } }}
+                  disabled={loading}
+                >
+                  <LogOut size={16} aria-hidden /> 채팅방 나가기
+                </button>
+              </div>
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {selectedRoomId && (
           <motion.section
             key="conversation"
@@ -3027,33 +3143,10 @@ function App() {
                     <Sparkles size={15} aria-hidden />GPT 요약
                   </button>
                 </span>
-                <button className="soft-action-button" onClick={clearRoomMessagesForMe} disabled={!selectedRoomId || messages.length === 0} type="button">대화 비우기</button>
-                {selectedRoom?.type === 'GROUP' && <button className="soft-action-button" onClick={leaveSelectedRoom} disabled={loading} type="button">나가기</button>}
-                <button className="ghost-icon-button" onClick={() => setRoomDeleteConfirmOpen(true)} disabled={!selectedRoomId || loading} title="채팅방 나가기"><Trash2 size={17} aria-hidden /></button>
+                <button className="ghost-icon-button" onClick={() => setRoomMenuOpen(true)} disabled={!selectedRoomId} title="채팅방 설정" aria-label="채팅방 설정"><Settings size={18} aria-hidden /></button>
               </div>
             </header>
 
-            <section className="participant-panel">
-              <div className="participant-list">
-                {roomParticipants.slice(0, 8).map((participant) => (
-                  <span key={participant.email} className={participant.online ? 'participant-chip online' : 'participant-chip'}>
-                    <ProfileAvatar className="tiny-avatar" name={participant.name} imageUrl={participant.profileImageUrl} />
-                    <strong>{participant.name}</strong>
-                    {participant.owner && <small>방장</small>}
-                  </span>
-                ))}
-                {roomParticipants.length > 8 && <span className="participant-more">+{roomParticipants.length - 8}</span>}
-              </div>
-              {selectedRoom?.type === 'GROUP' && (
-                <form className="invite-form" onSubmit={inviteParticipant}>
-                  <select value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} disabled={inviteOptions.length === 0}>
-                    <option value="">친구 초대</option>
-                    {inviteOptions.map((contact) => <option key={contact.email} value={contact.email}>{contact.name} · {contact.email}</option>)}
-                  </select>
-                  <button type="submit" disabled={!inviteEmail || loading} title="친구 초대"><UserPlus size={16} aria-hidden /></button>
-                </form>
-              )}
-            </section>
 
             <div
               className="message-list"
