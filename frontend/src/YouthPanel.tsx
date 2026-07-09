@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Briefcase, ExternalLink, Newspaper, RefreshCcw, Share2, Sparkles } from 'lucide-react';
+import { Briefcase, ExternalLink, Newspaper, RefreshCcw, Search, Share2, Sparkles, X } from 'lucide-react';
 import { NewsItem, NewsThumb } from './NewsFeed';
 
 const NEWS_ROOT = '/api/news';
@@ -54,6 +54,8 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
   const reduceMotion = useReducedMotion();
   const [region, setRegion] = useState('all');
   const [segment, setSegment] = useState('policies');
+  const [policyQuery, setPolicyQuery] = useState(''); // 제출된 정책 검색어
+  const [queryInput, setQueryInput] = useState('');
 
   const [policies, setPolicies] = useState<YouthPolicy[]>([]);
   const [available, setAvailable] = useState(true);
@@ -76,7 +78,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
     return `${prefix}${base}`;
   }, []);
 
-  const load = useCallback((seg: string, reg: string, mode: 'replace' | 'append') => {
+  const load = useCallback((seg: string, reg: string, mode: 'replace' | 'append', kw: string) => {
     const myReq = mode === 'replace' ? ++reqRef.current : reqRef.current;
     if (mode === 'append') {
       loadingMoreRef.current = true;
@@ -89,7 +91,8 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
     let url: string;
     if (seg === 'policies') {
       const page = mode === 'replace' ? 1 : pageRef.current;
-      url = `${NEWS_ROOT}/youth/policies?region=${encodeURIComponent(reg)}&page=${page}&size=${DISPLAY}`;
+      url = `${NEWS_ROOT}/youth/policies?region=${encodeURIComponent(reg)}&page=${page}&size=${DISPLAY}`
+        + (kw ? `&keyword=${encodeURIComponent(kw)}` : '');
     } else {
       const start = mode === 'replace' ? 1 : startRef.current;
       url = `${NEWS_ROOT}/search?query=${encodeURIComponent(newsQuery(seg, reg))}&start=${start}&display=${DISPLAY}`;
@@ -149,12 +152,12 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
     setHasMore(false);
     if (segment === 'policies') setPolicies([]);
     else setNews([]);
-    load(segment, region, 'replace');
-  }, [segment, region, load]);
+    load(segment, region, 'replace', policyQuery);
+  }, [segment, region, policyQuery, load]);
 
   function loadMore() {
     if (!hasMore || loadingRef.current || loadingMoreRef.current) return;
-    load(segment, region, 'append');
+    load(segment, region, 'append', policyQuery);
   }
 
   const isPolicies = segment === 'policies';
@@ -203,6 +206,26 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
         })}
       </div>
 
+      {isPolicies && (
+        <form className="youth-search" role="search" onSubmit={(event) => { event.preventDefault(); setPolicyQuery(queryInput.trim()); }}>
+          <Search size={15} aria-hidden />
+          <input
+            type="search"
+            value={queryInput}
+            onChange={(event) => setQueryInput(event.target.value)}
+            placeholder="정책 검색 (예: 적금, 창업, 주거)"
+            aria-label="청년 정책 검색"
+            enterKeyHint="search"
+          />
+          {queryInput && (
+            <button type="button" className="youth-search-clear" onClick={() => { setQueryInput(''); setPolicyQuery(''); }} aria-label="검색어 지우기">
+              <X size={14} aria-hidden />
+            </button>
+          )}
+          <button type="submit" className="youth-search-submit">검색</button>
+        </form>
+      )}
+
       {loading && (
         <div className="news-list">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -219,7 +242,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
       {!loading && error && (
         <div className="news-empty">
           <p>{error}</p>
-          <button type="button" className="news-retry" onClick={() => load(segment, region, 'replace')}>
+          <button type="button" className="news-retry" onClick={() => load(segment, region, 'replace', policyQuery)}>
             <RefreshCcw size={15} aria-hidden /> 다시 시도
           </button>
         </div>

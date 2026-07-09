@@ -3427,18 +3427,76 @@ input:focus {
 }
 
 /* ===== 청년(Youth) 패널 ===== */
-.youth-regionbar { display: flex; gap: 7px; padding: 10px 16px 2px; flex-wrap: wrap; }
-.youth-region-chip {
-  border: 1px solid #e3e7f2; border-radius: 999px;
-  padding: 5px 14px; background: #fff; color: #3d4453;
-  font-size: 12.5px; font-weight: 700; cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
+/* 지역 탭 — 세그먼트 컨트롤(전체/서울/경기) */
+.youth-regionbar {
+  display: flex;
+  gap: 4px;
+  margin: 10px 16px 0;
+  padding: 4px;
+  border-radius: 12px;
+  background: #edeff5;
 }
-.youth-region-chip:hover { background: #f2f2fe; border-color: #8b8ff0; color: #5b53eb; }
+.youth-region-chip {
+  flex: 1;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #5b6478;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.youth-region-chip:hover { color: #5b53eb; }
 .youth-region-chip.active {
+  background: #ffffff;
+  color: #5b53eb;
+  box-shadow: 0 2px 6px rgba(40, 44, 80, 0.12);
+}
+/* 정책 검색창 */
+.youth-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #f4f6fc;
+  color: #97a0bd;
+}
+.youth-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #2b3245;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.youth-search input::placeholder { color: #a2a9bd; font-weight: 500; }
+.youth-search-clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #e3e7f2;
+  color: #6b7280;
+  cursor: pointer;
+  flex: none;
+}
+.youth-search-submit {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
   background: linear-gradient(135deg, #7c74ff, #5b53eb);
-  border-color: transparent; color: #fff;
-  box-shadow: 0 6px 16px rgba(91, 83, 235, 0.28);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  flex: none;
 }
 /* 세부탭: .news-catbar 버튼/필 스타일 재사용, 단 sticky 해제(상단 카테고리 바와 겹치지 않게) */
 .youth-segbar {
