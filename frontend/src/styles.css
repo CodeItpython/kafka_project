@@ -2439,6 +2439,32 @@ input:focus {
   object-fit: contain;
 }
 
+/* 동영상 첨부 — 이미지와 동일한 컨테이너 폭, 컨트롤 표시 */
+.message-media.message-video {
+  width: min(280px, 100%);
+  max-height: 300px;
+  object-fit: contain;
+}
+
+/* 일반 파일 첨부 칩(다운로드) */
+.message-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(280px, 100%);
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #edf0f8;
+  color: #2b3245;
+  text-decoration: none;
+}
+.message-file-chip:hover { background: #e4e8f5; }
+.message-file-chip > svg { color: #6d66ef; flex: none; }
+.message-file-meta { display: flex; flex-direction: column; min-width: 0; }
+.message-file-meta strong { overflow: hidden; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.message-file-meta small { color: #8b94a7; font-size: 11px; }
+
 /* hover 시 나타나는 빠른 액션(답장 + 공감) 툴바 — 말풍선 클러스터 바깥쪽에 표시 */
 .message-actions {
   position: absolute;
@@ -2691,6 +2717,52 @@ input:focus {
 
 .attach-button input {
   display: none;
+}
+
+/* + 버튼 첨부 메뉴(Radix Popover) */
+.attach-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #eceef6;
+  box-shadow: 0 12px 34px rgba(40, 44, 80, 0.18);
+  z-index: 40;
+}
+.attach-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: transparent;
+  color: #2b3245;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.attach-menu button:hover { background: #f2f0ff; color: #5b53eb; }
+.attach-menu button svg { color: #6d66ef; flex: none; }
+
+.attachment-preview video {
+  width: 54px;
+  height: 42px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #000;
+}
+.attachment-file-ic {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 42px;
+  border-radius: 7px;
+  background: #e7e3ff;
+  color: #6d66ef;
 }
 
 .attachment-preview {
