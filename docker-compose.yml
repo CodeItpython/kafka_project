@@ -90,6 +90,8 @@ services:
       # 네이버 검색 API 자격증명(쇼핑과 동일 값 재사용) — .env로 주입, 깃 커밋 금지.
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+      # 온통청년 청년정책 API 키(청년 정책·혜택 탭). 미설정 시 정책 탭만 빈 목록으로 degrade.
+      YOUTH_API_KEY: ${YOUTH_API_KEY:-}
 
   chat-service:
     build:
