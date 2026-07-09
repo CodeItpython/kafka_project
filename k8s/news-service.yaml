@@ -38,6 +38,13 @@ spec:
                   name: news-secrets
                   key: naver-client-secret
                   optional: true
+            # 온통청년 청년정책 API 키(청년 정책·혜택 탭). 미설정 시 정책 탭만 빈 목록으로 degrade.
+            - name: YOUTH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: news-secrets
+                  key: youth-api-key
+                  optional: true
           # 느린 콜드 스타트 동안 liveness가 컨테이너를 죽이지 않도록 startup 게이트를 둔다(다른 서비스와 일관).
           startupProbe:
             httpGet:
