@@ -422,7 +422,6 @@ export default function ShoppingFeed({
         <div className="shop-hero-copy">
           <span className="shop-hero-eyebrow">NAVER SHOPPING</span>
           <h2>#특가픽</h2>
-          <p>카테고리별 인기·최저가 상품을 모았어요. 위로 당기면 새로고침돼요.</p>
         </div>
         <div className="shop-hero-actions">
           <button
@@ -433,10 +432,10 @@ export default function ShoppingFeed({
             aria-label={searchOpen ? '검색 닫기' : '검색'}
             aria-expanded={searchOpen}
           >
-            {searchOpen ? <X size={19} aria-hidden /> : <Search size={19} aria-hidden />}
+            {searchOpen ? <X size={18} aria-hidden /> : <Search size={18} aria-hidden />}
           </button>
           <button type="button" className="shop-cart-button" onClick={onOpenCart} title="장바구니">
-            <ShoppingCart size={20} aria-hidden />
+            <ShoppingCart size={18} aria-hidden />
             {cartCount > 0 && <span className="shop-cart-badge">{cartCount > 99 ? '99+' : cartCount}</span>}
           </button>
         </div>
