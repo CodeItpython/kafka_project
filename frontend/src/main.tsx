@@ -14,6 +14,9 @@ import {
   ChevronRight,
   Copy,
   Hash,
+  Image as ImageIcon,
+  Film,
+  File as FileIcon,
   KeyRound,
   Link2,
   LogOut,
@@ -44,6 +47,19 @@ import {
 import * as Popover from '@radix-ui/react-popover';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import './styles.css';
+
+/** 사람이 읽기 쉬운 파일 크기(파일 첨부 칩용). */
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${unit > 0 && value < 10 ? value.toFixed(1) : Math.round(value)}${units[unit]}`;
+}
 
 // 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
 const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
@@ -489,6 +505,9 @@ function App() {
   const [presence, setPresence] = useState<RoomPresence>({ onlineUsers: [], typingUsers: [] });
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState('');
+  const attachPhotoRef = useRef<HTMLInputElement>(null);
+  const attachVideoRef = useRef<HTMLInputElement>(null);
+  const attachFileRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>('chats');
@@ -1812,12 +1831,17 @@ function App() {
   function selectAttachment(file: File | null) {
     clearAttachment();
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setStatus('이미지와 GIF 파일만 첨부할 수 있습니다.');
+    // 종류별 용량 상한(서버 ChatService.maxAttachmentBytes와 동일): 이미지 10 · 동영상 50 · 파일 25MB
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const maxMb = isImage ? 10 : isVideo ? 50 : 25;
+    if (file.size > maxMb * 1024 * 1024) {
+      setStatus(`첨부 파일이 너무 큽니다. 최대 ${maxMb}MB까지 가능합니다.`);
       return;
     }
     setAttachment(file);
-    setAttachmentPreview(URL.createObjectURL(file));
+    // 이미지·동영상만 로컬 미리보기 URL 생성(그 외 파일은 칩으로 표시).
+    setAttachmentPreview(isImage || isVideo ? URL.createObjectURL(file) : '');
   }
 
   function clearAttachment() {
@@ -3262,17 +3286,42 @@ function App() {
                   <button type="button" onClick={() => setReplyTarget(null)} title="답장 취소"><X size={16} aria-hidden /></button>
                 </div>
               )}
-              {attachmentPreview && (
+              {attachment && (
                 <div className="attachment-preview">
-                  <img src={attachmentPreview} alt={attachment?.name ?? '첨부 미리보기'} />
-                  <span>{attachment?.name}</span>
+                  {attachment.type.startsWith('image/') ? (
+                    <img src={attachmentPreview} alt={attachment.name} />
+                  ) : attachment.type.startsWith('video/') ? (
+                    <video src={attachmentPreview} muted playsInline />
+                  ) : (
+                    <span className="attachment-file-ic"><FileIcon size={20} aria-hidden /></span>
+                  )}
+                  <span>{attachment.name}</span>
                   <button type="button" onClick={clearAttachment} title="첨부 제거"><X size={16} aria-hidden /></button>
                 </div>
               )}
-              <label className="attach-button" title="이미지 또는 GIF 첨부">
-                <Paperclip size={18} aria-hidden />
-                <input type="file" accept="image/*,.gif" onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)} disabled={!selectedRoomId} />
-              </label>
+              <Popover.Root>
+                <Popover.Trigger asChild>
+                  <button type="button" className="attach-button" title="첨부 / 게임" aria-label="첨부 메뉴 열기" disabled={!selectedRoomId}>
+                    <Plus size={20} aria-hidden />
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content className="attach-menu" side="top" align="start" sideOffset={8} collisionPadding={12}>
+                    <Popover.Close asChild>
+                      <button type="button" onClick={() => attachPhotoRef.current?.click()}><ImageIcon size={18} aria-hidden /> 사진</button>
+                    </Popover.Close>
+                    <Popover.Close asChild>
+                      <button type="button" onClick={() => attachVideoRef.current?.click()}><Film size={18} aria-hidden /> 동영상</button>
+                    </Popover.Close>
+                    <Popover.Close asChild>
+                      <button type="button" onClick={() => attachFileRef.current?.click()}><FileIcon size={18} aria-hidden /> 파일</button>
+                    </Popover.Close>
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+              <input ref={attachPhotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(event) => { selectAttachment(event.target.files?.[0] ?? null); event.target.value = ''; }} />
+              <input ref={attachVideoRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={(event) => { selectAttachment(event.target.files?.[0] ?? null); event.target.value = ''; }} />
+              <input ref={attachFileRef} type="file" style={{ display: 'none' }} onChange={(event) => { selectAttachment(event.target.files?.[0] ?? null); event.target.value = ''; }} />
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={presence.typingUsers.length > 0 ? `${presence.typingUsers[0]}님이 입력 중` : '메시지를 입력하세요'} disabled={!selectedRoomId} />
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
@@ -3667,9 +3716,21 @@ const MessageRow = React.memo(function MessageRow({
                       </div>
                     )}
                     {message.attachmentUrl && (
-                      <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
-                        <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
-                      </a>
+                      message.attachmentType?.startsWith('image/') ? (
+                        <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
+                          <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
+                        </a>
+                      ) : message.attachmentType?.startsWith('video/') ? (
+                        <video className="message-media message-video" src={message.attachmentUrl} controls preload="metadata" />
+                      ) : (
+                        <a className="message-file-chip" href={message.attachmentUrl} target="_blank" rel="noreferrer" download={message.attachmentName ?? undefined}>
+                          <FileIcon size={18} aria-hidden />
+                          <span className="message-file-meta">
+                            <strong>{message.attachmentName ?? '파일'}</strong>
+                            {typeof message.attachmentSize === 'number' && message.attachmentSize > 0 && <small>{formatBytes(message.attachmentSize)}</small>}
+                          </span>
+                        </a>
+                      )
                     )}
                     {displayText && <p>{displayText}</p>}
                     {linkUrl && <MessageLinkPreview url={linkUrl} />}
