@@ -58,6 +58,7 @@ export default function ShoppingFeed({
 
   const [input, setInput] = useState('');
   const [term, setTerm] = useState(''); // 제출된 검색어(비어 있으면 카테고리 피드)
+  const [searchOpen, setSearchOpen] = useState(false); // 검색창은 기본 접힘(아이콘) → 클릭 시 펼침
   const [popular, setPopular] = useState<PopularKeyword[]>([]);
   const [popIdx, setPopIdx] = useState(0);
   const [related, setRelated] = useState<string[]>([]); // 연관검색어(검색 시)
@@ -276,8 +277,8 @@ export default function ShoppingFeed({
       return;
     }
     refreshCountRef.current += 1;
-    // 새로고침마다 시작 오프셋을 순환시켜 "새로운 인기상품"을 노출(캐시도 우회).
-    const rotatedStart = ((refreshCountRef.current % 4) * DISPLAY * 2) + 1; // 1, 41, 81, 121
+    // 새로고침마다 시작 오프셋을 41→81→121로 순환(초기 1페이지로 안 돌아가게)시켜 매번 새 인기상품 노출(캐시 우회).
+    const rotatedStart = (((refreshCountRef.current - 1) % 3) + 1) * (DISPLAY * 2) + 1;
     loadPage(active, sort, '', rotatedStart, 'replace', true);
   }, [active, sort, term, loadPage]);
 
@@ -423,18 +424,32 @@ export default function ShoppingFeed({
           <h2>#특가픽</h2>
           <p>카테고리별 인기·최저가 상품을 모았어요. 위로 당기면 새로고침돼요.</p>
         </div>
-        <button type="button" className="shop-cart-button" onClick={onOpenCart} title="장바구니">
-          <ShoppingCart size={20} aria-hidden />
-          {cartCount > 0 && <span className="shop-cart-badge">{cartCount > 99 ? '99+' : cartCount}</span>}
-        </button>
+        <div className="shop-hero-actions">
+          <button
+            type="button"
+            className={searchOpen ? 'feed-search-toggle active' : 'feed-search-toggle'}
+            onClick={() => { if (searchOpen) { setSearchOpen(false); clearSearch(); } else { setSearchOpen(true); } }}
+            title={searchOpen ? '검색 닫기' : '검색'}
+            aria-label={searchOpen ? '검색 닫기' : '검색'}
+            aria-expanded={searchOpen}
+          >
+            {searchOpen ? <X size={19} aria-hidden /> : <Search size={19} aria-hidden />}
+          </button>
+          <button type="button" className="shop-cart-button" onClick={onOpenCart} title="장바구니">
+            <ShoppingCart size={20} aria-hidden />
+            {cartCount > 0 && <span className="shop-cart-badge">{cartCount > 99 ? '99+' : cartCount}</span>}
+          </button>
+        </div>
       </header>
 
       <div className="shop-searchbar">
+        {searchOpen && (
         <form className="shop-search-form" onSubmit={submitSearch} role="search">
           <Search size={17} aria-hidden />
           <input
             type="search"
             value={input}
+            autoFocus
             onChange={(event) => setInput(event.target.value)}
             onFocus={() => { if (suggestions.length > 0) setSuggestOpen(true); }}
             onBlur={() => setSuggestOpen(false)}
@@ -471,6 +486,7 @@ export default function ShoppingFeed({
             </ul>
           )}
         </form>
+        )}
 
         {current && (
           <div className="shop-popular" tabIndex={0} aria-label="실시간 인기검색어">

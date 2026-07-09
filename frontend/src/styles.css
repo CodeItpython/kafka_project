@@ -3902,6 +3902,18 @@ input:focus {
 .shop-hero-eyebrow, .news-hero-eyebrow { font-size: 11px; font-weight: 900; letter-spacing: 0.18em; color: #8b8ff0; }
 .shop-hero-copy h2, .news-hero-copy h2 { margin: 4px 0 2px; font-size: 26px; font-weight: 900; color: #191f28; }
 .shop-hero-copy p, .news-hero-copy p { color: #6b7280; font-size: 13px; }
+.shop-hero-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* 검색창을 접었을 때 노출되는 아이콘 토글(뉴스·쇼핑 공용) */
+.feed-search-toggle {
+  display: grid; place-items: center;
+  width: 44px; height: 44px;
+  border: 1px solid #e3e7f2; border-radius: 50%;
+  background: #fff; color: #5b53eb;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.feed-search-toggle:hover { background: #f2f2fe; }
+.feed-search-toggle.active { background: #5b53eb; color: #fff; border-color: #5b53eb; }
 .shop-cart-button {
   position: relative;
   display: grid;
@@ -4017,6 +4029,12 @@ input:focus {
   background: #fff; box-shadow: 0 12px 30px rgba(25, 31, 40, 0.12);
   opacity: 0; visibility: hidden; transform: translateY(-4px);
   transition: opacity 0.15s, transform 0.15s;
+}
+/* 트리거와 목록 사이 6px 틈에서 hover가 끊겨 목록이 닫히던 문제 → 투명 브릿지로 연결 */
+.shop-popular-list::before {
+  content: '';
+  position: absolute;
+  top: -10px; left: 0; right: 0; height: 10px;
 }
 .shop-popular:hover .shop-popular-list,
 .shop-popular:focus-within .shop-popular-list { opacity: 1; visibility: visible; transform: translateY(0); }
