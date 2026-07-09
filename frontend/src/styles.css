@@ -2165,6 +2165,9 @@ input:focus {
 .message-virtual-row {
   /* flex gap(9px)이 절대배치 행에는 적용되지 않으므로 행마다 간격을 준다(측정에 포함됨). */
   padding-bottom: 9px;
+  /* 절대배치 래퍼를 flex-column으로 만들어 .chat-row의 align-self(내 메시지=우측)를 보장. */
+  display: flex;
+  flex-direction: column;
 }
 
 .pull-refresh-indicator {
