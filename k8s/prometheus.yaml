@@ -28,6 +28,18 @@ data:
         static_configs:
           - targets:
               - news-service:8891
+
+      - job_name: chat-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              - chat-service:8892
+
+      - job_name: shopping-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              - shopping-service:8893
 ---
 apiVersion: apps/v1
 kind: Deployment

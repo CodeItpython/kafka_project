@@ -6,6 +6,10 @@ services:
       args:
         SERVICE: auth-service
     image: kafka-auth-service:local
+    # 컨테이너 크래시/도커 데몬 재시작 후 자동 복구(개발 중 OOM exit 137·데몬 재시작으로 스택이 죽어있던 문제 대응).
+    restart: unless-stopped
+    # 컨테이너 메모리 상한. 아래 MaxRAMPercentage와 짝을 이뤄 JVM이 호스트 전체 메모리를 힙으로 오인해 OOM-kill 되는 것을 막는다.
+    mem_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -17,6 +21,8 @@ services:
       - "8890:8890"
     environment:
       SPRING_PROFILES_ACTIVE: logstash
+      # mem_limit(768m)의 70%(~538MB)로 힙 상한. 나머지는 메타스페이스/스레드/네이티브 여유로 남긴다.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
       APP_INTERNAL_API_TOKEN: local-compose-internal-token-change-me
@@ -68,12 +74,15 @@ services:
         # 컨테이너 헬스체크가 쓰는 포트(기본 8890)를 news 실제 포트(8891)에 맞춘다.
         APP_PORT: "8891"
     image: kafka-news-service:local
+    restart: unless-stopped
+    mem_limit: 768m
     depends_on:
       elasticsearch:
         condition: service_healthy
     ports:
       - "8891:8891"
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       NEWS_CACHE_TTL_SECONDS: ${NEWS_CACHE_TTL_SECONDS:-180}
       # 기사 색인 + 연관검색어(significant_text)용. ES가 없어도 피드/검색은 Naver로 동작.
@@ -90,9 +99,13 @@ services:
         SERVICE: chat-service
         APP_PORT: "8892"
     image: kafka-chat-service:local
+    restart: unless-stopped
+    mem_limit: 768m
     depends_on:
       auth-service:
-        condition: service_started
+        # chat은 부팅 시 auth로 사용자 조회(Feign)를 하므로 auth가 "떠서 응답 가능"할 때까지 기다린다.
+        # (Dockerfile에 HEALTHCHECK가 구워져 있어 service_healthy 판정 가능)
+        condition: service_healthy
       kafka:
         condition: service_healthy
       postgres:
@@ -109,6 +122,7 @@ services:
       - "8892:8892"
     environment:
       SPRING_PROFILES_ACTIVE: logstash
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
       APP_INTERNAL_API_TOKEN: local-compose-internal-token-change-me
@@ -144,6 +158,8 @@ services:
         SERVICE: shopping-service
         APP_PORT: "8893"
     image: kafka-shopping-service:local
+    restart: unless-stopped
+    mem_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,6 +169,7 @@ services:
       - "8893:8893"
     environment:
       SPRING_PROFILES_ACTIVE: logstash
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kafka_shopping
