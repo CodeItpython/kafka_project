@@ -17,6 +17,7 @@ import {
   Image as ImageIcon,
   Film,
   File as FileIcon,
+  Gamepad2,
   KeyRound,
   Link2,
   LogOut,
@@ -46,6 +47,7 @@ import {
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import GameOverlay, { GameKey, GameScoreResult } from './games/GameOverlay';
 import './styles.css';
 
 /** 사람이 읽기 쉬운 파일 크기(파일 첨부 칩용). */
@@ -508,6 +510,7 @@ function App() {
   const attachPhotoRef = useRef<HTMLInputElement>(null);
   const attachVideoRef = useRef<HTMLInputElement>(null);
   const attachFileRef = useRef<HTMLInputElement>(null);
+  const [gameOpen, setGameOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>('chats');
@@ -3316,6 +3319,9 @@ function App() {
                     <Popover.Close asChild>
                       <button type="button" onClick={() => attachFileRef.current?.click()}><FileIcon size={18} aria-hidden /> 파일</button>
                     </Popover.Close>
+                    <Popover.Close asChild>
+                      <button type="button" onClick={() => setGameOpen(true)}><Gamepad2 size={18} aria-hidden /> 게임</button>
+                    </Popover.Close>
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
@@ -3325,6 +3331,17 @@ function App() {
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={presence.typingUsers.length > 0 ? `${presence.typingUsers[0]}님이 입력 중` : '메시지를 입력하세요'} disabled={!selectedRoomId} />
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
+            <GameOverlay
+              open={gameOpen}
+              onClose={() => setGameOpen(false)}
+              submitScore={(game: GameKey, sc: number) => request<GameScoreResult>('/chat/games/scores', { method: 'POST', body: JSON.stringify({ game, score: sc }) })}
+              loadBests={async () => {
+                const list = await request<Array<{ game: GameKey; bestScore: number }>>('/chat/games/scores/me');
+                const map = {} as Record<GameKey, number>;
+                (list || []).forEach((s) => { map[s.game] = s.bestScore; });
+                return map;
+              }}
+            />
           </motion.section>
         )}
       </AnimatePresence>
