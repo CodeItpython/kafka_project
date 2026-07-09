@@ -1,6 +1,6 @@
 package com.example.kafka.news;
 
-import com.example.kafka.news.OntongYouthApiClient.YouthPolicyApiResponse;
+import com.example.kafka.news.OntongYouthApiClient.PortalPolicyResponse;
 import com.example.kafka.news.YouthDtos.YouthPolicy;
 import java.time.Duration;
 import java.time.Instant;
@@ -74,41 +74,47 @@ public class YouthService {
     }
 
     private YouthResult fetch(Region region, String category, String keyword, int page, int size) {
-        YouthPolicyApiResponse response = client.fetchPolicies(page, size, keyword, category, region.zipParamOrNull());
-        if (response == null || response.result() == null || response.result().youthPolicyList() == null) {
+        PortalPolicyResponse response = client.searchPolicies(region.ctpvNm(), keyword, page, size);
+        if (response == null || response.searchResult() == null || response.searchResult().youthpolicy() == null) {
             return YouthResult.empty();
         }
-        List<YouthPolicyApiResponse.Policy> raw = response.result().youthPolicyList();
+        List<PortalPolicyResponse.Policy> raw = response.searchResult().youthpolicy();
         List<YouthPolicy> items = raw.stream()
-                .filter(policy -> region.matches(policy.zipCd(), policy.rgtrInstCdNm(), policy.sprvsnInstCdNm()))
-                .map(YouthService::toItem)
+                .map(policy -> toItem(policy, region))
                 .filter(item -> item.id() != null && !item.id().isBlank())
                 .toList();
-        // hasMore는 원본 페이지가 꽉 찼는지로 판단 — 지역 후처리로 짧아진 items나 pre-filter totCount에 의존하지 않는다.
-        boolean hasMore = raw.size() == size;
-        int totalCount = response.result().pagging() != null && response.result().pagging().totCount() != null
-                ? response.result().pagging().totCount()
-                : items.size();
-        return new YouthResult(items, totalCount, hasMore);
+        // 포털이 전체 건수(totalCount)를 주므로 다음 페이지 존재 여부를 정확히 계산.
+        boolean hasMore = (long) page * size < response.totalCount();
+        return new YouthResult(items, response.totalCount(), hasMore);
     }
 
-    private static YouthPolicy toItem(YouthPolicyApiResponse.Policy policy) {
+    private static YouthPolicy toItem(PortalPolicyResponse.Policy policy, Region region) {
+        String regionLabel = region == Region.ALL ? shortRegion(policy.regionNames()) : region.label();
         return new YouthPolicy(
-                policy.plcyNo(),
-                NewsService.clean(policy.plcyNm()),
-                NewsService.clean(policy.plcyExplnCn()),
-                NewsService.clean(policy.plcySprtCn()),
-                splitKeywords(policy.plcyKywdNm()),
-                blankToNull(policy.lclsfNm()),
-                blankToNull(policy.mclsfNm()),
-                regionLabel(policy.zipCd(), policy.rgtrInstCdNm(), policy.sprvsnInstCdNm()),
-                firstNonBlank(policy.sprvsnInstCdNm(), policy.rgtrInstCdNm()),
-                parseAge(policy.sprtTrgtMinAge()),
-                parseAge(policy.sprtTrgtMaxAge()),
-                blankToNull(policy.aplyUrlAddr()),
-                blankToNull(policy.refUrlAddr1()),
-                period(policy.bizPrdBgngYmd(), policy.bizPrdEndYmd(), policy.aplyYmd())
+                policy.docId(),
+                NewsService.clean(policy.name()),
+                NewsService.clean(policy.explanation()),
+                NewsService.clean(policy.support()),
+                splitKeywords(policy.keywords()),
+                blankToNull(policy.largeClassification()),
+                blankToNull(policy.mediumClassification()),
+                regionLabel,
+                blankToNull(policy.supervisorInstitution()),
+                parseAge(policy.minAge()),
+                parseAge(policy.maxAge()),
+                blankToNull(policy.applyUrl()),
+                blankToNull(policy.refUrl()),
+                period(policy.bizBeginYmd(), policy.bizEndYmd(), null)
         );
+    }
+
+    /** STDG_NM("서울특별시 종로구,...")에서 첫 시도명만 뽑아 짧게. 없으면 "전국". */
+    private static String shortRegion(String regionNames) {
+        if (regionNames == null || regionNames.isBlank()) {
+            return "전국";
+        }
+        String firstWord = regionNames.split(",")[0].trim().split(" ")[0];
+        return firstWord.isBlank() ? "전국" : firstWord;
     }
 
     private static List<String> splitKeywords(String raw) {
@@ -133,16 +139,6 @@ public class YouthService {
         }
     }
 
-    private static String regionLabel(String zipCd, String rgtrInstCdNm, String sprvsnInstCdNm) {
-        if (Region.SEOUL.matches(zipCd, rgtrInstCdNm, sprvsnInstCdNm)) {
-            return "서울";
-        }
-        if (Region.GYEONGGI.matches(zipCd, rgtrInstCdNm, sprvsnInstCdNm)) {
-            return "경기";
-        }
-        return "전국";
-    }
-
     /** yyyyMMdd~yyyyMMdd 사업기간을 우선 사용, 없으면 신청기간(aplyYmd) 원문. */
     private static String period(String begin, String end, String applyYmd) {
         String formattedBegin = formatYmd(begin);
@@ -165,16 +161,6 @@ public class YouthService {
             return null;
         }
         return digits.substring(0, 4) + "." + digits.substring(4, 6) + "." + digits.substring(6, 8);
-    }
-
-    private static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first.trim();
-        }
-        if (second != null && !second.isBlank()) {
-            return second.trim();
-        }
-        return null;
     }
 
     private static String blankToNull(String value) {
