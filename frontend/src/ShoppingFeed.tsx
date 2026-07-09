@@ -79,6 +79,7 @@ export default function ShoppingFeed({
   const touchStartY = useRef<number | null>(null);
   const wheelAccum = useRef(0);
   const wheelResetTimer = useRef<number | undefined>(undefined);
+  const wheelRefreshLatch = useRef(false); // 한 휠 제스처(관성 포함)당 새로고침 1회만 허용
 
   const searching = term.trim().length > 0;
 
@@ -345,25 +346,28 @@ export default function ShoppingFeed({
   // 데스크톱: 최상단에서 위로 휠 → 당김/새로고침
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
     const el = rootRef.current;
-    if (!el || el.scrollTop > 0 || refreshingRef.current) return;
-    if (event.deltaY < 0) {
-      wheelAccum.current += -event.deltaY;
-      setPull(Math.min(wheelAccum.current * 0.6, MAX_PULL));
-      if (wheelAccum.current > PULL_THRESHOLD * 1.6) {
-        triggerRefresh();
-        return;
-      }
-      // 휠은 손 떼는 이벤트가 없으므로, 스크롤이 멈추면 곧바로 당김을 원위치로 되돌린다.
-      if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
-      wheelResetTimer.current = window.setTimeout(() => {
-        if (!refreshingRef.current) {
-          wheelAccum.current = 0;
-          setPull(0);
-        }
-      }, 140);
-    } else {
+    if (!el || el.scrollTop > 0) return;
+    if (event.deltaY >= 0) {
       wheelAccum.current = 0;
+      wheelRefreshLatch.current = false;
       if (pull !== 0) setPull(0);
+      return;
+    }
+    // 관성 휠은 손 뗀 뒤에도 계속 들어오므로, 상향 휠마다 리셋 타이머를 갱신해
+    // 관성이 완전히 멈춘 뒤(180ms)에만 누적/래치를 해제한다 → 한 제스처당 새로고침 1회.
+    if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
+    wheelResetTimer.current = window.setTimeout(() => {
+      wheelAccum.current = 0;
+      wheelRefreshLatch.current = false;
+      setPull(0);
+    }, 180);
+    if (refreshingRef.current || wheelRefreshLatch.current) return;
+    wheelAccum.current += -event.deltaY;
+    setPull(Math.min(wheelAccum.current * 0.6, MAX_PULL));
+    if (wheelAccum.current > PULL_THRESHOLD * 1.6) {
+      wheelRefreshLatch.current = true;
+      wheelAccum.current = 0;
+      triggerRefresh();
     }
   }
 
