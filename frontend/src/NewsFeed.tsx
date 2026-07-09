@@ -265,8 +265,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
 
   const triggerRefresh = useCallback(() => {
     if (refreshingRef.current || loadingRef.current || !active) return;
+    // 새로고침 중에도 기존 목록을 유지(빈 화면 깜빡임 방지). 새 데이터가 오면 교체된다(stale-while-revalidate).
     setHasMore(true);
-    setItems([]);
     if (term.trim()) {
       nextStartRef.current = 1 + DISPLAY;
       loadPage(active, term.trim(), 1, 'replace', true);
