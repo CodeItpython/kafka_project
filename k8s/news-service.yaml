@@ -24,17 +24,37 @@ spec:
               value: http://localhost:8880,http://127.0.0.1:8880
             - name: SPRING_ELASTICSEARCH_URIS
               value: http://elasticsearch:9200
+            # 뉴스 검색/피드는 Naver 검색 API를 호출한다 — 미주입 시 검색이 503이 되므로 반드시 필요.
+            # (쇼핑과 동일 값 재사용 가능. 미설정이면 optional 처리로 부팅은 됨.)
+            - name: NAVER_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: news-secrets
+                  key: naver-client-id
+                  optional: true
+            - name: NAVER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: news-secrets
+                  key: naver-client-secret
+                  optional: true
+          # 느린 콜드 스타트 동안 liveness가 컨테이너를 죽이지 않도록 startup 게이트를 둔다(다른 서비스와 일관).
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8891
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 48
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: 8891
-            initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: 8891
-            initialDelaySeconds: 30
             periodSeconds: 20
           resources:
             requests:
