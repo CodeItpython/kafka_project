@@ -70,7 +70,9 @@ import io.micrometer.core.instrument.Timer;
 @Service
 @Slf4j
 public class ChatService {
-    private static final long MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+    private static final long MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+    private static final long MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+    private static final long MAX_FILE_BYTES = 25 * 1024 * 1024;
 
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomUserPreferenceRepository chatRoomUserPreferenceRepository;
@@ -555,12 +557,10 @@ public class ChatService {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("첨부할 파일이 비어 있습니다.");
         }
-        if (file.getSize() > MAX_ATTACHMENT_BYTES) {
-            throw new IllegalArgumentException("첨부 파일은 10MB 이하만 가능합니다.");
-        }
         String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
-        if (!contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("이미지와 GIF 파일만 첨부할 수 있습니다.");
+        long maxBytes = maxAttachmentBytes(contentType);
+        if (file.getSize() > maxBytes) {
+            throw new IllegalArgumentException("첨부 파일이 너무 큽니다. 최대 " + (maxBytes / (1024 * 1024)) + "MB까지 가능합니다.");
         }
 
         String extension = extension(file.getOriginalFilename(), contentType);
@@ -937,23 +937,40 @@ public class ChatService {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 
+    /** 첨부 종류별 용량 상한: 이미지 10MB · 동영상 50MB · 그 외 파일 25MB. */
+    private long maxAttachmentBytes(String contentType) {
+        if (contentType.startsWith("image/")) {
+            return MAX_IMAGE_BYTES;
+        }
+        if (contentType.startsWith("video/")) {
+            return MAX_VIDEO_BYTES;
+        }
+        return MAX_FILE_BYTES;
+    }
+
     private String extension(String fileName, String contentType) {
         String cleaned = cleanName(fileName);
         int dotIndex = cleaned.lastIndexOf('.');
         if (dotIndex >= 0 && dotIndex < cleaned.length() - 1) {
             return cleaned.substring(dotIndex).toLowerCase(Locale.ROOT);
         }
+        // 원본 파일명에 확장자가 없을 때의 폴백. 알 수 없으면 확장자 없이 저장(contentType은 메시지에 별도 보관).
         return switch (contentType) {
             case "image/gif" -> ".gif";
             case "image/png" -> ".png";
             case "image/webp" -> ".webp";
-            default -> ".jpg";
+            case "image/jpeg" -> ".jpg";
+            case "video/mp4" -> ".mp4";
+            case "video/webm" -> ".webm";
+            case "video/quicktime" -> ".mov";
+            case "application/pdf" -> ".pdf";
+            default -> "";
         };
     }
 
     private String cleanName(String fileName) {
         if (fileName == null || fileName.isBlank()) {
-            return "image";
+            return "file";
         }
         return Paths.get(fileName).getFileName().toString().replaceAll("[^a-zA-Z0-9._가-힣-]", "_");
     }
