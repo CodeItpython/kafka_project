@@ -1876,7 +1876,9 @@ input:focus {
 }
 
 .conversation {
-  grid-template-rows: auto auto 1fr auto;
+  /* 헤더 / 메시지 목록(1fr, 남는 공간 채움) / 컴포저.
+     (참가자 패널을 방 설정 드로어로 옮기며 행 수가 4→3으로 줄었다) */
+  grid-template-rows: auto 1fr auto;
 }
 
 .room-directory {
