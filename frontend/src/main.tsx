@@ -48,6 +48,7 @@ import {
 import * as Popover from '@radix-ui/react-popover';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import GameOverlay, { GameKey, GameScoreResult } from './games/GameOverlay';
+import GameMatchCard, { GameMatchResponse } from './games/GameMatchCard';
 import './styles.css';
 
 /** 사람이 읽기 쉬운 파일 크기(파일 첨부 칩용). */
@@ -511,6 +512,9 @@ function App() {
   const attachVideoRef = useRef<HTMLInputElement>(null);
   const attachFileRef = useRef<HTMLInputElement>(null);
   const [gameOpen, setGameOpen] = useState(false);
+  const [activeMatch, setActiveMatch] = useState<GameMatchResponse | null>(null);
+  const [matchSession, setMatchSession] = useState<{ matchId: number | null; game: GameKey | null } | null>(null);
+  const matchIdRef = useRef<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<HomeTab>('chats');
@@ -2146,6 +2150,9 @@ function App() {
           const summary = JSON.parse(frame.body) as MessageDeliverySummary;
           applyDeliverySummary(summary);
         });
+        client.subscribe(`/topic/rooms/${selectedRoomId}/game`, (frame: IMessage) => {
+          setActiveMatch(JSON.parse(frame.body) as GameMatchResponse);
+        });
       },
       onDisconnect: () => setConnected(false),
       onWebSocketClose: () => setConnected(false)
@@ -2157,6 +2164,16 @@ function App() {
       client.deactivate();
     };
   }, [selectedRoomId, user?.email, token]);
+
+  // 방 진입 시 최근 게임 대결 상태를 불러온다(브로드캐스트는 위 STOMP /game 구독으로 갱신).
+  useEffect(() => {
+    if (!selectedRoomId) { setActiveMatch(null); return; }
+    let cancelled = false;
+    request<GameMatchResponse | null>(`/chat/rooms/${selectedRoomId}/game-matches/latest`)
+      .then((m) => { if (!cancelled) setActiveMatch(m ?? null); })
+      .catch(() => { if (!cancelled) setActiveMatch(null); });
+    return () => { cancelled = true; };
+  }, [selectedRoomId]);
 
   useEffect(() => {
     if (!notificationTopic || !token) return;
@@ -3279,6 +3296,14 @@ function App() {
               </div>
             </div>
 
+            {activeMatch && !gameOpen && !matchSession && (
+              <GameMatchCard
+                match={activeMatch}
+                myEmail={user.email}
+                onPlay={(m) => { matchIdRef.current = m.id; setMatchSession({ matchId: m.id, game: m.game }); }}
+                onDismiss={() => setActiveMatch(null)}
+              />
+            )}
             <form className="composer" onSubmit={sendMessage}>
               {replyTarget && (
                 <div className="composer-reply-preview">
@@ -3322,6 +3347,9 @@ function App() {
                     <Popover.Close asChild>
                       <button type="button" onClick={() => setGameOpen(true)}><Gamepad2 size={18} aria-hidden /> 게임</button>
                     </Popover.Close>
+                    <Popover.Close asChild>
+                      <button type="button" onClick={() => { matchIdRef.current = null; setMatchSession({ matchId: null, game: null }); }}><Gamepad2 size={18} aria-hidden /> 게임 대결</button>
+                    </Popover.Close>
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
@@ -3332,14 +3360,26 @@ function App() {
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
             <GameOverlay
-              open={gameOpen}
-              onClose={() => setGameOpen(false)}
+              open={gameOpen || !!matchSession}
+              onClose={() => { setGameOpen(false); setMatchSession(null); matchIdRef.current = null; }}
               submitScore={(game: GameKey, sc: number) => request<GameScoreResult>('/chat/games/scores', { method: 'POST', body: JSON.stringify({ game, score: sc }) })}
               loadBests={async () => {
                 const list = await request<Array<{ game: GameKey; bestScore: number }>>('/chat/games/scores/me');
                 const map = {} as Record<GameKey, number>;
                 (list || []).forEach((s) => { map[s.game] = s.bestScore; });
                 return map;
+              }}
+              matchMode={!!matchSession}
+              matchGame={matchSession?.game ?? null}
+              onMatchStart={async (game: GameKey) => {
+                const m = await request<GameMatchResponse>(`/chat/rooms/${selectedRoomId}/game-matches`, { method: 'POST', body: JSON.stringify({ game }) });
+                matchIdRef.current = m.id;
+                return true;
+              }}
+              onMatchEnd={async (game: GameKey, sc: number) => {
+                const id = matchSession?.matchId ?? matchIdRef.current;
+                if (!id) return;
+                await request(`/chat/rooms/${selectedRoomId}/game-matches/${id}/rounds`, { method: 'POST', body: JSON.stringify({ score: sc }) });
               }}
             />
           </motion.section>
