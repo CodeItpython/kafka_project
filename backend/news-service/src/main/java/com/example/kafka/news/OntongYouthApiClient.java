@@ -45,6 +45,13 @@ public class OntongYouthApiClient {
                 .requestFactory(requestFactory)
                 // 일부 정부 API는 Accept 미지정 시 XML을 준다 — JSON을 명시적으로 요청.
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                // 온통청년은 비브라우저 요청(기본 UA)엔 실제 API 대신 홈페이지 HTML(SPA 셸)을 돌려준다(WAF성 동작).
+                // 브라우저처럼 보이는 헤더(UA/Referer/X-Requested-With)를 보내야 API 응답(JSON/에러)에 도달한다 — curl 실측 확인.
+                .defaultHeader(HttpHeaders.USER_AGENT,
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                                + "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+                .defaultHeader(HttpHeaders.REFERER, "https://www.youthcenter.go.kr/")
+                .defaultHeader("X-Requested-With", "XMLHttpRequest")
                 .build();
         if (!configured) {
             log.warn("Youth policy API key is not set (YOUTH_API_KEY). 청년 정책 탭은 키 설정 전까지 빈 목록입니다.");
