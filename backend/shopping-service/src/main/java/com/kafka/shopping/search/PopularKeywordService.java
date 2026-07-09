@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 /**
@@ -43,8 +44,10 @@ public class PopularKeywordService {
     private List<PopularKeywordResponse> compute() {
         try {
             long from = Instant.now().minus(properties.getPopularWindowHours(), ChronoUnit.HOURS).toEpochMilli();
-            List<SearchLogDocument> logs =
-                    repository.findByCreatedAtEpochGreaterThanEqual(from, PageRequest.of(0, MAX_SCAN));
+            // 최신순 정렬 — 윈도우에 MAX_SCAN 초과 로그가 있을 때 임의 subset이 아니라
+            // '가장 최근 MAX_SCAN건'을 집계하도록(정렬 없으면 Lucene 내부 순서라 랭킹이 비결정적).
+            List<SearchLogDocument> logs = repository.findByCreatedAtEpochGreaterThanEqual(
+                    from, PageRequest.of(0, MAX_SCAN, Sort.by(Sort.Direction.DESC, "createdAtEpoch")));
 
             Map<String, long[]> counts = new HashMap<>();
             Map<String, String> displays = new HashMap<>();

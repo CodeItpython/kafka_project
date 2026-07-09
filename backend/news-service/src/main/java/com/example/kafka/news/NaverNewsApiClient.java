@@ -2,9 +2,11 @@ package com.example.kafka.news;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -26,8 +28,13 @@ public class NaverNewsApiClient {
             @Value("${app.naver.client-secret:}") String clientSecret
     ) {
         this.configured = clientId != null && !clientId.isBlank() && clientSecret != null && !clientSecret.isBlank();
+        // 타임아웃을 둬 Naver가 느리거나 응답 없을 때 요청 스레드가 무한 대기하지 않게 한다.
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(3));
+        requestFactory.setReadTimeout(Duration.ofSeconds(8));
         this.restClient = builder
                 .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
                 .defaultHeader("X-Naver-Client-Id", clientId == null ? "" : clientId)
                 .defaultHeader("X-Naver-Client-Secret", clientSecret == null ? "" : clientSecret)
                 .build();
