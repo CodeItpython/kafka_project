@@ -2890,6 +2890,47 @@ input:focus {
 .game-ghost-btn { padding: 9px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.15); color: #ffffff; font-weight: 800; cursor: pointer; }
 .game-hint { margin: 0; font-size: 11.5px; color: #9aa0b3; text-align: center; }
 
+/* 챗방 턴제 대결 카드 */
+.game-match-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f2f0ff;
+  border: 1px solid #e2ddff;
+}
+.gmc-icon { color: #5b53eb; flex: none; }
+.gmc-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.gmc-title { font-size: 13px; font-weight: 800; color: #2b3245; }
+.gmc-scores { font-size: 12px; color: #5b6478; }
+.gmc-wait { font-size: 11.5px; color: #8b90a6; }
+.gmc-winner { font-size: 13px; font-weight: 900; color: #5b53eb; }
+.gmc-play-btn {
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c74ff, #5b53eb);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.gmc-dismiss {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: transparent;
+  color: #8b90a6;
+  cursor: pointer;
+  flex: none;
+}
+.gmc-dismiss:hover { background: #e6e2ff; color: #5b53eb; }
+
 .attachment-preview {
   grid-column: 1 / -1;
   display: grid;
