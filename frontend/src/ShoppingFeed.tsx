@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ExternalLink, Plus, RefreshCcw, Search, ShoppingBag, ShoppingCart, Store, TrendingUp, X } from 'lucide-react';
+import ThumbImage from './ThumbImage';
 
 type ShoppingCategory = { code: string; label: string };
 type PopularKeyword = { rank: number; keyword: string; count: number };
@@ -622,7 +623,7 @@ export default function ShoppingFeed({
               >
                 <a className="shop-card-thumb" href={item.link} target="_blank" rel="noreferrer noopener" title={item.title}>
                   {item.image ? (
-                    <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                    <ThumbImage src={item.image} />
                   ) : (
                     <span className="shop-card-thumb--empty" aria-hidden><ShoppingBag aria-hidden /></span>
                   )}

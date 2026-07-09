@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ExternalLink, Newspaper, RefreshCcw, Search, Share2, X } from 'lucide-react';
+import ThumbImage from './ThumbImage';
 
 type NewsCategory = { code: string; label: string };
 export type NewsItem = {
@@ -71,7 +72,7 @@ function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) 
   if (image) {
     return (
       <div className="news-card-thumb">
-        <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        <ThumbImage src={image} />
       </div>
     );
   }
