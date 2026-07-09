@@ -218,6 +218,10 @@ public class ChatController {
         return ResponseEntity.ok(chatService.storeAttachment(file));
     }
 
+    // 인라인 렌더가 안전한 이미지 타입. svg는 스크립트를 품을 수 있어 제외(→ 다운로드 처리).
+    private static final java.util.Set<String> INLINE_IMAGE_TYPES =
+            java.util.Set.of("image/png", "image/jpeg", "image/gif", "image/webp");
+
     @GetMapping("/attachments/{fileName:.+}")
     public ResponseEntity<Resource> attachment(
             @PathVariable String fileName,
@@ -229,8 +233,14 @@ public class ChatController {
         }
         StoredObject storedObject = chatService.loadAttachment(fileName);
         String contentType = storedObject.contentType();
+        // 이미지(raster)·동영상만 인라인 허용. 그 외(html/svg/일반 파일)는 attachment로 내려받게 해서
+        // 업로드 콘텐츠가 앱 오리진에서 실행되는 XSS를 막는다. nosniff로 MIME 스니핑도 차단.
+        boolean inlineSafe = contentType != null
+                && (contentType.startsWith("video/") || INLINE_IMAGE_TYPES.contains(contentType));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, contentType == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : contentType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, inlineSafe ? "inline" : "attachment")
+                .header("X-Content-Type-Options", "nosniff")
                 .body(storedObject.resource());
     }
 
