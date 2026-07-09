@@ -44,4 +44,33 @@ public final class YouthDtos {
             List<YouthPolicy> items
     ) {
     }
+
+    /**
+     * 경기 공공일자리(잡아바) 채용공고 카드. period는 startDate~endDate 표시용(둘 다 null 가능).
+     * url은 잡아바 상세페이지. id는 프론트 무한스크롤 dedupe 키.
+     */
+    public record YouthJob(
+            String id,
+            String title,
+            String org,
+            String startDate,
+            String endDate,
+            String period,
+            String url
+    ) {
+    }
+
+    /**
+     * 채용공고 목록 응답. available=false면 경기데이터드림 키/서비스명 미설정 → 프론트는 취업탭을 기존 뉴스로 유지.
+     */
+    public record YouthJobResponse(
+            int page,
+            int size,
+            int totalCount,
+            int count,
+            boolean hasMore,
+            boolean available,
+            List<YouthJob> items
+    ) {
+    }
 }

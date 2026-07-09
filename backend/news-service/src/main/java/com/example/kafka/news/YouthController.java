@@ -1,5 +1,6 @@
 package com.example.kafka.news;
 
+import com.example.kafka.news.YouthDtos.YouthJobResponse;
 import com.example.kafka.news.YouthDtos.YouthPolicyResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,6 +43,28 @@ public class YouthController {
                 result.items().size(),
                 result.hasMore(),
                 youthService.isAvailable(),
+                result.items()
+        );
+    }
+
+    /**
+     * 경기 공공일자리(잡아바) 채용공고 목록. 지역 필터는 데이터 특성상 경기 위주라 서버는 지역 무관으로 조회하고,
+     * 프론트가 지역/구성 여부에 따라 표시 여부를 정한다. 키 미설정 시 200 + items:[] + available:false.
+     */
+    @GetMapping("/jobs")
+    public YouthJobResponse jobs(
+            @RequestParam(name = "page", required = false, defaultValue = "1") int page,
+            @RequestParam(name = "size", required = false, defaultValue = "20") int size,
+            @RequestParam(name = "refresh", required = false, defaultValue = "false") boolean refresh
+    ) {
+        YouthService.JobResult result = youthService.jobs(page, size, refresh);
+        return new YouthJobResponse(
+                page,
+                size,
+                result.totalCount(),
+                result.items().size(),
+                result.hasMore(),
+                result.available(),
                 result.items()
         );
     }
