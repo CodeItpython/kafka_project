@@ -21,6 +21,7 @@ const DISPLAY = 20;
 const MAX_START = 161; // 무한 스크롤 상한(네이버 start 한계 + 과도한 페이징 방지)
 const PULL_THRESHOLD = 64;
 const MAX_PULL = 92;
+const MIN_REFRESH_MS = 600; // 새로고침 스피너 최소 표시 시간(빠른 응답에도 "새로고침한 느낌")
 const ROLL_INTERVAL = 2800; // 인기검색어 자동 롤링 주기(ms)
 
 const SORTS: { code: string; label: string }[] = [
@@ -187,6 +188,8 @@ export default function ShoppingFeed({
   const loadPage = useCallback(
     (category: string, sortCode: string, keyword: string, startAt: number, mode: 'replace' | 'append', refresh: boolean) => {
       const myReq = mode === 'replace' ? ++reqRef.current : reqRef.current;
+      const startedAt = Date.now(); // 새로고침 스피너 최소 표시 시간 계산용
+
       if (mode === 'append') {
         loadingMoreRef.current = true;
         setLoadingMore(true);
@@ -243,12 +246,22 @@ export default function ShoppingFeed({
         .finally(() => {
           loadingRef.current = false;
           loadingMoreRef.current = false;
-          refreshingRef.current = false;
           setLoading(false);
           setLoadingMore(false);
-          setRefreshing(false);
-          setPull(0);
           wheelAccum.current = 0;
+          if (refresh) {
+            // 로딩이 빨리 끝나도 스피너를 최소 시간만큼 유지(남은 시간만 지연). 더 오래 걸리면 즉시 종료.
+            const remaining = Math.max(0, MIN_REFRESH_MS - (Date.now() - startedAt));
+            window.setTimeout(() => {
+              refreshingRef.current = false;
+              setRefreshing(false);
+              setPull(0);
+            }, remaining);
+          } else {
+            refreshingRef.current = false;
+            setRefreshing(false);
+            setPull(0);
+          }
         });
     },
     []
