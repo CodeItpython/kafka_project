@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ExternalLink, Newspaper, RefreshCcw, Search, Share2, X } from 'lucide-react';
 import ThumbImage from './ThumbImage';
+import YouthPanel from './YouthPanel';
 
 type NewsCategory = { code: string; label: string };
 export type NewsItem = {
@@ -27,7 +28,7 @@ const ogImageCache = new Map<string, string | null>();
  * 뉴스 검색 API는 썸네일을 주지 않으므로, 카드가 화면에 보일 때(IntersectionObserver) 링크 프리뷰
  * 엔드포인트로 기사 og:image를 지연 조회해 채운다. 보이는 카드만 요청 + 캐시로 중복/부하를 줄인다.
  */
-function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) {
+export function NewsThumb({ url, fallback }: { url: string; fallback: string | null }) {
   const [image, setImage] = useState<string | null>(fallback ?? ogImageCache.get(url) ?? null);
   const ref = useRef<HTMLDivElement>(null);
   const requested = useRef(false);
@@ -125,7 +126,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data: NewsCategory[]) => {
         if (cancelled || !Array.isArray(data) || data.length === 0) return;
-        setCategories(data);
+        // '청년'은 백엔드 뉴스 카테고리(enum)가 아니라 커스텀 패널이므로 프론트에서 칩만 덧붙인다.
+        setCategories([...data, { code: 'youth', label: '청년' }]);
         setActive((current) => current || data[0].code);
       })
       .catch(() => {
@@ -206,12 +208,21 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
   // 카테고리/검색어 변경 → 처음부터 다시
   useEffect(() => {
     if (!active) return;
+    const keyword = term.trim();
+    // '청년' 탭(검색 중이 아닐 때)은 YouthPanel이 자체적으로 데이터를 불러오므로 카테고리 피드 로딩을 스킵한다.
+    if (active === 'youth' && !keyword) {
+      setItems([]);
+      setError(null);
+      setLoading(false);
+      setHasMore(false);
+      return;
+    }
     nextStartRef.current = 1;
     setHasMore(true);
     setItems([]);
     setPull(0);
     wheelAccum.current = 0;
-    loadPage(active, term.trim(), 1, 'replace', false);
+    loadPage(active, keyword, 1, 'replace', false);
     return () => {
       if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
     };
@@ -279,6 +290,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
 
   const triggerRefresh = useCallback(() => {
     if (refreshingRef.current || loadingRef.current || !active) return;
+    // 청년 패널은 카테고리 피드가 아니므로 당겨서 새로고침 대상에서 제외(불필요한 /feed 호출 방지).
+    if (active === 'youth' && !term.trim()) return;
     // 새로고침 중에도 기존 목록을 유지(빈 화면 깜빡임 방지). 새 데이터가 오면 교체된다(stale-while-revalidate).
     setHasMore(true);
     if (term.trim()) {
@@ -526,6 +539,10 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
         })}
       </div>
 
+      {active === 'youth' && !searching ? (
+        <YouthPanel onShare={onShare} />
+      ) : (
+      <>
       {loading && (
         <div className="news-list">
           {Array.from({ length: 4 }).map((_, index) => (
@@ -597,6 +614,8 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
             {!loadingMore && !hasMore && <span className="shop-more-end">{searching ? '검색 결과를 모두 불러왔어요' : '모든 뉴스를 불러왔어요'}</span>}
           </div>
         </>
+      )}
+      </>
       )}
     </div>
   );
