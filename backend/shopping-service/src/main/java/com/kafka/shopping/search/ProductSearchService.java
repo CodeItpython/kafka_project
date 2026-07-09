@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,11 @@ public class ProductSearchService {
             "title._3gram",
             "title._index_prefix"
     );
+    // 자동완성 토큰화/필터용 정규식은 한 번만 컴파일한다(요청마다 재컴파일 방지).
+    // 공백 + 문장부호(대괄호/괄호/따옴표/전각·스마트 따옴표/…·, .)로 분할.
+    private static final Pattern SUGGEST_TOKEN_SPLIT = Pattern.compile("[\\s\\[\\]()\"'…·,.＂“”‘’]+");
+    private static final Pattern MODEL_CODE = Pattern.compile("[A-Za-z0-9\\-]+");
+    private static final Pattern HAS_DIGIT = Pattern.compile(".*[0-9].*");
 
     private final ElasticsearchOperations elasticsearchOperations;
     private final ShoppingService shoppingService;
@@ -65,7 +71,9 @@ public class ProductSearchService {
             return List.of();
         }
         int limit = Math.max(1, Math.min(size, 10));
-        String prefixLower = normalized.toLowerCase(Locale.ROOT);
+        // 다중어 입력("삼성 노트북")이면 마지막(완성 중인) 단어로 제목 토큰을 매칭한다 —
+        // 전체 구절은 어떤 단일 토큰에도 포함되지 않아 첫 단어로 잘못 떨어지던 문제 방지.
+        String matchLower = lastWord(normalized.toLowerCase(Locale.ROOT));
         List<String> result = new ArrayList<>();
         try {
             NativeQuery nativeQuery = NativeQuery.builder()
@@ -79,7 +87,7 @@ public class ProductSearchService {
                     .stream()
                     .map(hit -> hit.getContent().getTitle())
                     .filter(title -> title != null && !title.isBlank())
-                    .forEach(title -> addSuggestion(result, shortenForSuggest(title, prefixLower), limit));
+                    .forEach(title -> addSuggestion(result, shortenForSuggest(title, matchLower), limit));
         } catch (RuntimeException exception) {
             log.debug("Suggest (ES) unavailable: {}", exception.getMessage());
         }
@@ -87,7 +95,7 @@ public class ProductSearchService {
             try {
                 for (ProductResponse product : shoppingService.search(normalized, "sim", 20, 1, false)) {
                     if (product.title() != null) {
-                        addSuggestion(result, shortenForSuggest(product.title(), prefixLower), limit);
+                        addSuggestion(result, shortenForSuggest(product.title(), matchLower), limit);
                     }
                     if (result.size() >= limit) {
                         break;
@@ -107,15 +115,22 @@ public class ProductSearchService {
         result.add(suggestion);
     }
 
+    /** 입력의 마지막 공백 토큰(완성 중인 단어). 공백이 없으면 그대로 반환. */
+    private static String lastWord(String text) {
+        int lastSpace = text.lastIndexOf(' ');
+        return (lastSpace >= 0 && lastSpace < text.length() - 1) ? text.substring(lastSpace + 1) : text;
+    }
+
     /**
-     * 상품 제목에서 자동완성 구절을 뽑는다: prefix가 든 토큰 + 다음 "의미있는" 토큰 하나를 붙여 구절로
-     * 만든다(단어 하나만 나오지 않게). 공백+문장부호로 토큰화하고, 모델코드/숫자성 다음 토큰은 붙이지 않는다.
+     * 상품 제목에서 자동완성 구절을 뽑는다: matchLower(완성 중인 단어)가 든 토큰 + 다음 "의미있는" 토큰
+     * 하나를 붙여 구절로 만든다(단어 하나만 나오지 않게). 공백+문장부호로 토큰화하고, 모델코드/숫자성
+     * 다음 토큰은 붙이지 않는다.
      */
-    private static String shortenForSuggest(String title, String prefixLower) {
-        String[] tokens = title.split("[\\s\\[\\]()\"'…·,.]+");
+    private static String shortenForSuggest(String title, String matchLower) {
+        String[] tokens = SUGGEST_TOKEN_SPLIT.split(title);
         for (int index = 0; index < tokens.length; index++) {
             String token = tokens[index].trim();
-            if (token.isBlank() || !token.toLowerCase(Locale.ROOT).contains(prefixLower)) {
+            if (token.isBlank() || !token.toLowerCase(Locale.ROOT).contains(matchLower)) {
                 continue;
             }
             if (index + 1 < tokens.length) {
@@ -139,7 +154,7 @@ public class ProductSearchService {
         if (token.length() < 2) {
             return false;
         }
-        return !(token.matches("[A-Za-z0-9\\-]+") && token.matches(".*[0-9].*"));
+        return !(MODEL_CODE.matcher(token).matches() && HAS_DIGIT.matcher(token).matches());
     }
 
     public List<ProductResponse> search(String query, String sort, int display, int start) {
@@ -177,7 +192,9 @@ public class ProductSearchService {
         try {
             Aggregation related = Aggregation.of(agg -> agg.significantText(text -> text
                     .field("titleNori")
-                    .size(limit + queryTokens.size() + 5)
+                    // 검색어 토큰 수는 상한을 둔다 — 비정상적으로 긴 질의가 버킷 수를 폭증시켜
+                    // ES too_many_buckets로 실패하는 것을 방지.
+                    .size(limit + Math.min(queryTokens.size(), 10) + 5)
                     .filterDuplicateText(true)
                     .minDocCount(2L)));
             NativeQuery nativeQuery = NativeQuery.builder()

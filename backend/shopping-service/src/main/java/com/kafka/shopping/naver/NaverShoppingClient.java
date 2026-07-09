@@ -1,6 +1,8 @@
 package com.kafka.shopping.naver;
 
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import lombok.extern.slf4j.Slf4j;
@@ -23,8 +25,13 @@ public class NaverShoppingClient {
             @Value("${app.naver.client-secret:}") String clientSecret
     ) {
         this.configured = clientId != null && !clientId.isBlank() && clientSecret != null && !clientSecret.isBlank();
+        // 타임아웃을 둬 Naver가 느리거나 응답 없을 때 요청 스레드/배치 잡이 무한 대기하지 않게 한다.
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(3));
+        requestFactory.setReadTimeout(Duration.ofSeconds(8));
         this.restClient = builder
                 .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
                 .defaultHeader("X-Naver-Client-Id", clientId == null ? "" : clientId)
                 .defaultHeader("X-Naver-Client-Secret", clientSecret == null ? "" : clientSecret)
                 .build();

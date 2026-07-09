@@ -27,19 +27,28 @@ public class ShoppingSearchIndexInitializer {
 
     @EventListener(ApplicationReadyEvent.class)
     public void initialize() {
-        boolean productsReady = ensureIndex(ProductDocument.class, "title", "search_as_you_type");
-        ensureIndex(SearchLogDocument.class, "keyword", "keyword");
+        // title(search_as_you_type)뿐 아니라 titleNori(연관검색어용)도 검증한다 — titleNori 도입 전
+        // 생성된 인덱스는 title만 맞아 재생성되지 않고, 기존 문서가 titleNori 없이 남아 연관검색어가
+        // 비게 되던 문제를 자가복구한다.
+        boolean productsReady = ensureIndex(ProductDocument.class,
+                Map.of("title", "search_as_you_type", "titleNori", "text"));
+        ensureIndex(SearchLogDocument.class, Map.of("keyword", "keyword"));
         if (productsReady && properties.isWarmOnStartup()) {
             catalogIndexLauncher.launch("startup");
         }
     }
 
-    private boolean ensureIndex(Class<?> documentClass, String field, String expectedType) {
+    private boolean ensureIndex(Class<?> documentClass, Map<String, String> requiredFields) {
         try {
             IndexOperations indexOperations = elasticsearchOperations.indexOps(documentClass);
-            if (indexOperations.exists() && !hasFieldType(indexOperations.getMapping(), field, expectedType)) {
-                log.info("Recreating Elasticsearch index with the expected mapping: {}", documentClass.getSimpleName());
-                indexOperations.delete();
+            if (indexOperations.exists()) {
+                Map<String, Object> mapping = indexOperations.getMapping();
+                boolean outdated = requiredFields.entrySet().stream()
+                        .anyMatch(field -> !hasFieldType(mapping, field.getKey(), field.getValue()));
+                if (outdated) {
+                    log.info("Recreating Elasticsearch index with the expected mapping: {}", documentClass.getSimpleName());
+                    indexOperations.delete();
+                }
             }
             if (!indexOperations.exists()) {
                 indexOperations.create();

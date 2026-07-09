@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,10 @@ public class NewsSearchService {
             "titleSuggest._3gram",
             "titleSuggest._index_prefix"
     );
+    // 자동완성 토큰화/필터 정규식은 한 번만 컴파일(요청마다 재컴파일 방지).
+    private static final Pattern SUGGEST_TOKEN_SPLIT = Pattern.compile("[\\s\\[\\]()\"'…·,.＂“”‘’]+");
+    private static final Pattern MODEL_CODE = Pattern.compile("[A-Za-z0-9\\-]+");
+    private static final Pattern HAS_DIGIT = Pattern.compile(".*[0-9].*");
 
     private final ElasticsearchOperations elasticsearchOperations;
     private final NewsService newsService;
@@ -51,7 +56,9 @@ public class NewsSearchService {
             return List.of();
         }
         int limit = Math.max(1, Math.min(size, 10));
-        String prefixLower = normalized.toLowerCase(Locale.ROOT);
+        // 다중어 입력이면 마지막(완성 중인) 단어로 제목 토큰을 매칭한다(전체 구절이 단일 토큰에 안 들어가
+        // 첫 단어로 잘못 떨어지던 문제 방지).
+        String matchLower = lastWord(normalized.toLowerCase(Locale.ROOT));
         List<String> result = new ArrayList<>();
         try {
             NativeQuery nativeQuery = NativeQuery.builder()
@@ -65,7 +72,7 @@ public class NewsSearchService {
                     .stream()
                     .map(hit -> hit.getContent().getTitle())
                     .filter(title -> title != null && !title.isBlank())
-                    .forEach(title -> addSuggestion(result, shortenForSuggest(title, prefixLower), limit));
+                    .forEach(title -> addSuggestion(result, shortenForSuggest(title, matchLower), limit));
         } catch (RuntimeException exception) {
             log.debug("News suggest (ES) unavailable: {}", exception.getMessage());
         }
@@ -73,7 +80,7 @@ public class NewsSearchService {
             try {
                 for (NewsItem item : newsService.search(normalized, 1, 20)) {
                     if (item.title() != null) {
-                        addSuggestion(result, shortenForSuggest(item.title(), prefixLower), limit);
+                        addSuggestion(result, shortenForSuggest(item.title(), matchLower), limit);
                     }
                     if (result.size() >= limit) {
                         break;
@@ -98,11 +105,11 @@ public class NewsSearchService {
      * 든 토큰 + 다음 의미토큰 하나를 붙여 구절로 반환("변수"…코스피"에서도 "코스피"만 깔끔히, 단어 하나만
      * 나오지 않게). 모델코드/숫자성 다음 토큰은 붙이지 않는다.
      */
-    private static String shortenForSuggest(String title, String prefixLower) {
-        String[] tokens = title.split("[\\s\\[\\]()\"'…·,.＂“”‘’]+");
+    private static String shortenForSuggest(String title, String matchLower) {
+        String[] tokens = SUGGEST_TOKEN_SPLIT.split(title);
         for (int index = 0; index < tokens.length; index++) {
             String token = tokens[index].trim();
-            if (token.isBlank() || !token.toLowerCase(Locale.ROOT).contains(prefixLower)) {
+            if (token.isBlank() || !token.toLowerCase(Locale.ROOT).contains(matchLower)) {
                 continue;
             }
             if (index + 1 < tokens.length) {
@@ -121,12 +128,18 @@ public class NewsSearchService {
         return "";
     }
 
+    /** 입력의 마지막 공백 토큰(완성 중인 단어). 공백이 없으면 그대로 반환. */
+    private static String lastWord(String text) {
+        int lastSpace = text.lastIndexOf(' ');
+        return (lastSpace >= 0 && lastSpace < text.length() - 1) ? text.substring(lastSpace + 1) : text;
+    }
+
     /** 구절에 붙일 다음 토큰이 의미있는지(순수 모델코드/숫자성 토큰은 제외). */
     private static boolean isMeaningfulNext(String token) {
         if (token.length() < 2) {
             return false;
         }
-        return !(token.matches("[A-Za-z0-9\\-]+") && token.matches(".*[0-9].*"));
+        return !(MODEL_CODE.matcher(token).matches() && HAS_DIGIT.matcher(token).matches());
     }
 
     public List<String> relatedKeywords(String query, int size) {
@@ -141,7 +154,9 @@ public class NewsSearchService {
         try {
             Aggregation related = Aggregation.of(agg -> agg.significantText(text -> text
                     .field("contentNori")
-                    .size(limit + queryTokens.size() + 5)
+                    // 검색어 토큰 수 상한 — 비정상적으로 긴 질의가 버킷 수를 폭증시켜 too_many_buckets로
+                    // 실패하는 것을 방지.
+                    .size(limit + Math.min(queryTokens.size(), 10) + 5)
                     .filterDuplicateText(true)
                     .minDocCount(2L)));
             NativeQuery nativeQuery = NativeQuery.builder()
