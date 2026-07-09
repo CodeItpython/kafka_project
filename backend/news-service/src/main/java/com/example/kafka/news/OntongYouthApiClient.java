@@ -1,141 +1,157 @@
 package com.example.kafka.news;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * 온통청년 청년정책 Open API(한국고용정보원, youthcenter.go.kr /go/ythip/getPlcy) 프록시.
- * 청년 '정책·혜택' 탭의 데이터 소스다(취업·소식은 네이버 뉴스 검색을 그대로 재사용).
+ * 온통청년(youthcenter.go.kr) 청년정책 조회 클라이언트. 공개 OPEN API(getPlcy)는 서버-사이드에서
+ * 홈페이지 HTML만 돌려주고 실제 API 서버(:8080)는 외부에서 막혀 있어, 웹사이트가 실제로 쓰는
+ * 포털 검색 API를 그대로 사용한다(API 키 불필요):
  *
- * <p>네이버와 달리 인증키는 헤더가 아니라 쿼리 파라미터(apiKeyVal)로 전달한다. data.go.kr가
- * 인코딩/디코딩 두 키를 주는데, RestClient의 queryParam이 값을 한 번 인코딩하므로 <b>디코딩(Decoding)
- * 키</b>를 넣어야 이중 인코딩으로 인증이 깨지지 않는다.
+ * <ol>
+ *   <li>{@code GET /youthPolicy/ythPlcyTotalSearch} → HTML에서 {@code <meta name="_csrf">} 토큰과
+ *       세션 쿠키(Set-Cookie)를 얻는다.</li>
+ *   <li>{@code POST /pubot/search/portalPolicySearch} (x-csrf-token + 쿠키 + user_id:guest) →
+ *       {@code searchResult.youthpolicy[]} 정책 목록 JSON.</li>
+ * </ol>
  *
- * <p>키 미설정({@code app.youth.api-key} 공백) 시 {@code configured=false}가 되어 호출을 건너뛰고
- * null을 반환한다 — 서비스는 정상 부팅하고 정책 탭만 빈 목록으로 우아하게 degrade한다(네이버 미설정과 동일 계약).
+ * 지역 필터는 {@code STDG_CTPV_NM}(시도명: 서울특별시/경기도)로 서버가 처리한다.
+ * 비공식 내부 API라 사이트 변경 시 깨질 수 있으므로 실패는 조용히 빈 결과로 degrade한다.
  */
 @Component
 @Slf4j
 public class OntongYouthApiClient {
+    private static final String SEARCH_PAGE = "/youthPolicy/ythPlcyTotalSearch";
+    private static final String SEARCH_API = "/pubot/search/portalPolicySearch";
+    private static final Pattern CSRF_META = Pattern.compile("name=\"_csrf\"\\s+content=\"([^\"]+)\"");
+    private static final String BROWSER_UA =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+    // 포털 검색이 기대하는 필드들(미사용 필터는 빈 문자열).
+    private static final String[] EMPTY_FIELDS = {
+            "PVSN_INST_GROUP_CD", "SPRT_TRGT_AGE", "EARN_MIN_AMT", "EARN_MAX_AMT", "QLFC_ACBG_NM",
+            "MRG_STTS_CD", "MJR_CND_NM", "EMPM_STTS_NM", "STDG_NM", "SPCL_FLD_NM", "USER_LCLSF_NO",
+            "PLCY_KYWD_SN", "APLY_PRD_BGNG_YMD", "APLY_PRD_END_YMD", "APLY_PRD_SE_CD", "ODTM_CD"
+    };
+
     private final RestClient restClient;
-    private final String apiKey;
-    private final boolean configured;
+    private final String baseUrl;
 
     public OntongYouthApiClient(
             RestClient.Builder builder,
-            @Value("${app.youth.base-url:https://www.youthcenter.go.kr}") String baseUrl,
-            @Value("${app.youth.api-key:}") String apiKey
+            @Value("${app.youth.base-url:https://www.youthcenter.go.kr}") String baseUrl
     ) {
-        this.apiKey = apiKey == null ? "" : apiKey;
-        this.configured = !this.apiKey.isBlank();
-        // 정부 API가 느리거나 응답 없을 때 요청 스레드가 무한 대기하지 않게 타임아웃을 둔다(네이버 클라이언트와 동일).
+        this.baseUrl = baseUrl;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(3));
-        requestFactory.setReadTimeout(Duration.ofSeconds(8));
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
         this.restClient = builder
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
-                // 일부 정부 API는 Accept 미지정 시 XML을 준다 — JSON을 명시적으로 요청.
-                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-                // 온통청년은 비브라우저 요청(기본 UA)엔 실제 API 대신 홈페이지 HTML(SPA 셸)을 돌려준다(WAF성 동작).
-                // 브라우저처럼 보이는 헤더(UA/Referer/X-Requested-With)를 보내야 API 응답(JSON/에러)에 도달한다 — curl 실측 확인.
-                .defaultHeader(HttpHeaders.USER_AGENT,
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                                + "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
-                .defaultHeader(HttpHeaders.REFERER, "https://www.youthcenter.go.kr/")
-                .defaultHeader("X-Requested-With", "XMLHttpRequest")
+                .defaultHeader(HttpHeaders.USER_AGENT, BROWSER_UA)
                 .build();
-        if (!configured) {
-            log.warn("Youth policy API key is not set (YOUTH_API_KEY). 청년 정책 탭은 키 설정 전까지 빈 목록입니다.");
-        }
     }
 
+    /** 포털 검색은 키가 필요 없으므로 항상 사용 가능. */
     public boolean isConfigured() {
-        return configured;
+        return true;
     }
 
     /**
-     * 청년정책 목록 조회. 미설정/실패 시 null(호출부는 빈 결과로 처리).
+     * 청년정책 검색. 실패/미도달 시 null(호출부는 빈 결과로 처리).
      *
-     * @param keyword 정책 키워드(plcyKywdNm), 공백이면 생략
-     * @param lclsfNm 정책 대분류명(일자리/주거/교육/복지문화/참여권리), 공백이면 생략
-     * @param zipCd   법정동코드(콤마구분), null이면 생략(지역 필터는 응답 후처리로 처리)
+     * @param ctpvNm 시도명(서울특별시/경기도), 전체면 빈 문자열
      */
-    public YouthPolicyApiResponse fetchPolicies(int pageNum, int pageSize, String keyword, String lclsfNm, String zipCd) {
-        if (!configured) {
-            return null;
-        }
+    public PortalPolicyResponse searchPolicies(String ctpvNm, String keyword, int pageNum, int listCount) {
         try {
-            return restClient.get()
-                    .uri(uriBuilder -> {
-                        uriBuilder.path("/go/ythip/getPlcy")
-                                .queryParam("apiKeyVal", apiKey)
-                                .queryParam("rtnType", "json")
-                                .queryParam("pageType", "1")
-                                .queryParam("pageNum", pageNum)
-                                .queryParam("pageSize", pageSize);
-                        if (keyword != null && !keyword.isBlank()) {
-                            uriBuilder.queryParam("plcyKywdNm", keyword.trim());
-                        }
-                        if (lclsfNm != null && !lclsfNm.isBlank()) {
-                            uriBuilder.queryParam("lclsfNm", lclsfNm.trim());
-                        }
-                        if (zipCd != null && !zipCd.isBlank()) {
-                            uriBuilder.queryParam("zipCd", zipCd.trim());
-                        }
-                        return uriBuilder.build();
-                    })
+            ResponseEntity<String> page = restClient.get()
+                    .uri(SEARCH_PAGE)
+                    .accept(MediaType.TEXT_HTML)
                     .retrieve()
-                    .body(YouthPolicyApiResponse.class);
+                    .toEntity(String.class);
+            String html = page.getBody() == null ? "" : page.getBody();
+            Matcher matcher = CSRF_META.matcher(html);
+            if (!matcher.find()) {
+                log.warn("Youth: _csrf meta token not found on search page (site layout changed?)");
+                return null;
+            }
+            String csrfToken = matcher.group(1);
+            List<String> setCookies = page.getHeaders().get(HttpHeaders.SET_COOKIE);
+            String cookieHeader = setCookies == null ? "" : setCookies.stream()
+                    .map(cookie -> cookie.split(";", 2)[0])
+                    .collect(Collectors.joining("; "));
+
+            return restClient.post()
+                    .uri(SEARCH_API)
+                    .header("x-csrf-token", csrfToken)
+                    .header("user_id", "guest")
+                    .header("x-requested-with", "XMLHttpRequest")
+                    .header(HttpHeaders.COOKIE, cookieHeader)
+                    .header(HttpHeaders.REFERER, baseUrl + SEARCH_PAGE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(buildBody(ctpvNm, keyword, pageNum, listCount))
+                    .retrieve()
+                    .body(PortalPolicyResponse.class);
         } catch (RuntimeException exception) {
-            // 나쁜 키/쿼터초과 시 XML/HTML 에러 봉투가 오면 JSON 파싱이 실패한다 — 여기서 흡수하고 빈 결과로 degrade.
-            log.warn("Youth policy fetch failed (pageNum={}, keyword={}): {}", pageNum, keyword, exception.getMessage());
+            log.warn("Youth policy search failed (ctpv={}, keyword={}): {}", ctpvNm, keyword, exception.getMessage());
             return null;
         }
     }
 
-    /**
-     * getPlcy JSON 응답. 실제 필드는 발급 키로 검증 후 조정할 수 있으나, ignoreUnknown으로 여분 필드는 무시한다.
-     * 페이징(pagging)은 표시용일 뿐이며 hasMore는 서비스가 raw 페이지 크기로 계산한다.
-     */
+    private Map<String, Object> buildBody(String ctpvNm, String keyword, int pageNum, int listCount) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("query", keyword == null ? "" : keyword.trim());
+        body.put("pageNum", pageNum);
+        body.put("listCount", listCount);
+        body.put("sortFields", "DATE/DESC");
+        body.put("searchFields", "all");
+        body.put("STDG_CTPV_NM", ctpvNm == null ? "" : ctpvNm);
+        for (String field : EMPTY_FIELDS) {
+            body.put(field, "");
+        }
+        return body;
+    }
+
+    /** 포털 검색 응답. 정책 필드는 UPPER_SNAKE_CASE. ignoreUnknown으로 여분 필드는 무시. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record YouthPolicyApiResponse(String resultCode, String resultMessage, Result result) {
+    public record PortalPolicyResponse(int totalCount, SearchResult searchResult) {
         @JsonIgnoreProperties(ignoreUnknown = true)
-        public record Result(Pagging pagging, List<Policy> youthPolicyList) {
+        public record SearchResult(List<Policy> youthpolicy) {
         }
 
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record Pagging(Integer totCount, Integer pageNum, Integer pageSize) {
-        }
-
-        /** 정책 1건. 연령은 빈 문자열("")로 올 수 있어 String으로 받고 서비스에서 Integer로 방어 파싱한다. */
         @JsonIgnoreProperties(ignoreUnknown = true)
         public record Policy(
-                String plcyNo,
-                String plcyNm,
-                String plcyExplnCn,
-                String plcySprtCn,
-                String plcyKywdNm,
-                String lclsfNm,
-                String mclsfNm,
-                String sprtTrgtMinAge,
-                String sprtTrgtMaxAge,
-                String zipCd,
-                String rgtrInstCdNm,
-                String sprvsnInstCdNm,
-                String aplyUrlAddr,
-                String refUrlAddr1,
-                String bizPrdBgngYmd,
-                String bizPrdEndYmd,
-                String aplyYmd
+                @JsonProperty("DOCID") String docId,
+                @JsonProperty("PLCY_NM") String name,
+                @JsonProperty("PLCY_EXPLN_CN") String explanation,
+                @JsonProperty("PLCY_SPRT_CN") String support,
+                @JsonProperty("PLCY_KYWD_NM") String keywords,
+                @JsonProperty("USER_LCLSF_NM") String largeClassification,
+                @JsonProperty("USER_MCLSF_NM") String mediumClassification,
+                @JsonProperty("STDG_NM") String regionNames,
+                @JsonProperty("SPRVSN_INST_CD_NM") String supervisorInstitution,
+                @JsonProperty("SPRT_TRGT_MIN_AGE") String minAge,
+                @JsonProperty("SPRT_TRGT_MAX_AGE") String maxAge,
+                @JsonProperty("APLY_URL_ADDR") String applyUrl,
+                @JsonProperty("REF_URL_ADDR1") String refUrl,
+                @JsonProperty("BIZ_PRD_BGNG_YMD") String bizBeginYmd,
+                @JsonProperty("BIZ_PRD_END_YMD") String bizEndYmd
         ) {
         }
     }
