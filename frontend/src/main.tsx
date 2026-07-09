@@ -3514,6 +3514,8 @@ const MessageRow = React.memo(function MessageRow({
 }: MessageRowProps) {
   const isDeleted = message.deletedForEveryone;
   const linkUrl = isDeleted ? null : firstMessageUrl(message.content);
+  // 링크 미리보기 카드가 붙는 경우, 본문에서 원본 URL은 숨긴다(카드가 링크를 담으므로 중복+말풍선 비대 방지).
+  const displayText = linkUrl && message.content ? message.content.replace(linkUrl, '').trim() : message.content;
   const deliveryLabel = deliveryStatusLabel(message);
   const draftValue = editingDraft ?? '';
   const hasMyReaction = (emoji: string) => message.reactions.some((reaction) => reaction.emoji === emoji && reaction.reactedByMe);
@@ -3552,7 +3554,7 @@ const MessageRow = React.memo(function MessageRow({
                         <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
                       </a>
                     )}
-                    {message.content && <p>{message.content}</p>}
+                    {displayText && <p>{displayText}</p>}
                     {linkUrl && <MessageLinkPreview url={linkUrl} />}
                     {message.editedAt && <span className="edited-label">수정됨</span>}
                     {message.reactions.length > 0 && (
