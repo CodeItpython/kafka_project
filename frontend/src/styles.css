@@ -2739,6 +2739,7 @@ input:focus {
   align-items: center;
   gap: 6px;
   padding: 8px 2px 6px;
+  border: 0;
   border-radius: 14px;
   background: transparent;
   color: #4b5262;
@@ -2926,6 +2927,7 @@ input:focus {
   align-self: flex-start;
   margin-top: 3px;
   padding: 5px 12px;
+  border: 0;
   border-radius: 999px;
   background: linear-gradient(135deg, #7c74ff, #5b53eb);
   color: #ffffff;
@@ -2936,8 +2938,9 @@ input:focus {
 .gmc-dismiss {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
+  border: 0;
   border-radius: 999px;
   background: transparent;
   color: #8b90a6;
