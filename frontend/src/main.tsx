@@ -15,6 +15,7 @@ import {
   Copy,
   Hash,
   KeyRound,
+  Link2,
   LogOut,
   Mail,
   MessageCircle,
@@ -583,16 +584,21 @@ function App() {
     return contacts.filter((contact) => !participantEmails.has(contact.email.toLowerCase()));
   }, [contacts, roomParticipants]);
   const isAdmin = user?.role === 'ADMIN';
-  // 채팅방 설정 드로어의 "사진·파일" — 로드된 메시지의 첨부를 이미지/파일로 분리.
+  // 채팅방 설정 드로어의 "사진·파일·링크" — 로드된 메시지에서 첨부(이미지/파일)와 링크를 모은다.
   const roomAttachments = useMemo(() => {
     const photos: ChatMessage[] = [];
     const files: ChatMessage[] = [];
+    const links: { id: string; url: string; label: string }[] = [];
     for (const message of messages) {
-      if (message.deletedForEveryone || !message.attachmentUrl) continue;
-      if (!message.attachmentType || message.attachmentType.startsWith('image/')) photos.push(message);
-      else files.push(message);
+      if (message.deletedForEveryone) continue;
+      if (message.attachmentUrl) {
+        if (!message.attachmentType || message.attachmentType.startsWith('image/')) photos.push(message);
+        else files.push(message);
+      }
+      const url = firstMessageUrl(message.content);
+      if (url) links.push({ id: message.id, url, label: (message.content ?? '').replace(url, '').trim() || url });
     }
-    return { photos, files };
+    return { photos, files, links };
   }, [messages]);
   const latestMessageId = messages[messages.length - 1]?.id ?? '';
   const emailCodeDigits = Array.from({ length: EMAIL_CODE_LENGTH }, (_, index) => code[index] ?? '');
@@ -3067,6 +3073,24 @@ function App() {
                     </div>
                   ) : (
                     <p className="room-drawer-empty">주고받은 사진이 없어요.</p>
+                  )}
+                </section>
+
+                <section className="room-drawer-section">
+                  <h4><Link2 size={14} aria-hidden /> 링크{roomAttachments.links.length > 0 && <span className="room-drawer-count">{roomAttachments.links.length}</span>}</h4>
+                  {roomAttachments.links.length > 0 ? (
+                    <ul className="room-drawer-files">
+                      {roomAttachments.links.map((link) => (
+                        <li key={link.id}>
+                          <a href={link.url} target="_blank" rel="noreferrer noopener" title={link.label}>
+                            <Link2 size={13} aria-hidden />
+                            <span>{link.label}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="room-drawer-empty">주고받은 링크가 없어요.</p>
                   )}
                 </section>
 
