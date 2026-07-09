@@ -96,6 +96,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
 
   const [input, setInput] = useState('');
   const [term, setTerm] = useState(''); // 제출된 검색어(비어 있으면 카테고리 피드)
+  const [searchOpen, setSearchOpen] = useState(false); // 검색창은 기본 접힘(아이콘) → 클릭 시 펼침
   const [related, setRelated] = useState<string[]>([]); // 연관검색어
   const [suggestions, setSuggestions] = useState<string[]>([]); // 자동완성 후보(입력 중)
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -107,6 +108,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
   const rootRef = useRef<HTMLDivElement>(null);
   const reqRef = useRef(0);
   const nextStartRef = useRef(1);
+  const refreshCountRef = useRef(0); // 새로고침마다 시작 오프셋을 순환시켜 새 기사 노출
   const loadingRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const refreshingRef = useRef(false);
@@ -263,10 +265,17 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
 
   const triggerRefresh = useCallback(() => {
     if (refreshingRef.current || loadingRef.current || !active) return;
-    nextStartRef.current = 1;
     setHasMore(true);
     setItems([]);
-    loadPage(active, term.trim(), 1, 'replace', true);
+    if (term.trim()) {
+      nextStartRef.current = 1 + DISPLAY;
+      loadPage(active, term.trim(), 1, 'replace', true);
+      return;
+    }
+    refreshCountRef.current += 1;
+    // 새로고침마다 시작 오프셋을 41→81→121로 순환(초기 1페이지로 안 돌아가게)시켜 매번 새 기사 노출(캐시 우회).
+    const rotatedStart = (((refreshCountRef.current - 1) % 3) + 1) * (DISPLAY * 2) + 1;
+    loadPage(active, '', rotatedStart, 'replace', true);
   }, [active, term, loadPage]);
 
   function closeSuggest() {
@@ -401,14 +410,27 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
           <h2>#헤드라인</h2>
           <p>네이버 뉴스에서 모은 주요 소식이에요. 위로 당기면 새로고침돼요.</p>
         </div>
+        <button
+          type="button"
+          className={searchOpen ? 'feed-search-toggle active' : 'feed-search-toggle'}
+          onClick={() => { if (searchOpen) { setSearchOpen(false); clearSearch(); } else { setSearchOpen(true); } }}
+          title={searchOpen ? '검색 닫기' : '검색'}
+          aria-label={searchOpen ? '검색 닫기' : '검색'}
+          aria-expanded={searchOpen}
+        >
+          {searchOpen ? <X size={19} aria-hidden /> : <Search size={19} aria-hidden />}
+        </button>
       </header>
 
+      {(searchOpen || (searching && related.length > 0)) && (
       <div className="news-searchbar">
+        {searchOpen && (
         <form className="news-search-form" onSubmit={submitSearch} role="search">
           <Search size={16} aria-hidden />
           <input
             type="search"
             value={input}
+            autoFocus
             onChange={(event) => setInput(event.target.value)}
             onFocus={() => { if (suggestions.length > 0) setSuggestOpen(true); }}
             onBlur={() => setSuggestOpen(false)}
@@ -445,6 +467,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
             </ul>
           )}
         </form>
+        )}
         {searching && related.length > 0 && (
           <div className="news-related" aria-label="연관검색어">
             <span className="news-related-label">연관검색어</span>
@@ -458,6 +481,7 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
           </div>
         )}
       </div>
+      )}
 
       <div className="news-catbar" role="tablist" aria-label="뉴스 카테고리">
         {categories.map((category) => {
