@@ -270,7 +270,7 @@ export default function ShoppingFeed({
 
   const triggerRefresh = useCallback(() => {
     if (refreshingRef.current || loadingRef.current || !active) return;
-    setItems([]);
+    // 새로고침 중에도 기존 목록을 유지(빈 화면 깜빡임 방지). 새 데이터가 오면 교체된다(stale-while-revalidate).
     setHasMore(true);
     if (term.trim()) {
       loadPage(active, sort, term.trim(), 1, 'replace', true);
