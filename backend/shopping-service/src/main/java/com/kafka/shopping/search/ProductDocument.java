@@ -90,6 +90,6 @@ public class ProductDocument {
     }
 
     public ProductResponse toProduct() {
-        return new ProductResponse(productId, title, link, image, price, mallName, brand, category);
+        return new ProductResponse(productId, title, link, image, price, 0L, mallName, brand, category);
     }
 }

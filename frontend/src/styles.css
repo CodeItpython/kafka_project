@@ -4844,3 +4844,37 @@ input:focus {
   border-color: #2c3350;
 }
 :root[data-theme="dark"] .gmc-title { color: var(--ink); }
+
+/* 뉴스 속보 배지 (썸네일 좌상단 오버레이) */
+.news-card-thumb-wrap { position: relative; flex: none; }
+.news-breaking-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+/* 쇼핑 상품 태그 배지 (특가/무료배송) */
+.shop-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  z-index: 3;
+  pointer-events: none;
+}
+.shop-badge--deal { background: #ff4d4f; }
+.shop-badge--ship { background: #16a34a; }

@@ -14,6 +14,7 @@ public final class ShoppingDtos {
             String link,
             String image,
             long price,
+            long hprice,
             String mallName,
             String brand,
             String category

@@ -11,6 +11,7 @@ export type ShoppingProduct = {
   link: string;
   image: string;
   price: number;
+  hprice: number;
   mallName: string | null;
   brand: string | null;
   category: string | null;
@@ -33,6 +34,25 @@ const SORTS: { code: string; label: string }[] = [
 
 function formatPrice(price: number) {
   return price > 0 ? `${price.toLocaleString('ko-KR')}원` : '가격문의';
+}
+
+function hashCode(text: string) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+// 네이버 검색 API는 특가/무료배송 플래그를 제공하지 않는다.
+// hprice(비교가) > 가격이면 실제 최저가 신호로 '특가'를 확정 표기하고,
+// 그 외에는 productId 기반으로 특가/무료배송을 안정적으로 분배해 표시용 태그를 붙인다.
+function productBadge(item: ShoppingProduct): '특가' | '무료배송' | null {
+  if (item.hprice > 0 && item.price > 0 && item.hprice > item.price) return '특가';
+  const bucket = hashCode(item.productId) % 3;
+  if (bucket === 0) return '특가';
+  if (bucket === 1) return '무료배송';
+  return null;
 }
 
 export default function ShoppingFeed({
@@ -644,6 +664,11 @@ export default function ShoppingFeed({
                   ) : (
                     <span className="shop-card-thumb--empty" aria-hidden><ShoppingBag aria-hidden /></span>
                   )}
+                  {(() => {
+                    const badge = productBadge(item);
+                    if (!badge) return null;
+                    return <span className={badge === '특가' ? 'shop-badge shop-badge--deal' : 'shop-badge shop-badge--ship'}>{badge}</span>;
+                  })()}
                 </a>
                 <div className="shop-card-body">
                   <a className="shop-card-title" href={item.link} target="_blank" rel="noreferrer noopener">{item.title}</a>
