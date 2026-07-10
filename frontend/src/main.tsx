@@ -3900,6 +3900,34 @@ const MessageRow = React.memo(function MessageRow({
   );
 });
 
+const ROOM_TINTS = [
+  { bg: '#EAF0FF', fg: '#3D6DFF' },
+  { bg: '#FFF0E9', fg: '#F97316' },
+  { bg: '#E8FAF0', fg: '#16A34A' },
+  { bg: '#F3EEFF', fg: '#7C5CFF' },
+  { bg: '#FFF0F3', fg: '#F04452' }
+];
+function roomTint(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return ROOM_TINTS[hash % ROOM_TINTS.length];
+}
+const ROOM_TIME_FORMAT = new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' });
+const ROOM_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function formatRoomTime(iso: string | null) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startThat = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((startToday - startThat) / 86400000);
+  if (diffDays <= 0) return ROOM_TIME_FORMAT.format(date);
+  if (diffDays === 1) return '어제';
+  if (diffDays < 7) return `${ROOM_WEEKDAYS[date.getDay()]}요일`;
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
 function RoomList({
   rooms,
   selectedRoomId,
@@ -3913,84 +3941,63 @@ function RoomList({
   onTogglePinned: (room: ChatRoom) => void;
   onToggleMuted: (room: ChatRoom) => void;
 }) {
-  const shouldReduceMotion = useReducedMotion();
-
   if (rooms.length === 0) {
     return <p className="empty-state">아직 대화가 없습니다.</p>;
   }
 
-  if (shouldReduceMotion) {
+  const renderRoom = (room: ChatRoom) => {
+    const tint = roomTint(room.name);
+    const isGroup = room.type === 'GROUP';
     return (
-      <div className="room-list">
-        {rooms.map((room) => (
-          <article key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}>
-            <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
-              {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
-              <span>
-                <strong>{room.name}</strong>
-                <small>{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
+      <article key={room.id} className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}>
+        <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
+          <span
+            className={isGroup ? 'room-avatar room-avatar--group' : 'room-avatar'}
+            style={isGroup ? undefined : { background: tint.bg, color: tint.fg }}
+            aria-hidden
+          >
+            {isGroup ? <Hash size={18} /> : (room.name || '?').trim().slice(0, 2)}
+          </span>
+          <span className="room-body">
+            <span className="room-line">
+              <strong>{room.name}</strong>
+              <span className="room-time">{formatRoomTime(room.lastMessageAt)}</span>
+            </span>
+            <span className="room-line">
+              <small className="room-preview">{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
+              <span className="room-meta">
+                {room.muted && <BellOff size={15} aria-hidden className="room-muted-ico" />}
+                {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
               </span>
-            </button>
-            <div className="room-meta-actions">
-              {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
-              <button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'}>
-                <Pin size={14} aria-hidden />
-              </button>
-              <button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'}>
-                {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+            </span>
+          </span>
+        </button>
+        <div className="room-actions">
+          <button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'}>
+            <Pin size={14} aria-hidden />
+          </button>
+          <button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'}>
+            {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
+          </button>
+        </div>
+      </article>
     );
-  }
+  };
+
+  const pinned = rooms.filter((room) => room.pinned);
+  const others = rooms.filter((room) => !room.pinned);
 
   return (
-    <LayoutGroup>
-      <div className="room-list">
-      {rooms.map((room) => (
-        <motion.article
-          key={room.id}
-          className={room.id === selectedRoomId ? 'room-item active' : 'room-item'}
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          whileHover={{ y: -2, scale: 1.012 }}
-          whileTap={{ scale: 0.988 }}
-          viewport={{ once: false, amount: 0.35 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 24, mass: 0.72 }}
-        >
-          {room.id === selectedRoomId && (
-            <motion.span
-              className="room-active-highlight"
-              layoutId="room-active-highlight"
-              transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.82 }}
-              aria-hidden
-            />
-          )}
-          <span className="room-hover-aura" aria-hidden />
-          <button type="button" className="room-main-button" onClick={() => onSelect(room.id)}>
-            <span className="room-kind-icon">
-              {room.type === 'DIRECT' ? <AtSign size={16} aria-hidden /> : <Hash size={16} aria-hidden />}
-            </span>
-            <span>
-              <strong>{room.name}</strong>
-              <small>{room.type === 'DIRECT' ? '개인 메시지' : `${room.participantCount}명 · ${room.description || '그룹 채팅'}`}</small>
-            </span>
-          </button>
-          <div className="room-meta-actions">
-            {room.unreadCount > 0 && <i className="unread-badge" aria-label={`${room.unreadCount}개의 읽지 않은 메시지`}>{room.unreadCount > 99 ? '99+' : room.unreadCount}</i>}
-            <motion.button type="button" className={room.pinned ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onTogglePinned(room)} title={room.pinned ? '채팅방 고정 해제' : '채팅방 고정'} whileHover={{ rotate: -8, scale: 1.08 }} whileTap={{ scale: 0.9 }}>
-              <Pin size={14} aria-hidden />
-            </motion.button>
-            <motion.button type="button" className={room.muted ? 'room-preference-button active' : 'room-preference-button'} onClick={() => onToggleMuted(room)} title={room.muted ? '알림 켜기' : '알림 끄기'} whileHover={{ rotate: 8, scale: 1.08 }} whileTap={{ scale: 0.9 }}>
-              {room.muted ? <BellOff size={14} aria-hidden /> : <Bell size={14} aria-hidden />}
-            </motion.button>
-          </div>
-        </motion.article>
-      ))}
-      </div>
-    </LayoutGroup>
+    <div className="room-list">
+      {pinned.length > 0 && (
+        <>
+          <div className="room-section-head"><Pin size={12} aria-hidden />고정됨</div>
+          {pinned.map(renderRoom)}
+          {others.length > 0 && <div className="room-section-head">전체</div>}
+        </>
+      )}
+      {others.map(renderRoom)}
+    </div>
   );
 }
 
