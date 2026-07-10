@@ -1,6 +1,8 @@
 package com.example.kafka.news;
 
+import com.example.kafka.news.GgJobsApiClient.GgJobsResult;
 import com.example.kafka.news.OntongYouthApiClient.PortalPolicyResponse;
+import com.example.kafka.news.YouthDtos.YouthJob;
 import com.example.kafka.news.YouthDtos.YouthPolicy;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,20 +26,67 @@ public class YouthService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final OntongYouthApiClient client;
+    private final GgJobsApiClient jobsClient;
     private final long ttlSeconds;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final Map<String, JobCacheEntry> jobsCache = new ConcurrentHashMap<>();
 
     public YouthService(
             OntongYouthApiClient client,
+            GgJobsApiClient jobsClient,
             @Value("${app.youth.cache-ttl-seconds:1800}") long ttlSeconds
     ) {
         this.client = client;
+        this.jobsClient = jobsClient;
         this.ttlSeconds = ttlSeconds;
     }
 
     /** 정책 API 키가 설정됐는지(프론트가 "키 미설정" vs "결과 없음"을 구분하도록 컨트롤러가 노출). */
     public boolean isAvailable() {
         return client.isConfigured();
+    }
+
+    /** 경기 공공일자리(잡아바) API가 구성됐는지 — 미구성이면 프론트는 취업탭을 기존 뉴스로 유지. */
+    public boolean isJobsAvailable() {
+        return jobsClient.isConfigured();
+    }
+
+    /**
+     * 경기 공공일자리 채용공고 조회(page/size별 TTL 캐시). 정책과 동일하게 실패 시 만료 캐시라도 반환하고,
+     * 빈 결과는 캐시하지 않는다. 미구성(available=false)이면 캐시 없이 즉시 빈 결과.
+     */
+    public JobResult jobs(int page, int size, boolean forceRefresh) {
+        if (!jobsClient.isConfigured()) {
+            return JobResult.unavailable();
+        }
+        int normalizedPage = Math.max(1, page);
+        int normalizedSize = clampSize(size);
+        String key = normalizedPage + "|" + normalizedSize;
+
+        JobCacheEntry entry = jobsCache.get(key);
+        Instant now = Instant.now();
+        if (!forceRefresh && entry != null && now.isBefore(entry.expiresAt())) {
+            return entry.result();
+        }
+
+        GgJobsResult response = jobsClient.fetchJobs(normalizedPage, normalizedSize);
+        boolean hasMore = (long) normalizedPage * normalizedSize < response.totalCount();
+        JobResult fresh = new JobResult(response.items(), response.totalCount(), hasMore, true);
+        if (fresh.items().isEmpty()) {
+            if (entry != null) {
+                log.info("Serving stale youth-jobs cache for key={} (fresh fetch empty)", key);
+                return entry.result();
+            }
+            return fresh;
+        }
+        if (jobsCache.size() >= MAX_CACHE_ENTRIES) {
+            jobsCache.entrySet().removeIf(existing -> !existing.getValue().expiresAt().isAfter(now));
+            if (jobsCache.size() >= MAX_CACHE_ENTRIES) {
+                jobsCache.clear();
+            }
+        }
+        jobsCache.put(key, new JobCacheEntry(fresh, now.plus(Duration.ofSeconds(ttlSeconds))));
+        return fresh;
     }
 
     public YouthResult policies(Region region, String category, String keyword, int page, int size, boolean forceRefresh) {
@@ -181,5 +230,15 @@ public class YouthService {
     }
 
     private record CacheEntry(YouthResult result, Instant expiresAt) {
+    }
+
+    /** available=false면 경기데이터드림 키/서비스명 미설정(결과 없음과 구분). */
+    public record JobResult(List<YouthJob> items, int totalCount, boolean hasMore, boolean available) {
+        static JobResult unavailable() {
+            return new JobResult(List.of(), 0, false, false);
+        }
+    }
+
+    private record JobCacheEntry(JobResult result, Instant expiresAt) {
     }
 }
