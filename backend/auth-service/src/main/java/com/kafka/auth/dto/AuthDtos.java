@@ -62,13 +62,19 @@ public final class AuthDtos {
             String provider,
             String role,
             String statusMessage,
-            String profileImageUrl
+            String profileImageUrl,
+            String theme
     ) {
     }
 
     public record UpdateProfileRequest(
             @NotBlank @Size(max = 80) String name,
             @Size(max = 500) String statusMessage
+    ) {
+    }
+
+    public record UpdateThemeRequest(
+            @NotBlank @Pattern(regexp = "light|dark|system", message = "테마는 light/dark/system 중 하나여야 합니다.") String theme
     ) {
     }
 
@@ -79,6 +85,7 @@ public final class AuthDtos {
             String provider,
             String statusMessage,
             String profileImageUrl,
+            String theme,
             Instant createdAt,
             Instant updatedAt,
             java.util.List<UserProfileHistoryResponse> history

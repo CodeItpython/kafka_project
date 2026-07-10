@@ -210,7 +210,8 @@ public class AuthService {
                 user.getProvider().name(),
                 user.getRole().name(),
                 user.getStatusMessage(),
-                storageUrlSigner.sign(user.getProfileImageUrl())
+                storageUrlSigner.sign(user.getProfileImageUrl()),
+                user.getTheme()
         );
     }
 

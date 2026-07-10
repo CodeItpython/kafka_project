@@ -1,6 +1,7 @@
 package com.kafka.auth.controller;
 
 import com.kafka.auth.dto.AuthDtos.UpdateProfileRequest;
+import com.kafka.auth.dto.AuthDtos.UpdateThemeRequest;
 import com.kafka.auth.dto.AuthDtos.UserProfileResponse;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.service.UserProfileService;
@@ -44,6 +45,14 @@ public class UserProfileController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(userProfileService.updateProfile(request, user));
+    }
+
+    @PatchMapping("/me/theme")
+    public ResponseEntity<UserProfileResponse> updateTheme(
+            @Valid @RequestBody UpdateThemeRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(userProfileService.updateTheme(request.theme(), user));
     }
 
     @PostMapping(path = "/me/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
