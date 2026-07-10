@@ -1,7 +1,25 @@
 :root {
   color: #191f28;
   background: #edf0f8;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+
+  /* 리디자인 브랜드 토큰 (단일 블루 액센트 + 토스 뉴트럴 그레이) */
+  --brand: #3d6dff;
+  --brand-strong: #2b57e0;
+  --brand-tint: #eaf0ff;
+  --ink: #191f28;
+  --gray-700: #4e5968;
+  --gray-600: #6b7684;
+  --gray-500: #8b95a1;
+  --gray-400: #b0b8c1;
+  --gray-300: #9aa3af;
+  --line: #e5e8eb;
+  --line-soft: #eef0f4;
+  --fill: #f2f4f6;
+  --surface: #ffffff;
+  --app-bg: #f7f8fa;
+  --card-shadow: 0 2px 8px rgba(70, 80, 140, 0.05);
+  --card-shadow-lg: 0 4px 16px rgba(70, 80, 140, 0.08);
 }
 
 * {
@@ -3199,10 +3217,7 @@ input:focus {
   max-width: 600px;
   margin: 0 auto;
   overflow: hidden;
-  background:
-    radial-gradient(120% 70% at 12% 0%, rgba(199, 210, 254, 0.4), transparent 55%),
-    radial-gradient(120% 70% at 88% 4%, rgba(221, 214, 254, 0.4), transparent 55%),
-    linear-gradient(180deg, #e8ecf8 0%, #eef0f7 60%, #f1f2f8 100%);
+  background: var(--app-bg);
 }
 
 @media (min-width: 640px) {
@@ -3257,44 +3272,57 @@ input:focus {
   background: linear-gradient(180deg, #eef1f9 0%, #eef0f7 100%);
 }
 
-/* 하단 탭바 */
+/* 하단 탭바 (리디자인: 아이콘 pill + 단일 블루 액센트) */
 .tab-bar {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  height: 62px;
-  border-top: 1px solid rgba(150, 155, 190, 0.22);
-  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 6px 22px;
+  border-top: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(14px) saturate(1.3);
 }
 .tab-bar button {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
   border: 0;
   background: transparent;
-  color: #9aa0c2;
+  color: var(--gray-300);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
+  cursor: pointer;
   transition: color 0.15s ease;
 }
-.tab-bar button.active { color: #5b53eb; }
+.tab-ico {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 30px;
+  border-radius: 999px;
+  color: inherit;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.tab-bar button.active { color: var(--brand); font-weight: 700; }
+.tab-bar button.active .tab-ico { background: var(--brand-tint); color: var(--brand); }
 .tab-bar .tab-badge {
   position: absolute;
-  top: 6px;
-  left: calc(50% + 7px);
+  top: -3px;
+  right: 6px;
   display: grid;
   place-items: center;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #fb5c6c;
+  background: #ff4d4f;
   color: #ffffff;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
+  font-style: normal;
+  border: 1.5px solid #ffffff;
 }
 
 /* ===================== 뉴스 피드 (인스타그램식 카드) ===================== */
