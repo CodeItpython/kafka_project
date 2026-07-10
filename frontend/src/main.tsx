@@ -3546,25 +3546,23 @@ function App() {
       {!selectedRoomId && (
         <nav className="tab-bar" aria-label="주요 탭">
           <button type="button" className={activeTab === 'friends' ? 'active' : ''} onClick={() => switchTab('friends')}>
-            <Users size={22} aria-hidden />
+            <span className="tab-ico"><Users size={22} aria-hidden /></span>
             <span>친구</span>
           </button>
           <button type="button" className={activeTab === 'chats' ? 'active' : ''} onClick={() => switchTab('chats')}>
-            <MessageCircle size={22} aria-hidden />
+            <span className="tab-ico"><MessageCircle size={22} aria-hidden />{totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}</span>
             <span>채팅</span>
-            {totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}
           </button>
           <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => switchTab('news')}>
-            <Newspaper size={22} aria-hidden />
+            <span className="tab-ico"><Newspaper size={22} aria-hidden /></span>
             <span>뉴스</span>
           </button>
           <button type="button" className={activeTab === 'shopping' ? 'active' : ''} onClick={() => { switchTab('shopping'); loadShoppingCart(); }}>
-            <ShoppingBag size={22} aria-hidden />
+            <span className="tab-ico"><ShoppingBag size={22} aria-hidden />{(shoppingCart?.totalCount ?? 0) > 0 && <i className="tab-badge">{(shoppingCart?.totalCount ?? 0) > 99 ? '99+' : shoppingCart?.totalCount}</i>}</span>
             <span>쇼핑</span>
-            {(shoppingCart?.totalCount ?? 0) > 0 && <i className="tab-badge">{(shoppingCart?.totalCount ?? 0) > 99 ? '99+' : shoppingCart?.totalCount}</i>}
           </button>
           <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => switchTab('settings')}>
-            <Settings size={22} aria-hidden />
+            <span className="tab-ico"><Settings size={22} aria-hidden /></span>
             <span>설정</span>
           </button>
         </nav>
