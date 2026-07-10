@@ -3313,6 +3313,10 @@ input:focus {
 /* 하단 탭바 (리디자인: 아이콘 pill + 단일 블루 액센트) */
 .tab-bar {
   flex: 0 0 auto;
+  /* 탭 패널(.tab-panel)이 position:absolute라 static인 탭바 위에 스택되어,
+     패널 하단의 카드를 hover(확대/부상)하면 탭바를 가리던 문제 → 탭바를 항상 위로. */
+  position: relative;
+  z-index: 20;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   padding: 8px 6px 22px;
