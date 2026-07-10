@@ -44,7 +44,9 @@ import {
   Users,
   Newspaper,
   X,
-  UserRound
+  UserRound,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -69,6 +71,7 @@ import NewsFeed, { NewsItem } from './NewsFeed';
 import ShoppingFeed, { ShoppingProduct } from './ShoppingFeed';
 import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
 import WelcomeLanding from './WelcomeLanding';
+import { playSound, isSoundEnabled, setSoundEnabled } from './sound';
 
 type Mode = 'login' | 'register' | 'email';
 type HomeTab = 'friends' | 'chats' | 'news' | 'shopping' | 'settings';
@@ -523,12 +526,21 @@ function App() {
     if (next === activeTab) return;
     setTabDirection(TAB_ORDER.indexOf(next) >= TAB_ORDER.indexOf(activeTab) ? 1 : -1);
     setActiveTab(next);
+    playSound('tab');
   }, [activeTab]);
   const [authStage, setAuthStage] = useState<'landing' | 'login'>('landing');
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [notificationTopic, setNotificationTopic] = useState('');
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [soundOn, setSoundOn] = useState(isSoundEnabled);
+  const toggleSound = useCallback(() => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      setSoundEnabled(next);
+      return next;
+    });
+  }, []);
   const [appToasts, setAppToasts] = useState<AppToast[]>([]);
   // 네이버 쇼핑 장바구니
   const [shoppingCart, setShoppingCart] = useState<ShoppingCart | null>(null);
@@ -708,6 +720,7 @@ function App() {
     setProfileName(data.user.name);
     setProfileStatus(data.user.statusMessage ?? '');
     setStatus(`${data.user.name}님으로 로그인되었습니다.`);
+    playSound('success');
   }
 
   function openSignup() {
@@ -1024,6 +1037,7 @@ function App() {
     cancelEditingMessage();
     setRooms((current) => current.map((room) => room.id === roomId ? { ...room, unreadCount: 0 } : room));
     requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
+    playSound('tap');
   }
 
   const dismissAppToast = useCallback((toastId: string) => {
@@ -1731,6 +1745,7 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ content, attachment: uploaded, replyToMessageId })
       });
+      playSound('send');
       clearAttachment();
       setTimeout(() => loadMessages(selectedRoomId), 350);
     } catch (error) {
@@ -1818,6 +1833,7 @@ function App() {
       });
       const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
       setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
+      playSound('reaction');
     } catch (error) {
       setStatus(readableError(error, '반응을 저장하지 못했습니다.'));
     }
@@ -2134,11 +2150,17 @@ function App() {
         client.subscribe(`/topic/rooms/${selectedRoomId}`, (frame: IMessage) => {
           const message = JSON.parse(frame.body) as ChatMessage;
           const messageWithReadState = withReadCounts([message], readReceiptsRef.current)[0];
-          setMessages((current) => current.some((item) => item.id === message.id)
-            ? current.map((item) => item.id === message.id ? messageWithReadState : item)
-            : [...current, messageWithReadState]);
+          let isNew = false;
+          setMessages((current) => {
+            if (current.some((item) => item.id === message.id)) {
+              return current.map((item) => item.id === message.id ? messageWithReadState : item);
+            }
+            isNew = true;
+            return [...current, messageWithReadState];
+          });
           if (user && message.senderEmail.toLowerCase() !== user.email.toLowerCase()) {
             markRoomRead(selectedRoomId).catch(() => undefined);
+            if (isNew) playSound('receive');
           }
         });
         client.subscribe(`/topic/rooms/${selectedRoomId}/read-receipts`, (frame: IMessage) => {
@@ -2191,6 +2213,8 @@ function App() {
           setNotificationUnreadCount((current) => current + (notification.read ? 0 : 1));
           if (notification.targetRoomId !== currentRoomId) {
             setRooms((current) => current.map((room) => room.id === notification.targetRoomId ? { ...room, unreadCount: room.unreadCount + 1 } : room));
+            // 열려 있지 않은 방의 알림만 소리로 알린다(열린 방 메시지는 'receive'가 이미 재생됨).
+            playSound('notify');
           }
           if (notification.targetRoomId && notification.targetMessageId && notification.targetRoomId !== currentRoomId) {
             markMessageDelivered(notification.targetRoomId, notification.targetMessageId).catch(() => undefined);
@@ -2796,6 +2820,26 @@ function App() {
                   </button>
                 ))}
                 {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
+              </div>
+            </section>
+
+            <section className="panel-section sound-panel">
+              <div className="settings-row static">
+                <span className="settings-row-label">
+                  {soundOn ? <Volume2 size={16} aria-hidden /> : <VolumeX size={16} aria-hidden />}
+                  효과음
+                </span>
+                <span className="settings-row-value">{soundOn ? '켜짐' : '꺼짐'}</span>
+                <button
+                  type="button"
+                  className={soundOn ? 'sound-switch on' : 'sound-switch'}
+                  role="switch"
+                  aria-checked={soundOn}
+                  aria-label="효과음 켜기/끄기"
+                  onClick={toggleSound}
+                >
+                  <span className="sound-switch-knob" aria-hidden />
+                </button>
               </div>
             </section>
 
