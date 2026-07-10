@@ -3644,6 +3644,32 @@ input:focus {
 .settings-row-label { display: inline-flex; align-items: center; gap: 8px; color: #59608a; font-weight: 800; font-size: 14px; }
 .settings-row-value { max-width: 58%; overflow: hidden; color: #8b92b5; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 
+/* 효과음 켜기/끄기 토글 스위치 */
+.sound-panel .settings-row { margin-bottom: 0; }
+.sound-switch {
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--gray-300, #d1d6db);
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+.sound-switch.on { background: var(--brand); }
+.sound-switch-knob {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 5px rgba(25, 31, 40, 0.22);
+  transform: translateX(0);
+  transition: transform 0.18s ease;
+}
+.sound-switch.on .sound-switch-knob { transform: translateX(18px); }
+
 .settings-action {
   display: flex;
   align-items: center;
