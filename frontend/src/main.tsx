@@ -23,6 +23,7 @@ import {
   LogOut,
   Mail,
   MessageCircle,
+  MessagesSquare,
   Reply,
   SmilePlus,
   Paperclip,
@@ -34,6 +35,7 @@ import {
   Search,
   Send,
   Settings,
+  Settings2,
   Share2,
   Swords,
   ShoppingBag,
@@ -3628,11 +3630,11 @@ function App() {
       {!selectedRoomId && (
         <nav className="tab-bar" aria-label="주요 탭">
           <button type="button" className={activeTab === 'friends' ? 'active' : ''} onClick={() => switchTab('friends')}>
-            <span className="tab-ico"><Users size={22} aria-hidden /></span>
+            <span className="tab-ico"><UserRound size={22} aria-hidden /></span>
             <span>친구</span>
           </button>
           <button type="button" className={activeTab === 'chats' ? 'active' : ''} onClick={() => switchTab('chats')}>
-            <span className="tab-ico"><MessageCircle size={22} aria-hidden />{totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}</span>
+            <span className="tab-ico"><MessagesSquare size={22} aria-hidden />{totalUnread > 0 && <i className="tab-badge">{totalUnread > 99 ? '99+' : totalUnread}</i>}</span>
             <span>채팅</span>
           </button>
           <button type="button" className={activeTab === 'news' ? 'active' : ''} onClick={() => switchTab('news')}>
@@ -3644,7 +3646,7 @@ function App() {
             <span>쇼핑</span>
           </button>
           <button type="button" className={activeTab === 'settings' ? 'active' : ''} onClick={() => switchTab('settings')}>
-            <span className="tab-ico"><Settings size={22} aria-hidden /></span>
+            <span className="tab-ico"><Settings2 size={22} aria-hidden /></span>
             <span>설정</span>
           </button>
         </nav>

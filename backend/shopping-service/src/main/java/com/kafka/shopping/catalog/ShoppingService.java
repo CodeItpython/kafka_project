@@ -93,6 +93,7 @@ public class ShoppingService {
                 item.link(),
                 item.image(),
                 parsePrice(item.lprice()),
+                parsePrice(item.hprice()),
                 item.mallName(),
                 item.brand() == null || item.brand().isBlank() ? item.maker() : item.brand(),
                 item.category1()

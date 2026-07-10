@@ -85,6 +85,15 @@ export function NewsThumb({ url, fallback }: { url: string; fallback: string | n
   );
 }
 
+// 제목 앞의 [속보]/속보 표기를 감지해 배지로 대체한다.
+const BREAKING_RE = /^\s*\[?\s*속보\s*\]?\s*[:·\-]?\s*/;
+function isBreaking(title: string) {
+  return BREAKING_RE.test(title);
+}
+function stripBreaking(title: string) {
+  return title.replace(BREAKING_RE, '').trim();
+}
+
 export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
   const reduceMotion = useReducedMotion();
   const [categories, setCategories] = useState<NewsCategory[]>([]);
@@ -585,9 +594,12 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
                 whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
               >
                 <a className="news-card" href={item.url} target="_blank" rel="noreferrer noopener">
-                  <NewsThumb url={item.url} fallback={item.thumbnail} />
+                  <div className="news-card-thumb-wrap">
+                    <NewsThumb url={item.url} fallback={item.thumbnail} />
+                    {isBreaking(item.title) && <span className="news-breaking-badge">속보</span>}
+                  </div>
                   <div className="news-card-body">
-                    <strong className="news-card-title">{item.title}</strong>
+                    <strong className="news-card-title">{isBreaking(item.title) ? stripBreaking(item.title) : item.title}</strong>
                     {item.description && <p className="news-card-desc">{item.description}</p>}
                     <span className="news-card-meta">
                       {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
