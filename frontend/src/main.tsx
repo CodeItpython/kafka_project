@@ -65,8 +65,6 @@ function formatBytes(bytes: number): string {
   return `${unit > 0 && value < 10 ? value.toFixed(1) : Math.round(value)}${units[unit]}`;
 }
 
-// 풀스크린 3D 파티클 씬은 무거우므로 코드 스플리팅(로그인 사용자 번들에 영향 없음)
-const WelcomeScene = React.lazy(() => import('./WelcomeScene'));
 import NewsFeed, { NewsItem } from './NewsFeed';
 import ShoppingFeed, { ShoppingProduct } from './ShoppingFeed';
 import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
@@ -2212,10 +2210,7 @@ function App() {
       return <WelcomeLanding onStart={() => setAuthStage('login')} />;
     }
     return (
-      <main className="auth-shell auth-shell--3d">
-        <React.Suspense fallback={null}>
-          <WelcomeScene />
-        </React.Suspense>
+      <main className="auth-shell auth-shell--login">
         <AnimatePresence>
           {pendingEmailAuth && (
             <motion.div
