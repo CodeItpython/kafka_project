@@ -92,6 +92,15 @@ services:
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
       # 온통청년 청년정책 API 키(청년 정책·혜택 탭). 미설정 시 정책 탭만 빈 목록으로 degrade.
       YOUTH_API_KEY: ${YOUTH_API_KEY:-}
+      # 경기데이터드림(openapi.gg.go.kr) 경기 공공일자리(잡아바) — 청년 '취업' 탭. .env로 주입, 깃 커밋 금지.
+      # 키/서비스명 미설정 시 취업 탭은 기존 청년 취업 뉴스로 degrade. 컬럼명은 자동추정되며 FIELD_*로 오버라이드 가능.
+      GG_JOBS_SERVICE_NAME: ${GG_JOBS_SERVICE_NAME:-}
+      GG_JOBS_API_KEY: ${GG_JOBS_API_KEY:-}
+      GG_JOBS_FIELD_TITLE: ${GG_JOBS_FIELD_TITLE:-}
+      GG_JOBS_FIELD_ORG: ${GG_JOBS_FIELD_ORG:-}
+      GG_JOBS_FIELD_START: ${GG_JOBS_FIELD_START:-}
+      GG_JOBS_FIELD_END: ${GG_JOBS_FIELD_END:-}
+      GG_JOBS_FIELD_URL: ${GG_JOBS_FIELD_URL:-}
 
   chat-service:
     build:
