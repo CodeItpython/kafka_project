@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, RefreshCcw, X } from 'lucide-react';
+import { ArrowLeft, RefreshCcw, X, Swords, ChevronRight } from 'lucide-react';
 import SnakeGame from './SnakeGame';
 import TetrisGame from './TetrisGame';
 import Game2048 from './Game2048';
@@ -20,6 +20,8 @@ type Props = {
   matchGame?: GameKey | null;
   onMatchStart?: (game: GameKey) => Promise<boolean>;
   onMatchEnd?: (game: GameKey, score: number) => Promise<void>;
+  // 미니게임 허브에서 '게임 대결' 배너를 누르면 대결 모드로 전환.
+  onDuel?: () => void;
 };
 
 const GAMES: { key: GameKey; name: string; emoji: string; hint: string }[] = [
@@ -28,7 +30,7 @@ const GAMES: { key: GameKey; name: string; emoji: string; hint: string }[] = [
   { key: 'G2048', name: '2048', emoji: '🔢', hint: '방향키 / 스와이프로 합치기' },
 ];
 
-export default function GameOverlay({ open, onClose, submitScore, loadBests, matchMode = false, matchGame = null, onMatchStart, onMatchEnd }: Props) {
+export default function GameOverlay({ open, onClose, submitScore, loadBests, matchMode = false, matchGame = null, onMatchStart, onMatchEnd, onDuel }: Props) {
   const [selected, setSelected] = useState<GameKey | null>(null);
   const [score, setScore] = useState(0);
   const [runId, setRunId] = useState(0);
@@ -117,7 +119,7 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
                   <ArrowLeft size={18} aria-hidden />
                 </button>
               ) : <span className="game-head-btn" aria-hidden />}
-              <strong>{matchMode ? '게임 대결' : (meta ? meta.name : '게임')}</strong>
+              <strong>{matchMode ? '게임 대결' : (meta ? meta.name : '미니게임')}</strong>
               <button type="button" className="game-head-btn" onClick={onClose} aria-label="닫기">
                 <X size={18} aria-hidden />
               </button>
@@ -125,13 +127,25 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
 
             {!selected ? (
               <div className="game-picker">
-                {GAMES.map((g) => (
-                  <button key={g.key} type="button" className="game-card" onClick={() => startGame(g.key)}>
-                    <span className="game-card-emoji" aria-hidden>{g.emoji}</span>
-                    <strong>{g.name}</strong>
-                    {matchMode ? <small>대결 신청</small> : <small>최고 {bests[g.key] ?? 0}</small>}
+                {!matchMode && onDuel && (
+                  <button type="button" className="game-duel-banner" onClick={onDuel}>
+                    <span className="game-duel-ico" aria-hidden><Swords size={24} /></span>
+                    <span className="game-duel-copy">
+                      <strong>게임 대결</strong>
+                      <small>친구와 실시간 점수 배틀 🔥</small>
+                    </span>
+                    <ChevronRight size={20} aria-hidden />
                   </button>
-                ))}
+                )}
+                <div className="game-card-grid">
+                  {GAMES.map((g) => (
+                    <button key={g.key} type="button" className="game-card" onClick={() => startGame(g.key)}>
+                      <span className="game-card-emoji" aria-hidden>{g.emoji}</span>
+                      <strong>{g.name}</strong>
+                      {matchMode ? <small>대결 신청</small> : <small>최고 {bests[g.key] ?? 0}</small>}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="game-stage">

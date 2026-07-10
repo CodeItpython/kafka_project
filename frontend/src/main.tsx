@@ -24,6 +24,9 @@ import {
   Mail,
   MessageCircle,
   MessagesSquare,
+  MessageSquareDashed,
+  MapPin,
+  Database,
   Reply,
   SmilePlus,
   Paperclip,
@@ -387,6 +390,27 @@ const SAMPLE_USERS = [
   { email: 'hyejin@example.com', name: '혜진' }
 ];
 
+// 알림 상대시간 (방금 전 / N분 전 / N시간 전 / 어제 / N일 전)
+function formatNotifTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hour = Math.floor(min / 60);
+  if (hour < 24) return `${hour}시간 전`;
+  const day = Math.floor(hour / 24);
+  return day === 1 ? '어제' : `${day}일 전`;
+}
+
+// 알림 종류별 아이콘 타일 색(디자인의 컬러 타일)
+function notifTint(type: string): string {
+  const t = (type || '').toUpperCase();
+  if (t.includes('MENTION')) return 'notif-ico--blue';
+  if (t.includes('FRIEND') || t.includes('INVITE')) return 'notif-ico--indigo';
+  if (t.includes('GAME') || t.includes('MATCH') || t.includes('DUEL')) return 'notif-ico--pink';
+  return 'notif-ico--green';
+}
+
 // 숫자 인증코드를 한 자리씩 칸에 나눠 입력받는 OTP 인풋. 자체 ref로 칸 이동/붙여넣기/
 // 백스페이스 이동을 처리하고, 값은 부모의 문자열 하나로 제어된다.
 function OtpInput({ length, value, onChange, autoFocus, disabled }: {
@@ -514,6 +538,7 @@ function App() {
   const [createChatOpen, setCreateChatOpen] = useState(false);
   const [createChatMode, setCreateChatMode] = useState<'group' | 'direct'>('group');
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [notifCenterOpen, setNotifCenterOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
   const [roomSuggestions, setRoomSuggestions] = useState<SearchSuggestion[]>([]);
   const [messageSuggestions, setMessageSuggestions] = useState<SearchSuggestion[]>([]);
@@ -2461,6 +2486,81 @@ function App() {
         onDismiss={dismissAppToast}
       />
       <AnimatePresence>
+        {notifCenterOpen && (
+          <motion.div
+            className="notif-center-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setNotifCenterOpen(false)}
+          >
+            <motion.section
+              className="notif-center"
+              role="dialog"
+              aria-modal="true"
+              aria-label="알림"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 34 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="notif-center-head">
+                <button type="button" className="notif-center-back" onClick={() => setNotifCenterOpen(false)} aria-label="닫기"><ArrowLeft size={20} aria-hidden /></button>
+                <div>
+                  <p className="eyebrow">NOTIFICATIONS</p>
+                  <h2>알림</h2>
+                </div>
+                <button type="button" className="notif-center-readall" onClick={markAllNotificationsRead} disabled={notificationUnreadCount === 0}>모두 읽음</button>
+              </header>
+              <div className="notif-center-list">
+                {notifications.length === 0 ? (
+                  <div className="notif-center-empty">
+                    <span className="notif-center-empty-ico" aria-hidden><Bell size={40} /></span>
+                    <strong>새 알림이 없어요</strong>
+                    <p>멘션·새 메시지·친구 요청이 오면<br />여기에 모아서 보여드릴게요.</p>
+                  </div>
+                ) : (() => {
+                  const todayStart = new Date();
+                  todayStart.setHours(0, 0, 0, 0);
+                  const groups = [
+                    { label: '오늘', items: notifications.filter((n) => new Date(n.createdAt).getTime() >= todayStart.getTime()) },
+                    { label: '이전', items: notifications.filter((n) => new Date(n.createdAt).getTime() < todayStart.getTime()) }
+                  ].filter((group) => group.items.length > 0);
+                  return groups.map((group) => (
+                    <div key={group.label} className="notif-group">
+                      <div className="notif-group-label">{group.label}</div>
+                      {group.items.map((n) => {
+                        const upper = (n.type || '').toUpperCase();
+                        const icon = upper.includes('MENTION') ? <AtSign size={19} aria-hidden />
+                          : upper.includes('FRIEND') || upper.includes('INVITE') ? <UserPlus size={19} aria-hidden />
+                          : upper.includes('GAME') || upper.includes('MATCH') || upper.includes('DUEL') ? <Swords size={19} aria-hidden />
+                          : <MessageCircle size={19} aria-hidden />;
+                        return (
+                          <button
+                            key={n.id}
+                            type="button"
+                            className={n.read ? 'notif-row' : 'notif-row unread'}
+                            onClick={() => { if (n.targetRoomId) { openRoom(n.targetRoomId); setNotifCenterOpen(false); } }}
+                          >
+                            <span className={`notif-ico ${notifTint(n.type)}`} aria-hidden>{icon}</span>
+                            <span className="notif-row-body">
+                              <span className="notif-row-title">{n.title}{!n.read && <i className="notif-dot" aria-hidden />}</span>
+                              <span className="notif-row-text">{n.body}</span>
+                              <span className="notif-row-time">{formatNotifTime(n.createdAt)}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {roomDeleteConfirmOpen && selectedRoom && (
           <motion.div
             className="confirm-dialog-backdrop"
@@ -2891,10 +2991,14 @@ function App() {
 
             {isAdmin && (
               <section className="panel-section dlt-panel">
-                <div className="section-title">
-                  <span>실패 메시지</span>
-                  <small>{dltTopic || 'DLT'}</small>
+                <div className="dlt-head">
+                  <div>
+                    <p className="dlt-eyebrow">ADMIN · KAFKA</p>
+                    <h3 className="dlt-title">데드레터(DLT)</h3>
+                  </div>
+                  <span className="dlt-badge">ADMIN</span>
                 </div>
+                <div className="dlt-topic"><Database size={15} aria-hidden />{dltTopic || 'chat.messages.DLT'}</div>
                 <div className="dlt-toolbar">
                   <label>
                     조회 개수
@@ -2933,9 +3037,9 @@ function App() {
                     <CheckCircle2 size={15} aria-hidden />
                     미리 확인
                   </button>
-                  <button type="button" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
-                    <Send size={15} aria-hidden />
-                    재처리
+                  <button type="button" className="dlt-replay-btn" onClick={() => replayDltMessages(false)} disabled={dltLoading || dltMessages.length === 0}>
+                    <RefreshCcw size={15} aria-hidden />
+                    선택 재처리
                   </button>
                 </div>
                 {dltResult && (
@@ -3459,6 +3563,12 @@ function App() {
                           게임 대결
                         </button>
                       </Popover.Close>
+                      <Popover.Close asChild>
+                        <button type="button" className="attach-tile" onClick={() => setStatus('위치 공유는 준비 중이에요.')}>
+                          <span className="attach-ic attach-ic-location"><MapPin size={20} aria-hidden /></span>
+                          위치
+                        </button>
+                      </Popover.Close>
                     </div>
                   </Popover.Content>
                 </Popover.Portal>
@@ -3481,6 +3591,7 @@ function App() {
               }}
               matchMode={!!matchSession}
               matchGame={matchSession?.game ?? null}
+              onDuel={() => { setGameOpen(false); matchIdRef.current = null; setMatchSession({ matchId: null, game: null }); }}
               onMatchStart={async (game: GameKey) => {
                 const m = await request<GameMatchResponse>(`/chat/rooms/${selectedRoomId}/game-matches`, { method: 'POST', body: JSON.stringify({ game }) });
                 matchIdRef.current = m.id;
@@ -3525,6 +3636,16 @@ function App() {
                 <h2>채팅</h2>
               </div>
               <div className="chat-head-actions">
+                <button
+                  type="button"
+                  className="chat-icon-button chat-notif-button"
+                  onClick={() => setNotifCenterOpen(true)}
+                  title="알림"
+                  aria-label={notificationUnreadCount > 0 ? `알림 ${notificationUnreadCount}개` : '알림'}
+                >
+                  {notificationUnreadCount > 0 ? <BellRing size={19} aria-hidden /> : <Bell size={19} aria-hidden />}
+                  {notificationUnreadCount > 0 && <i className="chat-notif-badge">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</i>}
+                </button>
                 <button
                   type="button"
                   className={chatSearchOpen ? 'chat-icon-button active' : 'chat-icon-button'}
@@ -3609,11 +3730,18 @@ function App() {
 
                 <div className="chat-room-list">
                   {visibleChatRooms.length === 0 ? (
-                    <p className="empty-state">
-                      {chatFilter === 'unread'
-                        ? '안 읽은 채팅이 없어요.'
-                        : '아직 참여한 채팅이 없어요. 오른쪽 위 + 버튼으로 새 채팅을 시작해보세요.'}
-                    </p>
+                    chatFilter === 'unread' ? (
+                      <p className="empty-state">안 읽은 채팅이 없어요.</p>
+                    ) : (
+                      <div className="chat-empty-state">
+                        <span className="chat-empty-ico" aria-hidden><MessageSquareDashed size={42} /></span>
+                        <strong>아직 참여한 채팅이 없어요</strong>
+                        <p>친구를 초대하거나 새 채팅방을 만들어<br />대화를 시작해보세요.</p>
+                        <button type="button" className="chat-empty-cta" onClick={() => openCreateChat('group')}>
+                          <Plus size={18} aria-hidden />새 채팅 시작하기
+                        </button>
+                      </div>
+                    )
                   ) : (
                     <RoomList
                       rooms={visibleChatRooms}
