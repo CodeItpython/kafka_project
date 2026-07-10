@@ -4878,3 +4878,66 @@ input:focus {
 }
 .shop-badge--deal { background: #ff4d4f; }
 .shop-badge--ship { background: #16a34a; }
+
+/* 대화 타이핑 인디케이터 (상대 입력 중 · ktTyping) */
+.typing-indicator {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin-top: 2px;
+  border-radius: 4px 18px 18px 18px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(70, 80, 140, 0.06);
+  animation: ktPopIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.typing-dots { display: inline-flex; gap: 5px; }
+.typing-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gray-400);
+  animation: ktTyping 1.2s infinite;
+}
+.typing-dots i:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots i:nth-child(3) { animation-delay: 0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .typing-dots i { animation: none; opacity: 0.6; }
+  .typing-indicator { animation: none; }
+}
+
+/* 뉴스 피처드 히어로 카드 (헤드라인 첫 항목) */
+.news-card--featured {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  box-shadow: var(--card-shadow-lg);
+}
+.news-card--featured .news-card-thumb-wrap { width: 100%; }
+.news-card--featured .news-card-thumb {
+  width: 100%;
+  height: 170px;
+  border-radius: 0;
+}
+.news-card--featured .news-card-thumb--empty {
+  width: 100%;
+  height: 170px;
+  border-radius: 0;
+}
+.news-card--featured .news-breaking-badge {
+  top: 12px;
+  left: 12px;
+  padding: 5px 10px;
+  font-size: 11px;
+}
+.news-card--featured .news-card-body {
+  display: block;
+  padding: 14px 16px 16px;
+}
+.news-card--featured .news-card-title {
+  font-size: 16px;
+  -webkit-line-clamp: 3;
+}
+.news-card--featured .news-card-desc { margin-top: 7px; }
+.news-card--featured .news-card-meta { margin-top: 11px; }

@@ -583,43 +583,49 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       {!loading && !error && items.length > 0 && (
         <>
           <div className="news-list">
-            {items.map((item, index) => (
-              <motion.div
-                key={`${item.id}-${index}`}
-                className="news-card-wrap"
-                initial={{ y: 10 }}
-                animate={{ y: 0 }}
-                transition={{ duration: 0.28, delay: Math.min((index % DISPLAY) * 0.02, 0.3) }}
-                whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
-                whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
-              >
-                <a className="news-card" href={item.url} target="_blank" rel="noreferrer noopener">
-                  <div className="news-card-thumb-wrap">
-                    <NewsThumb url={item.url} fallback={item.thumbnail} />
-                    {isBreaking(item.title) && <span className="news-breaking-badge">속보</span>}
-                  </div>
-                  <div className="news-card-body">
-                    <strong className="news-card-title">{isBreaking(item.title) ? stripBreaking(item.title) : item.title}</strong>
-                    {item.description && <p className="news-card-desc">{item.description}</p>}
-                    <span className="news-card-meta">
-                      {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
-                    </span>
-                  </div>
-                </a>
-                {onShare && (
-                  <button
-                    type="button"
-                    className="news-share-btn"
-                    title="채팅으로 공유"
-                    aria-label={`${item.title} 채팅으로 공유`}
-                    onClick={() => onShare(item)}
-                  >
-                    <Share2 size={15} aria-hidden />
-                    <span>공유</span>
-                  </button>
-                )}
-              </motion.div>
-            ))}
+            {items.map((item, index) => {
+              const breaking = isBreaking(item.title);
+              const displayTitle = breaking ? stripBreaking(item.title) : item.title;
+              // 헤드라인(비검색) 첫 항목은 큰 피처드 히어로 카드로 강조.
+              const featured = index === 0 && !searching;
+              return (
+                <motion.div
+                  key={`${item.id}-${index}`}
+                  className={featured ? 'news-card-wrap news-card-wrap--featured' : 'news-card-wrap'}
+                  initial={{ y: 10 }}
+                  animate={{ y: 0 }}
+                  transition={{ duration: 0.28, delay: Math.min((index % DISPLAY) * 0.02, 0.3) }}
+                  whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
+                  whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
+                >
+                  <a className={featured ? 'news-card news-card--featured' : 'news-card'} href={item.url} target="_blank" rel="noreferrer noopener">
+                    <div className="news-card-thumb-wrap">
+                      <NewsThumb url={item.url} fallback={item.thumbnail} />
+                      {breaking && <span className="news-breaking-badge">속보</span>}
+                    </div>
+                    <div className="news-card-body">
+                      <strong className="news-card-title">{displayTitle}</strong>
+                      {item.description && <p className="news-card-desc">{item.description}</p>}
+                      <span className="news-card-meta">
+                        {item.press ? `${item.press} · ` : ''}네이버뉴스 <ExternalLink size={13} aria-hidden />
+                      </span>
+                    </div>
+                  </a>
+                  {onShare && (
+                    <button
+                      type="button"
+                      className="news-share-btn"
+                      title="채팅으로 공유"
+                      aria-label={`${item.title} 채팅으로 공유`}
+                      onClick={() => onShare(item)}
+                    >
+                      <Share2 size={15} aria-hidden />
+                      <span>공유</span>
+                    </button>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
           <div className="shop-more">
             {loadingMore && <span className="shop-more-loading"><RefreshCcw size={14} aria-hidden /> 더 불러오는 중…</span>}
