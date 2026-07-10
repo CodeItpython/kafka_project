@@ -111,7 +111,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
       setEmpShowingJobs(value);
     };
 
-    const applyPolicies = (data: PolicyResponse & { items?: YouthPolicy[] }) => {
+    const applyPolicies = (data: PolicyResponse) => {
       if (stale()) return;
       const items = Array.isArray(data.items) ? data.items : [];
       setAvailable(data.available !== false);
@@ -130,6 +130,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
     const applyJobs = (data: { hasMore?: boolean; items?: YouthJob[] }) => {
       if (stale()) return;
       showJobs(true);
+      setAvailable(true); // 취업 탭은 항상 표시 가능 — 정책의 available=false가 빈 상태 안내를 가리지 않게 초기화
       const items = Array.isArray(data.items) ? data.items : [];
       if (mode === 'append') {
         setJobs((prev) => {
@@ -146,6 +147,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
     const applyNews = (data: { items?: NewsItem[] }) => {
       if (stale()) return;
       showJobs(false);
+      setAvailable(true); // 취업/소식 탭은 항상 표시 가능 — 정책의 available=false가 빈 상태 안내를 가리지 않게 초기화
       const items = Array.isArray(data.items) ? data.items : [];
       if (mode === 'append') {
         setNews((prev) => {
@@ -226,6 +228,8 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
     pageRef.current = 1;
     startRef.current = 1;
     jobsPageRef.current = 1;
+    empShowingJobsRef.current = false; // 취업/뉴스 표시 의도 리셋(에러 경로가 엉뚱한 목록을 비우지 않게)
+    setEmpShowingJobs(false);
     setHasMore(false);
     if (segment === 'policies') setPolicies([]);
     else { setNews([]); setJobs([]); }
@@ -394,7 +398,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
           <div className="youth-policy-list">
             {jobs.map((job, index) => (
               <motion.article
-                key={`${job.id}-${index}`}
+                key={job.id}
                 className="youth-policy-card"
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -402,7 +406,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
               >
                 <div className="youth-policy-head">
                   <span className="youth-policy-badge">채용</span>
-                  <span className="youth-policy-region">경기</span>
+                  <span className="youth-policy-region">잡아바</span>
                 </div>
                 <strong className="youth-policy-title">{job.title}</strong>
                 <div className="youth-policy-meta">
