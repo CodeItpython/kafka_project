@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 /**
@@ -27,17 +30,19 @@ public class YouthService {
 
     private final OntongYouthApiClient client;
     private final GgJobsApiClient jobsClient;
+    private final JobSearchRepository jobRepository;
     private final long ttlSeconds;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
-    private final Map<String, JobCacheEntry> jobsCache = new ConcurrentHashMap<>();
 
     public YouthService(
             OntongYouthApiClient client,
             GgJobsApiClient jobsClient,
+            JobSearchRepository jobRepository,
             @Value("${app.youth.cache-ttl-seconds:1800}") long ttlSeconds
     ) {
         this.client = client;
         this.jobsClient = jobsClient;
+        this.jobRepository = jobRepository;
         this.ttlSeconds = ttlSeconds;
     }
 
@@ -52,8 +57,10 @@ public class YouthService {
     }
 
     /**
-     * 경기 공공일자리 채용공고 조회(page/size별 TTL 캐시). 정책과 동일하게 실패 시 만료 캐시라도 반환하고,
-     * 빈 결과는 캐시하지 않는다. 미구성(available=false)이면 캐시 없이 즉시 빈 결과.
+     * 경기 공공일자리 채용공고 조회. {@link JobIndexService}가 배치로 채워둔 Elasticsearch 색인에서 서빙하고
+     * (재기동/업스트림 장애에 강함), 색인이 비었거나 ES가 없거나 강제 새로고침이면 라이브 API로 폴백한다.
+     * 라이브 폴백이 업스트림 오류를 만나면 available=false로 낮춰(빈 목록을 성공으로 위장하지 않음) 프론트가
+     * 기존 청년 취업 뉴스로 degrade하게 한다.
      */
     public JobResult jobs(int page, int size, boolean forceRefresh) {
         if (!jobsClient.isConfigured()) {
@@ -61,32 +68,28 @@ public class YouthService {
         }
         int normalizedPage = Math.max(1, page);
         int normalizedSize = clampSize(size);
-        String key = normalizedPage + "|" + normalizedSize;
 
-        JobCacheEntry entry = jobsCache.get(key);
-        Instant now = Instant.now();
-        if (!forceRefresh && entry != null && now.isBefore(entry.expiresAt())) {
-            return entry.result();
+        if (!forceRefresh) {
+            try {
+                Page<JobDocument> indexed = jobRepository.findAll(
+                        PageRequest.of(normalizedPage - 1, normalizedSize, Sort.by(Sort.Direction.ASC, "seq")));
+                long total = indexed.getTotalElements();
+                if (total > 0) {
+                    List<YouthJob> items = indexed.getContent().stream().map(JobDocument::toItem).toList();
+                    return new JobResult(items, (int) Math.min(total, Integer.MAX_VALUE),
+                            (long) normalizedPage * normalizedSize < total, true);
+                }
+            } catch (RuntimeException exception) {
+                log.debug("GG jobs ES read failed, falling back to live API: {}", exception.getMessage());
+            }
         }
 
         GgJobsResult response = jobsClient.fetchJobs(normalizedPage, normalizedSize);
+        if (!response.ok()) {
+            return JobResult.unavailable();
+        }
         boolean hasMore = (long) normalizedPage * normalizedSize < response.totalCount();
-        JobResult fresh = new JobResult(response.items(), response.totalCount(), hasMore, true);
-        if (fresh.items().isEmpty()) {
-            if (entry != null) {
-                log.info("Serving stale youth-jobs cache for key={} (fresh fetch empty)", key);
-                return entry.result();
-            }
-            return fresh;
-        }
-        if (jobsCache.size() >= MAX_CACHE_ENTRIES) {
-            jobsCache.entrySet().removeIf(existing -> !existing.getValue().expiresAt().isAfter(now));
-            if (jobsCache.size() >= MAX_CACHE_ENTRIES) {
-                jobsCache.clear();
-            }
-        }
-        jobsCache.put(key, new JobCacheEntry(fresh, now.plus(Duration.ofSeconds(ttlSeconds))));
-        return fresh;
+        return new JobResult(response.items(), response.totalCount(), hasMore, true);
     }
 
     public YouthResult policies(Region region, String category, String keyword, int page, int size, boolean forceRefresh) {
@@ -232,13 +235,10 @@ public class YouthService {
     private record CacheEntry(YouthResult result, Instant expiresAt) {
     }
 
-    /** available=false면 경기데이터드림 키/서비스명 미설정(결과 없음과 구분). */
+    /** available=false면 미구성(키/서비스명 없음) 또는 업스트림 오류 — 프론트는 기존 뉴스로 degrade. */
     public record JobResult(List<YouthJob> items, int totalCount, boolean hasMore, boolean available) {
         static JobResult unavailable() {
             return new JobResult(List.of(), 0, false, false);
         }
-    }
-
-    private record JobCacheEntry(JobResult result, Instant expiresAt) {
     }
 }

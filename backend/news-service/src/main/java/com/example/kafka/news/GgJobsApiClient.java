@@ -4,10 +4,12 @@ import com.example.kafka.news.YouthDtos.YouthJob;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -157,9 +159,8 @@ public class GgJobsApiClient {
         }
         FieldMap fields = resolveFields(rows.get(0));
         List<YouthJob> items = new ArrayList<>(rows.size());
-        int index = 0;
         for (JsonNode row : rows) {
-            YouthJob job = toJob(row, fields, index++);
+            YouthJob job = toJob(row, fields);
             if (job != null) {
                 items.add(job);
             }
@@ -167,7 +168,7 @@ public class GgJobsApiClient {
         return new GgJobsResult(totalCount, items, true, true, null);
     }
 
-    private YouthJob toJob(JsonNode row, FieldMap fields, int index) {
+    private YouthJob toJob(JsonNode row, FieldMap fields) {
         String title = clean(pick(row, fields.title()));
         if (title == null || title.isBlank()) {
             return null; // 제목 없는 행은 표시 가치 없음
@@ -176,8 +177,11 @@ public class GgJobsApiClient {
         String start = formatYmd(pick(row, fields.start()));
         String end = formatYmd(pick(row, fields.end()));
         String url = clean(pick(row, fields.url()));
-        String idSource = url != null ? url : title + "|" + (org == null ? "" : org);
-        String id = Integer.toHexString(idSource.hashCode()) + "-" + index;
+        // 위치 독립적 안정 id: 목록이 밀려도 같은 공고는 같은 id → 프론트 무한스크롤 dedupe가 깨지지 않는다.
+        // (JobDocument의 색인 id와 동일 규칙이라 ES/라이브 경로 간에도 같은 공고는 같은 id)
+        String basis = (url == null ? "" : url) + "|" + title + "|" + (org == null ? "" : org)
+                + "|" + (start == null ? "" : start);
+        String id = UUID.nameUUIDFromBytes(basis.getBytes(StandardCharsets.UTF_8)).toString();
         return new YouthJob(id, title, org, start, end, period(start, end), url);
     }
 
@@ -288,7 +292,8 @@ public class GgJobsApiClient {
             return null;
         }
         String digits = value.replaceAll("[^0-9]", "");
-        if (digits.length() == 8) {
+        // 8자리(YYYYMMDD) 또는 시각이 붙은 형태(YYYYMMDDHHMMSS 등)면 앞 8자리만 날짜로 포맷.
+        if (digits.length() >= 8) {
             return digits.substring(0, 4) + "." + digits.substring(4, 6) + "." + digits.substring(6, 8);
         }
         return value;
