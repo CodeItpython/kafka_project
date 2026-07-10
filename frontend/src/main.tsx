@@ -12,6 +12,8 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
+  ChevronLeft,
+  Download,
   Copy,
   Hash,
   Image as ImageIcon,
@@ -29,6 +31,7 @@ import {
   Database,
   Reply,
   SmilePlus,
+  Smile,
   Paperclip,
   Pin,
   Plus,
@@ -382,6 +385,16 @@ function samePresence(a: RoomPresence, b: RoomPresence) {
     && a.onlineUsers.every((user, index) => user === b.onlineUsers[index])
     && a.typingUsers.every((user, index) => user === b.typingUsers[index]);
 }
+// 컴포저 이모지 피커: 자주 쓰는 이모지 그리드
+const COMPOSER_EMOJIS = [
+  '😀', '😄', '😁', '😆', '😅', '😂', '🙂', '😉',
+  '😊', '😍', '😘', '😗', '😎', '🤩', '🥳', '🤔',
+  '😐', '😴', '😢', '😭', '😤', '😱', '😳', '🥺',
+  '👍', '👎', '👏', '🙌', '🙏', '💪', '👌', '✌️',
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🔥', '✨',
+  '🎉', '🎊', '💯', '✅', '❓', '❗', '👀', '🚀'
+];
+
 const SAMPLE_USERS = [
   { email: 'user@example.com', name: '건우' },
   { email: 'minji@example.com', name: '민지' },
@@ -648,6 +661,14 @@ function App() {
   // 도착했을 때 그새 방을 바꿨는지 판별해 stale 응답이 다른 방을 덮어쓰지 않게 한다.
   const selectedRoomIdRef = useRef(selectedRoomId);
   selectedRoomIdRef.current = selectedRoomId;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const [mediaViewer, setMediaViewer] = useState<{ images: ChatMessage[]; index: number } | null>(null);
+  const openMediaViewer = useCallback((message: ChatMessage) => {
+    const images = messagesRef.current.filter((m) => !m.deletedForEveryone && m.attachmentUrl && (m.attachmentType == null || m.attachmentType.startsWith('image/')));
+    const index = Math.max(0, images.findIndex((m) => m.id === message.id));
+    setMediaViewer({ images, index });
+  }, []);
   // 인터벌/구독 effect가 이 값들 때문에 재생성되지 않도록 렌더마다 최신값을 ref에 보관해 읽는다.
   const contactQueryRef = useRef(contactQuery);
   contactQueryRef.current = contactQuery;
@@ -2485,6 +2506,11 @@ function App() {
         onOpen={openNotificationToast}
         onDismiss={dismissAppToast}
       />
+      <MediaViewer
+        viewer={mediaViewer}
+        onClose={() => setMediaViewer(null)}
+        onIndexChange={(index) => setMediaViewer((current) => (current ? { ...current, index } : current))}
+      />
       <AnimatePresence>
         {notifCenterOpen && (
           <motion.div
@@ -3478,6 +3504,7 @@ function App() {
                         onHide={hideMessageForMe}
                         onDeleteForEveryone={deleteMessageForEveryone}
                         onCopy={copyMessageText}
+                        onOpenMedia={openMediaViewer}
                       />
                     </div>
                   );
@@ -3577,6 +3604,23 @@ function App() {
               <input ref={attachVideoRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={(event) => { selectAttachment(event.target.files?.[0] ?? null); event.target.value = ''; }} />
               <input ref={attachFileRef} type="file" style={{ display: 'none' }} onChange={(event) => { selectAttachment(event.target.files?.[0] ?? null); event.target.value = ''; }} />
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={presence.typingUsers.length > 0 ? `${presence.typingUsers[0]}님이 입력 중` : '메시지를 입력하세요'} disabled={!selectedRoomId} />
+              <Popover.Root>
+                <Popover.Trigger asChild>
+                  <button type="button" className="composer-emoji-button" title="이모지" aria-label="이모지 넣기" disabled={!selectedRoomId}>
+                    <Smile size={20} aria-hidden />
+                  </button>
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content className="emoji-picker" side="top" align="end" sideOffset={10} collisionPadding={12}>
+                    <div className="emoji-picker-head">자주 쓰는 이모지</div>
+                    <div className="emoji-grid">
+                      {COMPOSER_EMOJIS.map((emoji) => (
+                        <button key={emoji} type="button" className="emoji-cell" onClick={() => setDraft((current) => current + emoji)}>{emoji}</button>
+                      ))}
+                    </div>
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
               <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
             </form>
             <GameOverlay
@@ -3788,6 +3832,64 @@ function App() {
   );
 }
 
+// 미디어 뷰어: 채팅방 이미지 풀스크린 + 상단바(닫기/카운트/저장) + 하단 필름스트립
+function MediaViewer({ viewer, onClose, onIndexChange }: {
+  viewer: { images: ChatMessage[]; index: number } | null;
+  onClose: () => void;
+  onIndexChange: (index: number) => void;
+}) {
+  const open = !!viewer;
+  const images = viewer?.images ?? [];
+  const index = viewer?.index ?? 0;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+      else if (event.key === 'ArrowLeft' && index > 0) onIndexChange(index - 1);
+      else if (event.key === 'ArrowRight' && index < images.length - 1) onIndexChange(index + 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, index, images.length, onClose, onIndexChange]);
+  const current = images[index];
+  return (
+    <AnimatePresence>
+      {open && current && (
+        <motion.div
+          className="media-viewer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="사진 보기"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <div className="media-viewer-top" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="media-viewer-btn" onClick={onClose} aria-label="닫기"><X size={20} aria-hidden /></button>
+            <span className="media-viewer-count">{index + 1} / {images.length}</span>
+            <a className="media-viewer-btn" href={current.attachmentUrl ?? '#'} target="_blank" rel="noreferrer" download={current.attachmentName ?? undefined} aria-label="저장"><Download size={20} aria-hidden /></a>
+          </div>
+          <div className="media-viewer-stage" onClick={(event) => event.stopPropagation()}>
+            {index > 0 && <button type="button" className="media-viewer-nav prev" onClick={() => onIndexChange(index - 1)} aria-label="이전 사진"><ChevronLeft size={26} aria-hidden /></button>}
+            <img key={current.id} className="media-viewer-img" src={current.attachmentUrl ?? ''} alt={current.attachmentName ?? ''} />
+            {index < images.length - 1 && <button type="button" className="media-viewer-nav next" onClick={() => onIndexChange(index + 1)} aria-label="다음 사진"><ChevronRight size={26} aria-hidden /></button>}
+          </div>
+          {images.length > 1 && (
+            <div className="media-viewer-strip" onClick={(event) => event.stopPropagation()}>
+              {images.map((m, i) => (
+                <button key={m.id} type="button" className={i === index ? 'media-thumb active' : 'media-thumb'} onClick={() => onIndexChange(i)} aria-label={`${i + 1}번째 사진`}>
+                  <img src={m.attachmentUrl ?? ''} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function NotificationToastStack({
   toasts,
   onOpen,
@@ -3949,6 +4051,7 @@ type MessageRowProps = {
   onHide: (message: ChatMessage) => void;
   onDeleteForEveryone: (message: ChatMessage) => void;
   onCopy: (text: string) => void;
+  onOpenMedia: (message: ChatMessage) => void;
 };
 
 // 메시지 한 줄. React.memo로 감싸 props가 바뀐 행만 리렌더한다.
@@ -3969,7 +4072,8 @@ const MessageRow = React.memo(function MessageRow({
   onReply,
   onHide,
   onDeleteForEveryone,
-  onCopy
+  onCopy,
+  onOpenMedia
 }: MessageRowProps) {
   const isDeleted = message.deletedForEveryone;
   const linkUrl = isDeleted ? null : firstMessageUrl(message.content);
@@ -4010,9 +4114,9 @@ const MessageRow = React.memo(function MessageRow({
                     )}
                     {message.attachmentUrl && (
                       message.attachmentType?.startsWith('image/') ? (
-                        <a className="message-media" href={message.attachmentUrl} target="_blank" rel="noreferrer">
+                        <button type="button" className="message-media" onClick={() => onOpenMedia(message)} title="사진 크게 보기">
                           <img src={message.attachmentUrl} alt={message.attachmentName ?? '첨부 이미지'} />
-                        </a>
+                        </button>
                       ) : message.attachmentType?.startsWith('video/') ? (
                         <video className="message-media message-video" src={message.attachmentUrl} controls preload="metadata" />
                       ) : (
