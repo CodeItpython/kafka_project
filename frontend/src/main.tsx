@@ -3207,11 +3207,9 @@ function App() {
                   <CheckCircle2 size={15} aria-hidden />
                   {connected ? '실시간 연결' : '연결 대기'}
                 </span>
-                <span className="tip-wrap" data-tip="서비스 준비중입니다">
-                  <button className="soft-action-button is-soon" onClick={() => setStatus('GPT 요약은 서비스 준비중입니다.')} type="button" aria-label="GPT 요약 (서비스 준비중)">
-                    <Sparkles size={15} aria-hidden />GPT 요약
-                  </button>
-                </span>
+                <button className="soft-action-button summary-action" onClick={summarizeConversation} disabled={!selectedRoomId || summaryLoading} type="button" aria-label="AI 대화 요약">
+                  <Sparkles size={15} aria-hidden />{summaryLoading ? '요약 중…' : 'AI 요약'}
+                </button>
                 <button className="ghost-icon-button" onClick={() => setRoomMenuOpen(true)} disabled={!selectedRoomId} title="채팅방 설정" aria-label="채팅방 설정"><Settings size={18} aria-hidden /></button>
               </div>
             </header>
@@ -3243,6 +3241,7 @@ function App() {
               {conversationSummary && (
                 <section className="summary-card">
                   <div className="section-title">
+                    <Sparkles size={14} aria-hidden />
                     <span>대화 요약</span>
                     <small>{conversationSummary.model} · {conversationSummary.messageCount}개</small>
                   </div>
