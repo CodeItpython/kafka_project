@@ -782,33 +782,6 @@ input:focus {
   font-size: 13px;
 }
 
-.tip-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.tip-wrap::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #191f28;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 50;
-}
-.tip-wrap:hover::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-.soft-action-button.is-soon { opacity: 0.7; }
 
 .notice {
   margin-top: 14px;
@@ -1953,19 +1926,32 @@ input:focus {
 .presence-line {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   min-height: 20px;
   margin-top: 8px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .presence-line span {
-  color: #067647;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand);
+}
+
+.presence-line span:first-child::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
 }
 
 .presence-line strong {
-  color: #5b53eb;
+  color: var(--brand);
+  font-weight: 700;
 }
 
 .status-pill {
@@ -2004,6 +1990,18 @@ input:focus {
   background: #edf0f8;
   font-size: 13px;
   font-weight: 900;
+}
+
+.soft-action-button.summary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand);
+  background: var(--brand-tint);
+}
+
+.soft-action-button.summary-action:disabled {
+  opacity: 0.6;
 }
 
 .participant-panel {
@@ -2205,18 +2203,41 @@ input:focus {
 
 .summary-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   width: min(620px, 100%);
-  padding: 14px;
-  border: 1px solid #dcd9f8;
-  border-radius: 14px;
-  color: #333d4b;
-  background: #f5f4fe;
+  padding: 13px 15px;
+  border: 1px solid #e2e6ff;
+  border-radius: 16px;
+  color: #4e5968;
+  background: linear-gradient(135deg, #f0f3ff, #f7f5ff);
+}
+
+.summary-card .section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.summary-card .section-title > svg { color: #5b53eb; flex: none; }
+
+.summary-card .section-title span {
+  color: #5b53eb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-card .section-title small {
+  margin-left: auto;
+  color: #a9b0c9;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .summary-card p {
-  color: #333d4b;
-  line-height: 1.58;
+  margin: 0;
+  color: #4e5968;
+  font-size: 13px;
+  line-height: 1.55;
   white-space: pre-wrap;
 }
 
@@ -2263,18 +2284,18 @@ input:focus {
   position: relative;
   min-width: 0;
   max-width: 100%;
-  padding: 11px 15px;
-  border-radius: 20px 20px 20px 7px;
-  color: #2a2f45;
-  background: #ffffff;
-  box-shadow: 0 8px 22px rgba(66, 71, 130, 0.10);
+  padding: 11px 14px;
+  border-radius: 4px 18px 18px 18px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(70, 80, 140, 0.06);
 }
 
 .chat-row.mine .chat-bubble {
-  border-radius: 20px 20px 7px 20px;
+  border-radius: 18px 4px 18px 18px;
   color: #ffffff;
-  background: linear-gradient(160deg, #2f2d63 0%, #262353 100%);
-  box-shadow: 0 10px 26px rgba(38, 35, 83, 0.28);
+  background: var(--brand);
+  box-shadow: 0 6px 16px rgba(61, 109, 255, 0.28);
 }
 
 /* 말풍선 옆 시간 — 초 없이 작게 (오전 9:08) */
@@ -2542,9 +2563,9 @@ input:focus {
 }
 
 .reaction-strip button.active {
-  border-color: #5b53eb;
-  color: #5b53eb;
-  background: #eeecfe;
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-tint);
 }
 
 .chat-row.mine .chat-bubble .reaction-strip button {
@@ -2672,15 +2693,16 @@ input:focus {
   background: transparent;
 }
 
-.attach-button {
+.composer > button.attach-button {
   display: grid;
   place-items: center;
   width: 42px;
   height: 42px;
   min-height: 42px;
-  border-radius: 999px;
-  color: #6d66ef;
-  background: #eeecfe;
+  border-radius: 14px;
+  color: var(--gray-600);
+  background: var(--fill);
+  box-shadow: none;
 }
 
 .attach-button input {
@@ -2965,20 +2987,22 @@ input:focus {
 
 .composer > button {
   flex: 0 0 auto;
+  border-radius: 14px;
   color: #ffffff;
-  background: linear-gradient(150deg, #6d66ef 0%, #5b53eb 100%);
-  box-shadow: 0 8px 18px rgba(91, 83, 235, 0.36);
+  background: var(--brand);
+  box-shadow: 0 8px 18px rgba(61, 109, 255, 0.35);
 }
 
 .composer > button:hover,
 .composer > button:focus-visible {
   color: #ffffff;
-  background: linear-gradient(150deg, #5b53eb 0%, #4a43d6 100%);
+  background: #2b57e0;
 }
 
 .composer > button:disabled {
   color: #ffffff;
-  background: #bcb7f4;
+  background: #b9c7f2;
+  box-shadow: none;
   opacity: 1;
 }
 
