@@ -46,7 +46,10 @@ import {
   X,
   UserRound,
   Volume2,
-  VolumeX
+  VolumeX,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -72,6 +75,10 @@ import ShoppingFeed, { ShoppingProduct } from './ShoppingFeed';
 import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
 import WelcomeLanding from './WelcomeLanding';
 import { playSound, isSoundEnabled, setSoundEnabled } from './sound';
+import { Theme, loadTheme, applyTheme, saveThemeLocal, watchSystemTheme } from './theme';
+
+// 앱 마운트 전 테마를 먼저 적용해 깜빡임(FOUC)을 줄인다.
+applyTheme(loadTheme());
 
 type Mode = 'login' | 'register' | 'email';
 type HomeTab = 'friends' | 'chats' | 'news' | 'shopping' | 'settings';
@@ -113,6 +120,7 @@ type User = {
   role: 'USER' | 'ADMIN';
   statusMessage: string;
   profileImageUrl: string | null;
+  theme?: Theme;
 };
 
 type AuthResponse = {
@@ -541,6 +549,27 @@ function App() {
       return next;
     });
   }, []);
+  const [theme, setThemeState] = useState<Theme>(loadTheme);
+  // 테마 변경 시 <html data-theme> 적용 + 로컬 캐시
+  useEffect(() => {
+    applyTheme(theme);
+    saveThemeLocal(theme);
+  }, [theme]);
+  // 'system'일 때 OS 다크 전환 실시간 반영
+  useEffect(() => watchSystemTheme(() => theme), [theme]);
+  // 로그인/부트스트랩 시 서버 프로필의 테마로 동기화
+  useEffect(() => {
+    if (user?.theme) setThemeState(user.theme);
+  }, [user?.theme]);
+  function changeTheme(next: Theme) {
+    setThemeState(next);
+    setUser((current) => (current ? { ...current, theme: next } : current));
+    playSound('toggle');
+    // 로그인 상태면 프로필(백엔드)에 저장해 기기 간 동기화
+    if (token) {
+      request<UserProfile>('/users/me/theme', { method: 'PATCH', body: JSON.stringify({ theme: next }) }).catch(() => undefined);
+    }
+  }
   const [appToasts, setAppToasts] = useState<AppToast[]>([]);
   // 네이버 쇼핑 장바구니
   const [shoppingCart, setShoppingCart] = useState<ShoppingCart | null>(null);
@@ -2820,6 +2849,21 @@ function App() {
                   </button>
                 ))}
                 {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
+              </div>
+            </section>
+
+            <section className="panel-section theme-panel">
+              <div className="section-title"><span>화면 테마</span></div>
+              <div className="theme-seg" role="group" aria-label="화면 테마">
+                <button type="button" className={theme === 'light' ? 'active' : ''} aria-pressed={theme === 'light'} onClick={() => changeTheme('light')}>
+                  <Sun size={16} aria-hidden />라이트
+                </button>
+                <button type="button" className={theme === 'dark' ? 'active' : ''} aria-pressed={theme === 'dark'} onClick={() => changeTheme('dark')}>
+                  <Moon size={16} aria-hidden />다크
+                </button>
+                <button type="button" className={theme === 'system' ? 'active' : ''} aria-pressed={theme === 'system'} onClick={() => changeTheme('system')}>
+                  <Monitor size={16} aria-hidden />시스템
+                </button>
               </div>
             </section>
 

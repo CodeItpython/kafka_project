@@ -51,6 +51,9 @@ public class UserAccount {
     @Column(length = 1000)
     private String profileImageUrl;
 
+    @Column(nullable = false, length = 10)
+    private String theme = "system";
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -78,6 +81,22 @@ public class UserAccount {
     public void updateProfileImage(String profileImageUrl) {
         this.profileImageUrl = profileImageUrl;
         this.updatedAt = Instant.now();
+    }
+
+    public void updateTheme(String theme) {
+        this.theme = normalizeTheme(theme);
+        this.updatedAt = Instant.now();
+    }
+
+    public String getTheme() {
+        return normalizeTheme(theme);
+    }
+
+    private static String normalizeTheme(String theme) {
+        if ("light".equals(theme) || "dark".equals(theme)) {
+            return theme;
+        }
+        return "system";
     }
 
     public void changeEmail(String email) {

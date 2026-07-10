@@ -61,6 +61,13 @@ public class UserProfileService {
     }
 
     @Transactional
+    public UserProfileResponse updateTheme(String theme, UserAccount user) {
+        user.updateTheme(theme);
+        UserAccount saved = userAccountRepository.save(user);
+        return toProfileResponse(saved);
+    }
+
+    @Transactional
     public UserProfileResponse updateProfileImage(MultipartFile file, UserAccount user) {
         String imageUrl = storeProfileImage(file);
         user.updateProfileImage(imageUrl);
@@ -113,6 +120,7 @@ public class UserProfileService {
                 user.getProvider().name(),
                 user.getStatusMessage(),
                 storageUrlSigner.sign(user.getProfileImageUrl()),
+                user.getTheme(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 history
