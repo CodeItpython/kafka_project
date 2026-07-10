@@ -3379,6 +3379,11 @@ function App() {
                   );
                 })}
               </div>
+              {presence.typingUsers.length > 0 && (
+                <div className="typing-indicator" aria-live="polite" aria-label={`${presence.typingUsers.join(', ')}님이 입력 중`}>
+                  <span className="typing-dots" aria-hidden><i /><i /><i /></span>
+                </div>
+              )}
             </div>
 
             {activeMatch && !gameOpen && !matchSession && (
