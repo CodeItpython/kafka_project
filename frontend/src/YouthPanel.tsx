@@ -24,6 +24,17 @@ type YouthPolicy = {
   period: string | null;
 };
 
+// 경기 공공일자리(잡아바) 채용공고. 취업 탭에서 정책 카드 스타일을 재사용해 표시.
+type YouthJob = {
+  id: string;
+  title: string;
+  org: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  period: string | null;
+  url: string | null;
+};
+
 type PolicyResponse = { available?: boolean; hasMore?: boolean; items?: YouthPolicy[] };
 
 // 지역 토글 / 세부탭은 클라이언트 상수(쇼핑 탭의 SORTS 방식).
@@ -60,6 +71,8 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
   const [policies, setPolicies] = useState<YouthPolicy[]>([]);
   const [available, setAvailable] = useState(true);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [jobs, setJobs] = useState<YouthJob[]>([]);
+  const [empShowingJobs, setEmpShowingJobs] = useState(false); // 취업 탭이 채용공고를 보여주는 중(아니면 뉴스 폴백)
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -69,6 +82,8 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
   const reqRef = useRef(0);
   const pageRef = useRef(1); // 정책 페이지
   const startRef = useRef(1); // 뉴스 start 오프셋
+  const jobsPageRef = useRef(1); // 채용공고 페이지
+  const empShowingJobsRef = useRef(false); // 로직용(렌더용 state와 동기화)
   const loadingRef = useRef(false);
   const loadingMoreRef = useRef(false);
 
@@ -88,56 +103,117 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
       setLoading(true);
       setError(null);
     }
-    let url: string;
-    if (seg === 'policies') {
+    const stale = () => myReq !== reqRef.current; // 세그먼트/지역 변경으로 무효화된 응답 폐기
+    const getJson = (url: string) =>
+      fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
+    const showJobs = (value: boolean) => {
+      empShowingJobsRef.current = value;
+      setEmpShowingJobs(value);
+    };
+
+    const applyPolicies = (data: PolicyResponse & { items?: YouthPolicy[] }) => {
+      if (stale()) return;
+      const items = Array.isArray(data.items) ? data.items : [];
+      setAvailable(data.available !== false);
+      if (mode === 'append') {
+        setPolicies((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...items.filter((p) => !seen.has(p.id))];
+        });
+      } else {
+        setPolicies(items);
+      }
+      pageRef.current = (mode === 'replace' ? 1 : pageRef.current) + 1;
+      setHasMore(Boolean(data.hasMore));
+    };
+
+    const applyJobs = (data: { hasMore?: boolean; items?: YouthJob[] }) => {
+      if (stale()) return;
+      showJobs(true);
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (mode === 'append') {
+        setJobs((prev) => {
+          const seen = new Set(prev.map((j) => j.id));
+          return [...prev, ...items.filter((j) => !seen.has(j.id))];
+        });
+      } else {
+        setJobs(items);
+      }
+      jobsPageRef.current = (mode === 'replace' ? 1 : jobsPageRef.current) + 1;
+      setHasMore(Boolean(data.hasMore));
+    };
+
+    const applyNews = (data: { items?: NewsItem[] }) => {
+      if (stale()) return;
+      showJobs(false);
+      const items = Array.isArray(data.items) ? data.items : [];
+      if (mode === 'append') {
+        setNews((prev) => {
+          const seen = new Set(prev.map((n) => n.id));
+          return [...prev, ...items.filter((n) => !seen.has(n.id))];
+        });
+      } else {
+        setNews(items);
+      }
+      startRef.current = (mode === 'replace' ? 1 : startRef.current) + DISPLAY;
+      setHasMore(items.length >= DISPLAY && startRef.current <= MAX_START);
+    };
+
+    const policyUrl = () => {
       const page = mode === 'replace' ? 1 : pageRef.current;
-      url = `${NEWS_ROOT}/youth/policies?region=${encodeURIComponent(reg)}&page=${page}&size=${DISPLAY}`
+      return `${NEWS_ROOT}/youth/policies?region=${encodeURIComponent(reg)}&page=${page}&size=${DISPLAY}`
         + (kw ? `&keyword=${encodeURIComponent(kw)}` : '');
-    } else {
+    };
+    const jobsUrl = () => {
+      const page = mode === 'replace' ? 1 : jobsPageRef.current;
+      return `${NEWS_ROOT}/youth/jobs?page=${page}&size=${DISPLAY}`;
+    };
+    const newsUrl = () => {
       const start = mode === 'replace' ? 1 : startRef.current;
-      url = `${NEWS_ROOT}/search?query=${encodeURIComponent(newsQuery(seg, reg))}&start=${start}&display=${DISPLAY}`;
-    }
-    return fetch(url)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-      .then((data: PolicyResponse & { items?: (YouthPolicy | NewsItem)[] }) => {
-        if (myReq !== reqRef.current) return; // 세그먼트/지역 변경으로 무효화된 응답 폐기
-        const list = Array.isArray(data.items) ? data.items : [];
-        if (seg === 'policies') {
-          const items = list as YouthPolicy[];
-          setAvailable(data.available !== false);
-          if (mode === 'append') {
-            setPolicies((prev) => {
-              const seen = new Set(prev.map((p) => p.id));
-              return [...prev, ...items.filter((p) => !seen.has(p.id))];
-            });
-          } else {
-            setPolicies(items);
-          }
-          pageRef.current = (mode === 'replace' ? 1 : pageRef.current) + 1;
-          setHasMore(Boolean(data.hasMore));
-        } else {
-          const items = list as NewsItem[];
-          if (mode === 'append') {
-            setNews((prev) => {
-              const seen = new Set(prev.map((n) => n.id));
-              return [...prev, ...items.filter((n) => !seen.has(n.id))];
-            });
-          } else {
-            setNews(items);
-          }
-          startRef.current = (mode === 'replace' ? 1 : startRef.current) + DISPLAY;
-          setHasMore(items.length >= DISPLAY && startRef.current <= MAX_START);
+      return `${NEWS_ROOT}/search?query=${encodeURIComponent(newsQuery(seg, reg))}&start=${start}&display=${DISPLAY}`;
+    };
+
+    const run = async () => {
+      if (seg === 'policies') {
+        applyPolicies(await getJson(policyUrl()));
+        return;
+      }
+      if (seg === 'employment') {
+        if (mode === 'append') {
+          if (empShowingJobsRef.current) applyJobs(await getJson(jobsUrl()));
+          else applyNews(await getJson(newsUrl()));
+          return;
         }
-      })
+        // 첫 로드: 경기/전체는 잡아바 채용공고 우선, 미구성(available:false)·서울·오류면 뉴스로 폴백.
+        if (reg !== 'seoul') {
+          try {
+            const data = await getJson(jobsUrl());
+            if (stale()) return;
+            if (data.available !== false) {
+              applyJobs(data);
+              return;
+            }
+          } catch {
+            // 채용공고 API 미배포/오류 → 뉴스 폴백
+          }
+        }
+        applyNews(await getJson(newsUrl()));
+        return;
+      }
+      // 소식
+      applyNews(await getJson(newsUrl()));
+    };
+
+    return run()
       .catch(() => {
-        if (myReq !== reqRef.current) return;
-        if (mode === 'append') return; // 일시적 오류로 더보기를 영구 중단시키지 않음
+        if (stale() || mode === 'append') return; // 일시적 오류로 더보기를 영구 중단시키지 않음
         setError('불러오지 못했습니다.');
         if (seg === 'policies') setPolicies([]);
+        else if (empShowingJobsRef.current) setJobs([]);
         else setNews([]);
       })
       .finally(() => {
-        if (myReq !== reqRef.current) return;
+        if (stale()) return;
         loadingRef.current = false;
         loadingMoreRef.current = false;
         setLoading(false);
@@ -149,9 +225,10 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
   useEffect(() => {
     pageRef.current = 1;
     startRef.current = 1;
+    jobsPageRef.current = 1;
     setHasMore(false);
     if (segment === 'policies') setPolicies([]);
-    else setNews([]);
+    else { setNews([]); setJobs([]); }
     load(segment, region, 'replace', policyQuery);
   }, [segment, region, policyQuery, load]);
 
@@ -161,7 +238,8 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
   }
 
   const isPolicies = segment === 'policies';
-  const empty = isPolicies ? policies.length === 0 : news.length === 0;
+  const showingJobs = segment === 'employment' && empShowingJobs;
+  const empty = isPolicies ? policies.length === 0 : showingJobs ? jobs.length === 0 : news.length === 0;
 
   return (
     <div className="youth-panel">
@@ -257,7 +335,7 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
 
       {!loading && !error && available && empty && (
         <div className="news-empty">
-          <p>표시할 {isPolicies ? '정책' : '소식'}이 없습니다.</p>
+          <p>표시할 {isPolicies ? '정책이' : showingJobs ? '채용공고가' : '소식이'} 없습니다.</p>
         </div>
       )}
 
@@ -311,7 +389,39 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
         </>
       )}
 
-      {!loading && !error && !isPolicies && news.length > 0 && (
+      {!loading && !error && showingJobs && jobs.length > 0 && (
+        <>
+          <div className="youth-policy-list">
+            {jobs.map((job, index) => (
+              <motion.article
+                key={`${job.id}-${index}`}
+                className="youth-policy-card"
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.28, delay: Math.min((index % DISPLAY) * 0.02, 0.3) }}
+              >
+                <div className="youth-policy-head">
+                  <span className="youth-policy-badge">채용</span>
+                  <span className="youth-policy-region">경기</span>
+                </div>
+                <strong className="youth-policy-title">{job.title}</strong>
+                <div className="youth-policy-meta">
+                  {job.org && <span>🏛 {job.org}</span>}
+                  {job.period && <span>🗓 {job.period}</span>}
+                </div>
+                {job.url && (
+                  <a className="youth-policy-apply" href={job.url} target="_blank" rel="noreferrer noopener">
+                    자세히 보기 <ExternalLink size={13} aria-hidden />
+                  </a>
+                )}
+              </motion.article>
+            ))}
+          </div>
+          {renderMore()}
+        </>
+      )}
+
+      {!loading && !error && !isPolicies && !showingJobs && news.length > 0 && (
         <>
           <div className="news-list">
             {news.map((item, index) => (
