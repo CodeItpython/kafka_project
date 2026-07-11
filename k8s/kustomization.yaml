@@ -16,6 +16,7 @@ resources:
   - chat-service.yaml
   - shopping-service.yaml
   - signaling-service.yaml
+  - order-service.yaml
   - autoscaling.yaml
   - news-service.yaml
   - frontend.yaml

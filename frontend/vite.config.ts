@@ -13,6 +13,8 @@ export default defineConfig({
       '/api/chat': 'http://localhost:8892',
       '/api/notifications': 'http://localhost:8892',
       '/api/admin/kafka': 'http://localhost:8892',
+      // order-service owns checkout, orders and the mock payment.
+      '/api/orders': 'http://localhost:8895',
       '/api': 'http://localhost:8890',
       // signaling-service owns the video-call WebRTC signaling socket. Must come
       // before '/ws' since '/ws-signal' also has the '/ws' prefix.

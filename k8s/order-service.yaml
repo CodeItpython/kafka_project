@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: kafka-project
+spec:
+  # Stateless (orders live in Postgres) — safe to scale out.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: order-service
+          image: kafka-order-service:local
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 8895
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: logstash
+            - name: APP_CORS_ALLOWED_ORIGINS
+              value: http://localhost:8880,http://127.0.0.1:8880
+            # jwt-secret MUST match auth-secrets (tokens are minted by auth-service).
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: order-secrets
+                  key: jwt-secret
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/kafka_order
+            - name: SPRING_DATASOURCE_USERNAME
+              value: kafka
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: kafka
+            - name: APP_SERVICES_SHOPPING_SERVICE_URL
+              value: http://shopping-service:8893
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: MANAGEMENT_OTLP_TRACING_ENDPOINT
+              value: http://tempo:4318/v1/traces
+            - name: LOGSTASH_HOST
+              value: logstash
+            - name: LOGSTASH_PORT
+              value: "5000"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8895
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 48
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8895
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8895
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: kafka-project
+spec:
+  type: NodePort
+  selector:
+    app: order-service
+  ports:
+    - name: http
+      port: 8895
+      targetPort: 8895
+      nodePort: 30895
