@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signaling-service
+  namespace: kafka-project
+spec:
+  # Pinned to 1 replica: signaling routing uses an in-memory STOMP SimpleBroker +
+  # user registry, so both call peers must land on the same instance. Scaling out
+  # needs a shared broker (RabbitMQ/Redis relay) first.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: signaling-service
+  template:
+    metadata:
+      labels:
+        app: signaling-service
+    spec:
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: signaling-service
+          image: kafka-signaling-service:local
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 8894
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: logstash
+            - name: APP_CORS_ALLOWED_ORIGINS
+              value: http://localhost:8880,http://127.0.0.1:8880
+            # jwt-secret MUST match auth-secrets (tokens are minted by auth-service).
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: signaling-secrets
+                  key: jwt-secret
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: MANAGEMENT_OTLP_TRACING_ENDPOINT
+              value: http://tempo:4318/v1/traces
+            - name: LOGSTASH_HOST
+              value: logstash
+            - name: LOGSTASH_PORT
+              value: "5000"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8894
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 48
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8894
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8894
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: signaling-service
+  namespace: kafka-project
+spec:
+  type: NodePort
+  selector:
+    app: signaling-service
+  ports:
+    - name: http
+      port: 8894
+      targetPort: 8894
+      nodePort: 30894

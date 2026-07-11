@@ -13,4 +13,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = 'kafka-backend'
-include 'auth-service', 'news-service', 'chat-service', 'shopping-service'
+include 'auth-service', 'news-service', 'chat-service', 'shopping-service', 'signaling-service'

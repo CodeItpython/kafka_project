@@ -18,6 +18,7 @@ import {
   Truck,
   QrCode,
   ScanLine,
+  Video,
   Copy,
   Hash,
   Image as ImageIcon,
@@ -89,6 +90,7 @@ import WelcomeLanding from './WelcomeLanding';
 import { playSound, isSoundEnabled, setSoundEnabled } from './sound';
 import { Theme, loadTheme, applyTheme, saveThemeLocal, watchSystemTheme } from './theme';
 import QRCode from 'qrcode';
+import VideoCall, { StartCall } from './call/VideoCall';
 
 // 앱 마운트 전 테마를 먼저 적용해 깜빡임(FOUC)을 줄인다.
 applyTheme(loadTheme());
@@ -714,6 +716,11 @@ function App() {
   const directoryHeaderOpacity = useTransform(directoryScrollYProgress, [0, 0.35], [1, 0.94]);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? null;
+  // 1:1(DIRECT) 방에서 나를 제외한 상대 — 영상통화 대상.
+  const callPeer = selectedRoom?.type === 'DIRECT'
+    ? roomParticipants.find((participant) => participant.email.toLowerCase() !== (user?.email ?? '').toLowerCase()) ?? null
+    : null;
+  const callStartRef = useRef<StartCall | null>(null);
   const directRooms = rooms.filter((room) => room.type === 'DIRECT');
   const totalUnread = rooms.reduce((sum, room) => sum + room.unreadCount, 0);
   const unreadRoomCount = rooms.filter((room) => room.unreadCount > 0).length;
@@ -2234,6 +2241,8 @@ function App() {
       setMessages([]);
       setReplyTarget(null);
       setInviteEmail('');
+      // 방 전환 중 이전 방 참여자가 남아 callPeer가 엉뚱한 상대로 계산되지 않도록 먼저 비운다.
+      setRoomParticipants([]);
       loadMessages(selectedRoomId);
       loadPresence(selectedRoomId);
       loadRoomParticipants(selectedRoomId);
@@ -2670,6 +2679,11 @@ function App() {
         toasts={appToasts}
         onOpen={openNotificationToast}
         onDismiss={dismissAppToast}
+      />
+      <VideoCall
+        token={token}
+        user={{ email: user.email, name: user.name, profileImageUrl: user.profileImageUrl }}
+        onExposeStart={(start) => { callStartRef.current = start; }}
       />
       <div className="undo-snack-wrap" aria-live="polite">
         <AnimatePresence>
@@ -3696,6 +3710,11 @@ function App() {
                   <CheckCircle2 size={15} aria-hidden />
                   {connected ? '실시간 연결' : '연결 대기'}
                 </span>
+                {callPeer && (
+                  <button className="ghost-icon-button call-button" onClick={() => callStartRef.current?.({ email: callPeer.email, name: callPeer.name, image: callPeer.profileImageUrl }, selectedRoomId || null)} title="영상 통화" aria-label="영상 통화">
+                    <Video size={18} aria-hidden />
+                  </button>
+                )}
                 <button className="soft-action-button summary-action" onClick={summarizeConversation} disabled={!selectedRoomId || summaryLoading} type="button" aria-label="AI 대화 요약">
                   <Sparkles size={15} aria-hidden />{summaryLoading ? '요약 중…' : 'AI 요약'}
                 </button>

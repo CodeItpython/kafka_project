@@ -5522,3 +5522,152 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
 .kt-coach-controls { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; }
 .kt-coach-skip { flex: 0 0 auto; padding: 10px 12px; font-size: 13px; font-weight: 700; color: var(--gray-500); cursor: pointer; }
 .kt-coach-next { flex: 1; min-height: 46px; border-radius: 12px; background: var(--brand); color: #fff; font-size: 14px; font-weight: 700; box-shadow: var(--sh-btn-blue); cursor: pointer; }
+
+/* ── #28 영상 통화 ─────────────────────────────── */
+.call-button { color: var(--brand); }
+.call-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 영상통화는 테마와 무관하게 다크 배경. */
+  background: radial-gradient(120% 90% at 50% 0%, #1a2036, #0d1120 65%, #080a12);
+  color: #fff;
+}
+.call-avatar { border-radius: 50%; object-fit: cover; background: #2a3350; }
+.call-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #5b86ff, #3d6dff);
+}
+
+/* 발신/수신 링잉 화면 */
+.call-ringing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 24px calc(env(safe-area-inset-bottom) + 48px);
+  text-align: center;
+}
+.call-ring-badge {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: #cdd7ff;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+}
+.call-ring-name { font-size: 24px; font-weight: 800; }
+.call-ring-email { font-size: 12px; color: #7f8bb0; margin-top: -6px; }
+.call-ring-sub { font-size: 14px; color: #9aa6c8; margin-top: 6px; }
+.call-ring-actions { display: flex; gap: 44px; margin-top: 28px; }
+.call-ring-btn {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.call-ring-btn:active { transform: scale(0.94); }
+.call-accept { background: var(--kt-success); box-shadow: 0 10px 26px rgba(34, 197, 94, 0.5); }
+.call-decline { background: var(--kt-danger); box-shadow: 0 10px 26px rgba(229, 72, 77, 0.5); }
+
+/* 통화 중 화면 */
+.call-stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.call-remote {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0a0d16;
+}
+.call-connecting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.call-connecting strong { font-size: 20px; font-weight: 800; }
+.call-connecting span { font-size: 14px; color: #9aa6c8; }
+.call-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: calc(env(safe-area-inset-top) + 18px) 16px 18px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent);
+}
+.call-topbar strong { font-size: 17px; font-weight: 700; }
+.call-topbar span { font-size: 12px; color: #b9c2df; }
+.call-local {
+  position: absolute;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 108px);
+  width: 108px;
+  height: 152px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: #10151f;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  transform: scaleX(-1); /* 셀프뷰는 거울 모드 */
+}
+.call-local.is-off { background: #1b2130; }
+.call-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 28px);
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+.call-ctrl {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.call-ctrl:active { transform: scale(0.94); }
+.call-ctrl.is-off { background: #fff; color: #191f28; }
+.call-hangup { background: var(--kt-danger); }
+.call-hangup:active { transform: scale(0.94); }
+.call-error {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  z-index: 130;
+  max-width: calc(100% - 32px);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #191f28;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+}
