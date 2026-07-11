@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, RefreshCcw, X, Swords, ChevronRight } from 'lucide-react';
+import { ArrowLeft, X, Swords, ChevronRight, Trophy, Share2, RotateCcw } from 'lucide-react';
 import SnakeGame from './SnakeGame';
 import TetrisGame from './TetrisGame';
 import Game2048 from './Game2048';
+import type { GameMatchResponse } from './GameMatchCard';
 
 export type GameKey = 'SNAKE' | 'TETRIS' | 'G2048';
 
@@ -19,9 +20,11 @@ type Props = {
   matchMode?: boolean;
   matchGame?: GameKey | null;
   onMatchStart?: (game: GameKey) => Promise<boolean>;
-  onMatchEnd?: (game: GameKey, score: number) => Promise<void>;
+  onMatchEnd?: (game: GameKey, score: number) => Promise<GameMatchResponse | null | void>;
   // 미니게임 허브에서 '게임 대결' 배너를 누르면 대결 모드로 전환.
   onDuel?: () => void;
+  myEmail?: string;
+  myName?: string;
 };
 
 const GAMES: { key: GameKey; name: string; emoji: string; hint: string }[] = [
@@ -30,11 +33,11 @@ const GAMES: { key: GameKey; name: string; emoji: string; hint: string }[] = [
   { key: 'G2048', name: '2048', emoji: '🔢', hint: '방향키 / 스와이프로 합치기' },
 ];
 
-export default function GameOverlay({ open, onClose, submitScore, loadBests, matchMode = false, matchGame = null, onMatchStart, onMatchEnd, onDuel }: Props) {
+export default function GameOverlay({ open, onClose, submitScore, loadBests, matchMode = false, matchGame = null, onMatchStart, onMatchEnd, onDuel, myEmail = '', myName = '' }: Props) {
   const [selected, setSelected] = useState<GameKey | null>(null);
   const [score, setScore] = useState(0);
   const [runId, setRunId] = useState(0);
-  const [over, setOver] = useState<{ score: number; improved: boolean } | null>(null);
+  const [over, setOver] = useState<{ score: number; improved: boolean; prevBest: number; match: GameMatchResponse | null } | null>(null);
   const [bests, setBests] = useState<Record<string, number>>({});
   // 부모 리렌더로 콜백 신원이 바뀌어도 오버레이가 초기화되지 않도록 ref로 고정.
   const fns = useRef({ submitScore, loadBests, onMatchStart, onMatchEnd });
@@ -73,21 +76,30 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
     setRunId((n) => n + 1);
   };
   const restart = () => { setScore(0); setOver(null); setRunId((n) => n + 1); };
+  const handleShare = useCallback(async (label: string) => {
+    const text = `Kafka Talk 미니게임 · ${label}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Kafka Talk', text }); return; }
+      await navigator.clipboard?.writeText(text);
+    } catch { /* 취소/미지원 무시 */ }
+  }, []);
 
   const handleScore = useCallback((s: number) => setScore(s), []);
   const handleOver = useCallback((finalScore: number) => {
     const game = selected;
     if (!game) return;
+    const prevBest = bests[game] ?? 0;
     if (matchMode) {
       Promise.resolve(fns.current.onMatchEnd?.(game, finalScore))
-        .finally(() => setOver({ score: finalScore, improved: false }));
+        .then((match) => setOver({ score: finalScore, improved: false, prevBest, match: (match as GameMatchResponse) ?? null }))
+        .catch(() => setOver({ score: finalScore, improved: false, prevBest, match: null }));
       return;
     }
     fns.current.submitScore(game, finalScore).then((res) => {
-      setOver({ score: finalScore, improved: !!res?.improved });
+      setOver({ score: finalScore, improved: !!res?.improved, prevBest, match: null });
       if (res) setBests((prev) => ({ ...prev, [game]: res.bestScore }));
-    }).catch(() => setOver({ score: finalScore, improved: false }));
-  }, [selected, matchMode]);
+    }).catch(() => setOver({ score: finalScore, improved: false, prevBest, match: null }));
+  }, [selected, matchMode, bests]);
 
   const meta = GAMES.find((g) => g.key === selected);
   const best = selected ? (bests[selected] ?? 0) : 0;
@@ -157,23 +169,54 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
                   {selected === 'SNAKE' && <SnakeGame key={runId} onScore={handleScore} onGameOver={handleOver} />}
                   {selected === 'TETRIS' && <TetrisGame key={runId} onScore={handleScore} onGameOver={handleOver} />}
                   {selected === 'G2048' && <Game2048 key={runId} onScore={handleScore} onGameOver={handleOver} />}
-                  {over && (
+                  {over && (() => {
+                    const m = over.match;
+                    const done = matchMode && m && m.status === 'DONE';
+                    const gameName = meta ? meta.name : '게임';
+                    let label = gameName;
+                    if (done && m) {
+                      const result = m.winnerEmail === null ? '무승부' : (m.winnerEmail === myEmail ? '승리 🎉' : '패배');
+                      label = `${gameName} · ${result}`;
+                    } else if (matchMode) {
+                      label = '점수 제출 완료';
+                    }
+                    const iAmChallenger = m ? m.challengerEmail === myEmail : true;
+                    const myScore = m ? (iAmChallenger ? m.challengerScore : m.opponentScore) ?? over.score : over.score;
+                    const oppName = m ? (iAmChallenger ? m.opponentName : m.challengerName) ?? '상대' : '상대';
+                    const oppScore = m ? (iAmChallenger ? m.opponentScore : m.challengerScore) ?? 0 : 0;
+                    return (
                     <div className="game-over-panel">
-                      <strong>{matchMode ? '점수 제출 완료' : '게임 오버'}</strong>
-                      <span className="game-over-score">{over.score}점</span>
-                      {!matchMode && over.improved && <span className="game-over-best">🎉 최고 점수 갱신!</span>}
+                      <span className="game-over-trophy" aria-hidden><Trophy size={38} /></span>
+                      <span className="game-over-label">{label}</span>
+                      <span className="game-over-score">{over.score.toLocaleString()}</span>
+                      {!matchMode && (
+                        <span className="game-over-sub">
+                          이전 최고 {over.prevBest.toLocaleString()}{over.improved && <span className="game-over-record"> · 신기록!</span>}
+                        </span>
+                      )}
+                      {done && m && (
+                        <div className="game-vs">
+                          <div className="game-vs-row">
+                            <span className="game-vs-who"><span className="game-vs-avatar is-me">{(myName[0] ?? '나')}</span><span className="game-vs-name">나</span></span>
+                            <span className="game-vs-score">{Number(myScore).toLocaleString()}</span>
+                          </div>
+                          <div className="game-vs-row">
+                            <span className="game-vs-who"><span className="game-vs-avatar is-opp">{(oppName[0] ?? '상')}</span><span className="game-vs-name" style={{ color: '#9AA3B8' }}>{oppName}</span></span>
+                            <span className="game-vs-score" style={{ color: '#9AA3B8' }}>{Number(oppScore).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
                       <div className="game-over-actions">
+                        <button type="button" className="game-ghost-btn" onClick={() => handleShare(label)}><Share2 size={17} aria-hidden />공유</button>
                         {matchMode ? (
                           <button type="button" className="game-primary-btn" onClick={onClose}>닫기</button>
                         ) : (
-                          <>
-                            <button type="button" className="game-primary-btn" onClick={restart}><RefreshCcw size={15} aria-hidden /> 다시하기</button>
-                            <button type="button" className="game-ghost-btn" onClick={() => setSelected(null)}>다른 게임</button>
-                          </>
+                          <button type="button" className="game-primary-btn" onClick={restart}><RotateCcw size={17} aria-hidden />다시하기</button>
                         )}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
                 {meta && <p className="game-hint">{meta.hint}</p>}
               </div>

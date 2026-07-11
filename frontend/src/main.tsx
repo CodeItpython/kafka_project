@@ -14,6 +14,10 @@ import {
   ChevronRight,
   ChevronLeft,
   Download,
+  Check,
+  Truck,
+  QrCode,
+  ScanLine,
   Copy,
   Hash,
   Image as ImageIcon,
@@ -84,6 +88,7 @@ import { MessageLinkPreview, firstMessageUrl } from './LinkPreview';
 import WelcomeLanding from './WelcomeLanding';
 import { playSound, isSoundEnabled, setSoundEnabled } from './sound';
 import { Theme, loadTheme, applyTheme, saveThemeLocal, watchSystemTheme } from './theme';
+import QRCode from 'qrcode';
 
 // 앱 마운트 전 테마를 먼저 적용해 깜빡임(FOUC)을 줄인다.
 applyTheme(loadTheme());
@@ -93,6 +98,14 @@ type HomeTab = 'friends' | 'chats' | 'news' | 'shopping' | 'settings';
 
 // 하단 탭 순서 — 탭 전환 시 이 순서 기준으로 좌/우 슬라이드 방향을 정한다.
 const TAB_ORDER: HomeTab[] = ['friends', 'chats', 'news', 'shopping', 'settings'];
+
+// 첫 로그인 온보딩 코치마크 — 하단 탭을 순서대로 소개.
+const COACH_STEPS: { tab: HomeTab; Icon: typeof UserRound; title: string; body: React.ReactElement }[] = [
+  { tab: 'friends', Icon: UserRound, title: '친구부터 찾아볼까요 👋', body: <>친구 목록을 확인하고<br />QR로 새 친구를 추가할 수 있어요.</> },
+  { tab: 'chats', Icon: MessagesSquare, title: '대화는 여기예요 💬', body: <>실시간 채팅부터 그룹 대화,<br />미니게임 대결까지 한곳에서.</> },
+  { tab: 'news', Icon: Newspaper, title: '뉴스도 놓치지 마세요 📰', body: <>관심 주제의 소식을<br />한눈에 모아 보여드려요.</> },
+  { tab: 'shopping', Icon: ShoppingBag, title: '쇼핑도 여기서 🛍️', body: <>최저가·인기 상품을 둘러보고<br />바로 장바구니에 담아보세요.</> },
+];
 // 오른쪽 탭으로 이동하면 새 패널이 오른쪽에서, 왼쪽 탭이면 왼쪽에서 슬라이드 인.
 // 나가는 패널은 반대 방향으로 슬라이드 아웃(패널은 absolute 오버레이라 서로 겹쳐 크로스 슬라이드).
 const TAB_SLIDE = {
@@ -118,6 +131,16 @@ type ShoppingCart = {
   items: ShoppingCartItem[];
   totalCount: number;
   totalPrice: number;
+};
+
+type OrderSummary = {
+  orderNumber: string;
+  thumb: string | null;
+  name: string;
+  meta: string;
+  totalCount: number;
+  totalPrice: number;
+  eta: string;
 };
 
 type User = {
@@ -615,6 +638,14 @@ function App() {
   const [shoppingCart, setShoppingCart] = useState<ShoppingCart | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartAddingId, setCartAddingId] = useState<string | null>(null);
+  const [order, setOrder] = useState<OrderSummary | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [coachStep, setCoachStep] = useState<number | null>(null);
+  // 실행취소 스낵바: 삭제를 5초간 보류했다가 확정. 한 번에 하나만 추적.
+  const [undoSnack, setUndoSnack] = useState<{ id: number; label: string } | null>(null);
+  const undoRef = useRef<{ commit: () => void; revert: () => void; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const undoSeqRef = useRef(0);
   const [pendingEmailAuth, setPendingEmailAuth] = useState<AuthResponse | null>(null);
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(() => localStorage.getItem('inAppNotificationsEnabled') !== 'false');
   const [dltMessages, setDltMessages] = useState<DltMessage[]>([]);
@@ -1652,6 +1683,45 @@ function App() {
     }
   }
 
+  function placeOrder() {
+    const cart = shoppingCart;
+    if (!cart || cart.items.length === 0) return;
+    const first = cart.items[0];
+    const restCount = cart.items.length - 1;
+    const d = new Date();
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    const orderNumber = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
+    const del = new Date(d.getTime() + 2 * 24 * 60 * 60 * 1000);
+    const eta = `${p2(del.getMonth() + 1)}/${p2(del.getDate())} 도착 예정`;
+    setOrder({
+      orderNumber,
+      thumb: first.image,
+      name: first.title,
+      meta: restCount > 0 ? `외 ${restCount}종 · 총 ${cart.totalCount}개` : `${first.quantity}개`,
+      totalCount: cart.totalCount,
+      totalPrice: cart.totalPrice,
+      eta,
+    });
+    setCartOpen(false);
+    playSound('success');
+    clearShoppingCart();
+  }
+
+  async function shareMyQr() {
+    if (!user) return;
+    const link = `${window.location.origin}/?add=${encodeURIComponent(user.email)}`;
+    const text = `Kafka Talk에서 친구 추가하기 · ${user.name}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Kafka Talk', text, url: link }); return; }
+      await navigator.clipboard?.writeText(link);
+      setStatus('친구 추가 링크를 복사했어요.');
+    } catch { /* 취소/미지원 무시 */ }
+  }
+
+  function scanQr() {
+    setStatus('QR 스캔은 준비 중이에요.');
+  }
+
   function openShareModal(item: NewsItem) {
     setShareItem(item);
     setShareTab('friends');
@@ -1832,15 +1902,64 @@ function App() {
     }
   }
 
-  const hideMessageForMe = useCallback(async (message: ChatMessage) => {
-    try {
-      await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/me`, { method: 'DELETE' });
+  const flushPendingUndo = useCallback(() => {
+    const pending = undoRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    undoRef.current = null;
+    setUndoSnack(null);
+    pending.commit();
+  }, []);
+
+  const scheduleUndoableDelete = useCallback((opts: { label: string; optimistic: () => void; revert: () => void; commit: () => void }) => {
+    flushPendingUndo(); // 직전 보류 건이 있으면 먼저 확정
+    opts.optimistic();
+    const id = (undoSeqRef.current += 1);
+    const timer = setTimeout(() => {
+      undoRef.current = null;
+      setUndoSnack(null);
+      opts.commit();
+    }, 5000);
+    undoRef.current = { commit: opts.commit, revert: opts.revert, timer };
+    setUndoSnack({ id, label: opts.label });
+  }, [flushPendingUndo]);
+
+  const undoDelete = useCallback(() => {
+    const pending = undoRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    undoRef.current = null;
+    setUndoSnack(null);
+    pending.revert();
+  }, []);
+
+  const hideMessageForMe = useCallback((message: ChatMessage) => {
+    const idx = messagesRef.current.findIndex((item) => item.id === message.id);
+    const removeLocal = () => {
       setMessages((current) => current.filter((item) => item.id !== message.id));
       setSearchResults((current) => current.filter((item) => item.id !== message.id));
-    } catch (error) {
-      setStatus(readableError(error, '메시지를 삭제하지 못했습니다.'));
-    }
-  }, [request, readableError]);
+    };
+    const restore = () => {
+      setMessages((current) => {
+        if (current.some((item) => item.id === message.id)) return current;
+        const copy = [...current];
+        copy.splice(idx < 0 ? copy.length : Math.min(idx, copy.length), 0, message);
+        return copy;
+      });
+      setSearchResults((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
+    };
+    scheduleUndoableDelete({
+      label: '메시지를 삭제했어요',
+      optimistic: removeLocal,
+      revert: restore,
+      commit: () => {
+        request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/me`, { method: 'DELETE' })
+          // 확정 시 재제거: 대기 5초 사이 새로고침(loadMessages)으로 되살아난 경우 다시 숨긴다.
+          .then(removeLocal)
+          .catch((error) => { setStatus(readableError(error, '메시지를 삭제하지 못했습니다.')); restore(); });
+      },
+    });
+  }, [scheduleUndoableDelete, request, readableError]);
 
   async function clearRoomMessagesForMe() {
     if (!selectedRoomId) return;
@@ -1854,16 +1973,30 @@ function App() {
     }
   }
 
-  const deleteMessageForEveryone = useCallback(async (message: ChatMessage) => {
-    try {
-      const updated = await request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/everyone`, { method: 'DELETE' });
-      const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
-      setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
-      setSearchResults((current) => current.filter((item) => item.id !== updated.id));
-    } catch (error) {
-      setStatus(readableError(error, '모두에게 삭제하지 못했습니다.'));
-    }
-  }, [request, withReadCounts, readableError]);
+  const deleteMessageForEveryone = useCallback((message: ChatMessage) => {
+    scheduleUndoableDelete({
+      label: '모두에게서 삭제했어요',
+      optimistic: () => {
+        setMessages((current) => current.map((item) => item.id === message.id ? { ...item, deletedForEveryone: true } : item));
+        setSearchResults((current) => current.filter((item) => item.id !== message.id));
+      },
+      revert: () => {
+        setMessages((current) => current.map((item) => item.id === message.id ? message : item));
+        setSearchResults((current) => current.some((item) => item.id === message.id) ? current : [message, ...current]);
+      },
+      commit: () => {
+        request<ChatMessage>(`/chat/rooms/${message.roomId}/messages/${message.id}/everyone`, { method: 'DELETE' })
+          .then((updated) => {
+            const normalized = withReadCounts([updated], readReceiptsRef.current)[0];
+            setMessages((current) => current.map((item) => item.id === normalized.id ? normalized : item));
+          })
+          .catch((error) => {
+            setStatus(readableError(error, '모두에게 삭제하지 못했습니다.'));
+            setMessages((current) => current.map((item) => item.id === message.id ? message : item));
+          });
+      },
+    });
+  }, [scheduleUndoableDelete, request, withReadCounts, readableError]);
 
   const startEditingMessage = useCallback((message: ChatMessage) => {
     setReplyTarget(null);
@@ -1983,6 +2116,7 @@ function App() {
   }
 
   function logout() {
+    flushPendingUndo();
     localStorage.removeItem('accessToken');
     setToken('');
     setUser(null);
@@ -2274,6 +2408,37 @@ function App() {
   }, [selectedRoomId]);
 
   useEffect(() => {
+    // 닫혀 있거나 사용자가 바뀌면 이전 QR을 즉시 비워 스푸핑/스테일 노출 방지 (재생성 전까지 로딩 표시)
+    setQrDataUrl(null);
+    if (!qrOpen || !user) { return; }
+    let cancelled = false;
+    const link = `${window.location.origin}/?add=${encodeURIComponent(user.email)}`;
+    QRCode.toDataURL(link, { width: 200, margin: 1, color: { dark: '#191F28', light: '#F7F8FA' } })
+      .then((url) => { if (!cancelled) setQrDataUrl(url); })
+      .catch(() => { if (!cancelled) setQrDataUrl(null); });
+    return () => { cancelled = true; };
+  }, [qrOpen, user]);
+
+  // 방을 옮기면 보류 중인 삭제를 즉시 확정 (스낵바 유실 방지)
+  useEffect(() => { flushPendingUndo(); }, [selectedRoomId, flushPendingUndo]);
+
+  // 첫 로그인 시 한 번만 코치마크 노출.
+  useEffect(() => {
+    if (user && !localStorage.getItem('onboardingCoachmarkSeen')) setCoachStep(0);
+  }, [user?.email]);
+  const finishCoach = useCallback(() => {
+    localStorage.setItem('onboardingCoachmarkSeen', '1');
+    setCoachStep(null);
+  }, []);
+  const nextCoach = useCallback(() => {
+    setCoachStep((step) => {
+      if (step === null) return null;
+      if (step >= COACH_STEPS.length - 1) { localStorage.setItem('onboardingCoachmarkSeen', '1'); return null; }
+      return step + 1;
+    });
+  }, []);
+
+  useEffect(() => {
     if (!notificationTopic || !token) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const client = new Client({
@@ -2506,6 +2671,24 @@ function App() {
         onOpen={openNotificationToast}
         onDismiss={dismissAppToast}
       />
+      <div className="undo-snack-wrap" aria-live="polite">
+        <AnimatePresence>
+          {undoSnack && (
+            <motion.div
+              key={undoSnack.id}
+              className="undo-snack"
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            >
+              <span className="undo-snack-icon" aria-hidden><Trash2 size={18} /></span>
+              <span className="undo-snack-label">{undoSnack.label}</span>
+              <button type="button" className="undo-snack-action" onClick={undoDelete}>실행취소</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       <MediaViewer
         viewer={mediaViewer}
         onClose={() => setMediaViewer(null)}
@@ -2931,6 +3114,11 @@ function App() {
                 <p>{user.email} · {user.provider}</p>
                 {user.statusMessage && <small>{user.statusMessage}</small>}
               </div>
+              {activeTab === 'friends' && (
+                <button type="button" className="profile-qr-btn" onClick={() => setQrOpen(true)} title="QR 코드로 친구 추가" aria-label="QR 코드로 친구 추가">
+                  <QrCode size={20} aria-hidden />
+                </button>
+              )}
             </div>
 
             {activeTab === 'settings' && (<>
@@ -3259,10 +3447,96 @@ function App() {
                 <p className="cart-note">상품을 누르면 네이버에서 구매할 수 있어요.</p>
                 <div className="cart-foot-actions">
                   <button type="button" onClick={clearShoppingCart} disabled={!shoppingCart || shoppingCart.items.length === 0}>비우기</button>
-                  <button type="button" className="primary" onClick={() => setCartOpen(false)}>계속 쇼핑</button>
+                  <button type="button" className="primary" onClick={placeOrder} disabled={!shoppingCart || shoppingCart.items.length === 0}>주문하기</button>
                 </div>
               </footer>
             </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {order && (
+          <motion.div
+            className="order-complete"
+            role="dialog"
+            aria-modal="true"
+            aria-label="주문 완료"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="order-complete-body">
+              <div className="order-hero">
+                <span className="order-hero-icon" aria-hidden><Check size={46} strokeWidth={3} /></span>
+                <strong>주문이 완료되었어요</strong>
+                <span className="order-hero-no">주문번호 {order.orderNumber}</span>
+              </div>
+              <div className="order-card">
+                <div className="order-card-thumb" aria-hidden>
+                  {order.thumb ? <img src={order.thumb} alt="" /> : <ShoppingBag size={22} />}
+                </div>
+                <div className="order-card-info">
+                  <strong>{order.name}</strong>
+                  <span>{order.meta}</span>
+                </div>
+                <span className="order-card-price">{order.totalPrice.toLocaleString('ko-KR')}원</span>
+              </div>
+              <div className="order-delivery">
+                <span className="order-delivery-icon" aria-hidden><Truck size={20} /></span>
+                <div className="order-delivery-info">
+                  <strong>{order.eta}</strong>
+                  <span>무료배송 · 도착 시 문 앞에 놓아드려요</span>
+                </div>
+              </div>
+            </div>
+            <footer className="order-complete-foot">
+              <button type="button" className="order-ghost" onClick={() => { setOrder(null); setStatus('주문 상세는 준비 중이에요.'); }}>주문 상세</button>
+              <button type="button" className="order-primary" onClick={() => setOrder(null)}>쇼핑 계속하기</button>
+            </footer>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {qrOpen && (
+          <motion.div
+            className="qr-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="QR 친구 추가"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setQrOpen(false)}
+          >
+            <motion.div
+              className="qr-sheet"
+              initial={{ y: 28, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 28, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button type="button" className="qr-close" onClick={() => setQrOpen(false)} aria-label="닫기"><X size={20} aria-hidden /></button>
+              <div className="qr-card">
+                <div className="qr-card-head">
+                  <span className="qr-avatar" aria-hidden>{user.name.slice(0, 2)}</span>
+                  <div>
+                    <strong>{user.name}</strong>
+                    <span>{user.email}</span>
+                  </div>
+                </div>
+                <div className="qr-code-frame">
+                  {qrDataUrl ? <img src={qrDataUrl} alt="내 프로필 QR 코드" /> : <span className="qr-code-loading" aria-hidden />}
+                </div>
+                <p className="qr-hint">이 QR을 상대가 스캔하면<br />바로 친구로 추가돼요.</p>
+              </div>
+              <div className="qr-actions">
+                <button type="button" className="qr-scan-btn" onClick={scanQr}><ScanLine size={18} aria-hidden />QR 스캔</button>
+                <button type="button" className="qr-share-btn" onClick={shareMyQr}><Share2 size={18} aria-hidden />내 코드 공유</button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -3635,6 +3909,8 @@ function App() {
               }}
               matchMode={!!matchSession}
               matchGame={matchSession?.game ?? null}
+              myEmail={user.email}
+              myName={user.name}
               onDuel={() => { setGameOpen(false); matchIdRef.current = null; setMatchSession({ matchId: null, game: null }); }}
               onMatchStart={async (game: GameKey) => {
                 const m = await request<GameMatchResponse>(`/chat/rooms/${selectedRoomId}/game-matches`, { method: 'POST', body: JSON.stringify({ game }) });
@@ -3643,8 +3919,14 @@ function App() {
               }}
               onMatchEnd={async (game: GameKey, sc: number) => {
                 const id = matchSession?.matchId ?? matchIdRef.current;
-                if (!id) return;
+                if (!id) return null;
                 await request(`/chat/rooms/${selectedRoomId}/game-matches/${id}/rounds`, { method: 'POST', body: JSON.stringify({ score: sc }) });
+                // 라운드 제출 후 최신 대결 상태(양측 점수·승자)를 받아 VS 결과에 사용
+                try {
+                  return await request<GameMatchResponse>(`/chat/rooms/${selectedRoomId}/game-matches/latest`);
+                } catch {
+                  return null;
+                }
               }}
             />
           </motion.section>
@@ -3828,6 +4110,31 @@ function App() {
           </button>
         </nav>
       )}
+
+      {!selectedRoomId && coachStep !== null && (() => {
+        const step = COACH_STEPS[coachStep];
+        const last = coachStep >= COACH_STEPS.length - 1;
+        return (
+          <div className="kt-coach" role="dialog" aria-modal="true" aria-label="사용 안내">
+            <button type="button" className="kt-coach-scrim" onClick={finishCoach} aria-label="안내 닫기" />
+            <div className="kt-coach-spotgrid" aria-hidden>
+              <span className="kt-coach-spot" style={{ gridColumn: TAB_ORDER.indexOf(step.tab) + 1 }} />
+            </div>
+            <div className="kt-coach-tip">
+              <span className="kt-coach-ico" aria-hidden><step.Icon size={22} /></span>
+              <strong>{step.title}</strong>
+              <p>{step.body}</p>
+              <div className="kt-coach-dots" aria-hidden>
+                {COACH_STEPS.map((s, i) => <i key={s.tab} className={i === coachStep ? 'on' : ''} />)}
+              </div>
+              <div className="kt-coach-controls">
+                <button type="button" className="kt-coach-skip" onClick={finishCoach}>건너뛰기</button>
+                <button type="button" className="kt-coach-next" onClick={nextCoach}>{last ? '시작하기' : '다음'}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

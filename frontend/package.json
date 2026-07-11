@@ -21,10 +21,14 @@
     "lucide-react": "^0.468.0",
     "motion": "^12.40.0",
     "postprocessing": "^6.39.2",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.185.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6"
   }
 }
