@@ -145,6 +145,59 @@ type OrderSummary = {
   eta: string;
 };
 
+// order-service (/api/orders) response shapes.
+type OrderItemResponse = {
+  productId: string;
+  title: string;
+  link: string | null;
+  image: string | null;
+  price: number;
+  quantity: number;
+  mallName: string | null;
+  brand: string | null;
+};
+type OrderResponse = {
+  id: number;
+  orderNumber: string;
+  status: string;
+  paymentMethod: string;
+  paymentTxId: string;
+  totalCount: number;
+  totalAmount: number;
+  createdAt: string;
+  items: OrderItemResponse[];
+};
+
+function orderItemSummary(res: OrderResponse): { thumb: string | null; name: string; meta: string } {
+  const first = res.items[0];
+  const rest = res.items.length - 1;
+  return {
+    thumb: first?.image ?? null,
+    name: first?.title ?? '주문 상품',
+    meta: rest > 0 ? `외 ${rest}종 · 총 ${res.totalCount}개` : `${first?.quantity ?? res.totalCount}개`,
+  };
+}
+
+// "MM/DD 도착 예정" — 주문일 + 2일.
+function orderEta(createdAt: string): string {
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const del = new Date(new Date(createdAt).getTime() + 2 * 24 * 60 * 60 * 1000);
+  return `${p2(del.getMonth() + 1)}/${p2(del.getDate())} 도착 예정`;
+}
+
+function orderResponseToSummary(res: OrderResponse): OrderSummary {
+  const s = orderItemSummary(res);
+  return {
+    orderNumber: res.orderNumber,
+    thumb: s.thumb,
+    name: s.name,
+    meta: s.meta,
+    totalCount: res.totalCount,
+    totalPrice: res.totalAmount,
+    eta: orderEta(res.createdAt),
+  };
+}
+
 type User = {
   id: number;
   email: string;
@@ -641,6 +694,11 @@ function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [cartAddingId, setCartAddingId] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderSummary | null>(null);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [coachStep, setCoachStep] = useState<number | null>(null);
@@ -1690,28 +1748,38 @@ function App() {
     }
   }
 
-  function placeOrder() {
+  async function placeOrder() {
     const cart = shoppingCart;
-    if (!cart || cart.items.length === 0) return;
-    const first = cart.items[0];
-    const restCount = cart.items.length - 1;
-    const d = new Date();
-    const p2 = (n: number) => String(n).padStart(2, '0');
-    const orderNumber = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
-    const del = new Date(d.getTime() + 2 * 24 * 60 * 60 * 1000);
-    const eta = `${p2(del.getMonth() + 1)}/${p2(del.getDate())} 도착 예정`;
-    setOrder({
-      orderNumber,
-      thumb: first.image,
-      name: first.title,
-      meta: restCount > 0 ? `외 ${restCount}종 · 총 ${cart.totalCount}개` : `${first.quantity}개`,
-      totalCount: cart.totalCount,
-      totalPrice: cart.totalPrice,
-      eta,
-    });
-    setCartOpen(false);
-    playSound('success');
-    clearShoppingCart();
+    if (!cart || cart.items.length === 0 || placingOrder) return;
+    setPlacingOrder(true);
+    try {
+      // order-service reads the authoritative cart, records the order + mock payment,
+      // and clears the cart server-side.
+      const res = await request<OrderResponse>('/orders/checkout', { method: 'POST' });
+      setOrder(orderResponseToSummary(res));
+      setCartOpen(false);
+      playSound('success');
+      loadShoppingCart(); // 서버가 카트를 비웠으니 최신 상태로 갱신
+    } catch (error) {
+      setStatus(readableError(error, '주문을 처리하지 못했습니다.'));
+    } finally {
+      setPlacingOrder(false);
+    }
+  }
+
+  async function openOrders() {
+    setOrdersOpen(true);
+    setOrdersLoading(true);
+    setOrdersError(false);
+    try {
+      setOrders(await request<OrderResponse[]>('/orders'));
+    } catch (error) {
+      setStatus(readableError(error, '주문 내역을 불러오지 못했습니다.'));
+      setOrders([]);
+      setOrdersError(true);
+    } finally {
+      setOrdersLoading(false);
+    }
   }
 
   async function shareMyQr() {
@@ -3461,7 +3529,7 @@ function App() {
                 <p className="cart-note">상품을 누르면 네이버에서 구매할 수 있어요.</p>
                 <div className="cart-foot-actions">
                   <button type="button" onClick={clearShoppingCart} disabled={!shoppingCart || shoppingCart.items.length === 0}>비우기</button>
-                  <button type="button" className="primary" onClick={placeOrder} disabled={!shoppingCart || shoppingCart.items.length === 0}>주문하기</button>
+                  <button type="button" className="primary" onClick={placeOrder} disabled={!shoppingCart || shoppingCart.items.length === 0 || placingOrder}>{placingOrder ? '결제 중…' : '주문하기'}</button>
                 </div>
               </footer>
             </motion.aside>
@@ -3505,9 +3573,73 @@ function App() {
               </div>
             </div>
             <footer className="order-complete-foot">
-              <button type="button" className="order-ghost" onClick={() => { setOrder(null); setStatus('주문 상세는 준비 중이에요.'); }}>주문 상세</button>
+              <button type="button" className="order-ghost" onClick={() => { setOrder(null); openOrders(); }}>주문 내역</button>
               <button type="button" className="order-primary" onClick={() => setOrder(null)}>쇼핑 계속하기</button>
             </footer>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {ordersOpen && (
+          <motion.div
+            className="orders-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="주문 내역"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <header className="orders-header">
+              <button type="button" className="orders-back" onClick={() => setOrdersOpen(false)} aria-label="닫기"><ArrowLeft size={20} aria-hidden /></button>
+              <h2>주문 내역</h2>
+              <span className="orders-back" aria-hidden />
+            </header>
+            <div className="orders-body">
+              {ordersLoading ? (
+                <p className="orders-empty">불러오는 중…</p>
+              ) : ordersError ? (
+                <div className="orders-empty">
+                  <ShoppingBag size={40} aria-hidden />
+                  <strong>주문 내역을 불러오지 못했어요</strong>
+                  <span>잠시 후 다시 시도해주세요.</span>
+                  <button type="button" className="orders-retry" onClick={openOrders}>다시 시도</button>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className="orders-empty">
+                  <ShoppingBag size={40} aria-hidden />
+                  <strong>주문 내역이 없어요</strong>
+                  <span>마음에 드는 상품을 담아 주문해보세요.</span>
+                </div>
+              ) : (
+                orders.map((o) => {
+                  const s = orderItemSummary(o);
+                  return (
+                    <div className="order-row" key={o.id}>
+                      <div className="order-row-top">
+                        <span className="order-row-no">주문번호 {o.orderNumber}</span>
+                        <span className="order-row-status">결제완료</span>
+                      </div>
+                      <div className="order-row-body">
+                        <div className="order-card-thumb" aria-hidden>
+                          {s.thumb ? <img src={s.thumb} alt="" /> : <ShoppingBag size={22} />}
+                        </div>
+                        <div className="order-card-info">
+                          <strong>{s.name}</strong>
+                          <span>{s.meta}</span>
+                        </div>
+                        <span className="order-card-price">{o.totalAmount.toLocaleString('ko-KR')}원</span>
+                      </div>
+                      <div className="order-row-foot">
+                        <span>{orderEta(o.createdAt)}</span>
+                        <span>결제수단 {o.paymentMethod === 'MOCK_PAY' ? '카카오페이(모의)' : o.paymentMethod}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
