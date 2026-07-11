@@ -14,6 +14,12 @@ export default defineConfig({
       '/api/notifications': 'http://localhost:8892',
       '/api/admin/kafka': 'http://localhost:8892',
       '/api': 'http://localhost:8890',
+      // signaling-service owns the video-call WebRTC signaling socket. Must come
+      // before '/ws' since '/ws-signal' also has the '/ws' prefix.
+      '/ws-signal': {
+        target: 'ws://localhost:8894',
+        ws: true
+      },
       '/ws': {
         target: 'ws://localhost:8892',
         ws: true
