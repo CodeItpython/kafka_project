@@ -104,6 +104,11 @@ public class UserAccount {
         this.updatedAt = Instant.now();
     }
 
+    public void updatePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.updatedAt = Instant.now();
+    }
+
     public String getStatusMessage() {
         return statusMessage == null ? "" : statusMessage;
     }

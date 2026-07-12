@@ -48,6 +48,19 @@ public final class AuthDtos {
     ) {
     }
 
+    /** 비밀번호 재설정 링크 요청(가입 이메일로 발송). */
+    public record PasswordResetRequest(
+            @Email @NotBlank String email
+    ) {
+    }
+
+    /** 재설정 링크의 토큰으로 새 비밀번호를 확정. */
+    public record PasswordResetConfirmRequest(
+            @NotBlank String token,
+            @NotBlank @Size(min = 8) String newPassword
+    ) {
+    }
+
     public record AuthResponse(
             String accessToken,
             String tokenType,

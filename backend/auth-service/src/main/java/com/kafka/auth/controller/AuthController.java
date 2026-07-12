@@ -8,6 +8,8 @@ import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
 import com.kafka.auth.dto.AuthDtos.EmailVerifyRequest;
 import com.kafka.auth.dto.AuthDtos.KakaoGuideResponse;
 import com.kafka.auth.dto.AuthDtos.LoginRequest;
+import com.kafka.auth.dto.AuthDtos.PasswordResetConfirmRequest;
+import com.kafka.auth.dto.AuthDtos.PasswordResetRequest;
 import com.kafka.auth.dto.AuthDtos.RegisterRequest;
 import com.kafka.auth.dto.AuthDtos.UserResponse;
 import com.kafka.auth.model.UserAccount;
@@ -65,6 +67,18 @@ public class AuthController {
     @PostMapping("/email/verify")
     public ResponseEntity<Void> verifyEmailForSignup(@Valid @RequestBody EmailVerifyRequest request) {
         authService.verifyEmailForSignup(request.email(), request.code());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<Void> requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
+        authService.requestPasswordReset(request.email(), frontendRedirectUri);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        authService.resetPassword(request.token(), request.newPassword());
         return ResponseEntity.noContent().build();
     }
 
