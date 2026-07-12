@@ -1,0 +1,20 @@
+name: gitleaks
+
+# 새 커밋/PR에 시크릿(키·토큰·비밀번호)이 섞여 들어오는 것을 차단한다.
+# gitleaks-action 은 PR/푸시에 포함된 커밋만 스캔하므로(퍼블릭 저장소는 무료),
+# 이미 알려진 과거 히스토리 유출(docs/SECURITY.md에서 별도 처리) 때문에 상시 실패하지 않는다.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
