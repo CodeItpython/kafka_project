@@ -1,5 +1,6 @@
 package com.kafka.auth.controller;
 
+import com.kafka.auth.dto.AuthDtos.UpdateNotificationSettingsRequest;
 import com.kafka.auth.dto.AuthDtos.UpdateProfileRequest;
 import com.kafka.auth.dto.AuthDtos.UpdateThemeRequest;
 import com.kafka.auth.dto.AuthDtos.UserProfileResponse;
@@ -53,6 +54,14 @@ public class UserProfileController {
             @AuthenticationPrincipal UserAccount user
     ) {
         return ResponseEntity.ok(userProfileService.updateTheme(request.theme(), user));
+    }
+
+    @PatchMapping("/me/notification-settings")
+    public ResponseEntity<UserProfileResponse> updateNotificationSettings(
+            @Valid @RequestBody UpdateNotificationSettingsRequest request,
+            @AuthenticationPrincipal UserAccount user
+    ) {
+        return ResponseEntity.ok(userProfileService.updateNotificationSettings(request, user));
     }
 
     @PostMapping(path = "/me/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
