@@ -34,11 +34,14 @@ import {
   MessagesSquare,
   MessageSquareDashed,
   MapPin,
+  Mic,
   Database,
   Reply,
   SmilePlus,
   Smile,
   Paperclip,
+  Pause,
+  Play,
   Pin,
   Plus,
   Pencil,
@@ -590,6 +593,72 @@ function OtpInput({ length, value, onChange, autoFocus, disabled }: {
   );
 }
 
+// 음성 메시지 파형(정적 막대 높이 패턴, 재생 진행에 따라 색이 채워진다)
+const VOICE_BARS = [40, 70, 100, 60, 85, 45, 75, 55, 90, 50, 65, 95, 42, 80, 58, 72, 48, 88, 52, 68];
+
+/** 음성 메시지 재생 버블: 재생/일시정지 + 파형 + 길이(mm:ss). */
+function VoiceBubble({ url }: { url: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+
+  const fmt = (s: number) => {
+    if (!Number.isFinite(s) || s < 0) return '0:00';
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  function toggle() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) { audio.play().then(() => setPlaying(true)).catch(() => undefined); }
+    else { audio.pause(); setPlaying(false); }
+  }
+
+  // MediaRecorder webm은 duration이 Infinity로 뜨는 버그가 있어, 큰 값으로 seek해 강제로 확정시킨다.
+  function onLoadedMetadata() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.duration === Infinity || Number.isNaN(audio.duration)) {
+      audio.currentTime = 1e101;
+      audio.ontimeupdate = () => {
+        audio.ontimeupdate = null;
+        audio.currentTime = 0;
+        setDuration(audio.duration);
+      };
+    } else {
+      setDuration(audio.duration);
+    }
+  }
+
+  const progress = duration > 0 ? current / duration : 0;
+  const activeBars = Math.round(progress * VOICE_BARS.length);
+
+  return (
+    <div className={`voice-bubble${playing ? ' is-playing' : ''}`}>
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onLoadedMetadata={onLoadedMetadata}
+        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onEnded={() => { setPlaying(false); setCurrent(0); }}
+      />
+      <button type="button" className="voice-play" onClick={toggle} aria-label={playing ? '일시정지' : '재생'}>
+        {playing ? <Pause size={16} aria-hidden /> : <Play size={16} aria-hidden />}
+      </button>
+      <span className="voice-wave" aria-hidden>
+        {VOICE_BARS.map((h, i) => (
+          <span key={i} className={i < activeBars ? 'on' : ''} style={{ height: `${h}%` }} />
+        ))}
+      </span>
+      <span className="voice-time">{fmt(playing || current > 0 ? current : duration)}</span>
+    </div>
+  );
+}
+
 /** 검색어와 일치하는 첫 구간을 <mark>로 강조한다(대소문자 무시). */
 function Highlight({ text, query }: { text: string; query: string }) {
   const q = query.trim();
@@ -679,6 +748,14 @@ function App() {
   const [presence, setPresence] = useState<RoomPresence>({ onlineUsers: [], typingUsers: [] });
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState('');
+  // 음성 메시지 녹음 상태
+  const [recording, setRecording] = useState(false);
+  const [recordSecs, setRecordSecs] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordTimerRef = useRef<number | null>(null);
+  const recordCancelRef = useRef(false);
   const attachPhotoRef = useRef<HTMLInputElement>(null);
   const attachVideoRef = useRef<HTMLInputElement>(null);
   const attachFileRef = useRef<HTMLInputElement>(null);
@@ -2261,6 +2338,81 @@ function App() {
     }
     setAttachment(null);
     setAttachmentPreview('');
+  }
+
+  function stopRecordStream() {
+    if (recordTimerRef.current !== null) { window.clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    recordStreamRef.current?.getTracks().forEach((t) => t.stop());
+    recordStreamRef.current = null;
+  }
+
+  async function startRecording() {
+    if (!selectedRoomId || recording) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordStreamRef.current = stream;
+      recordChunksRef.current = [];
+      recordCancelRef.current = false;
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) recordChunksRef.current.push(event.data); };
+      recorder.onstop = async () => {
+        stopRecordStream();
+        const cancelled = recordCancelRef.current;
+        const chunks = recordChunksRef.current;
+        recordChunksRef.current = [];
+        setRecording(false);
+        setRecordSecs(0);
+        if (cancelled || chunks.length === 0 || !selectedRoomId) return;
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        await sendVoiceMessage(blob);
+      };
+      recorder.start();
+      setRecording(true);
+      setRecordSecs(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSecs((s) => s + 1), 1000);
+    } catch {
+      setStatus('마이크를 사용할 수 없어요. 권한을 확인해주세요.');
+      stopRecordStream();
+    }
+  }
+
+  function cancelRecording() {
+    recordCancelRef.current = true;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    } else {
+      stopRecordStream();
+      setRecording(false);
+      setRecordSecs(0);
+    }
+  }
+
+  function stopAndSendRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop(); // onstop이 업로드/전송을 처리
+    }
+  }
+
+  async function sendVoiceMessage(blob: Blob) {
+    if (!selectedRoomId) return;
+    const ext = (blob.type.split('/')[1] || 'webm').split(';')[0];
+    const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type });
+    forceLatestMessageScrollRef.current = true;
+    shouldStickToLatestMessageRef.current = true;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploaded = await request<AttachmentResponse>('/chat/attachments', { method: 'POST', body: formData });
+      await request(`/chat/rooms/${selectedRoomId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content: '', attachment: uploaded, replyToMessageId: null })
+      });
+      playSound('send');
+      setTimeout(() => loadMessages(selectedRoomId), 350);
+    } catch (error) {
+      setStatus(readableError(error, '음성 메시지 전송에 실패했습니다.'));
+    }
   }
 
   async function runMessageSearch(query: string) {
@@ -4303,6 +4455,15 @@ function App() {
                   <button type="button" onClick={clearAttachment} title="첨부 제거"><X size={16} aria-hidden /></button>
                 </div>
               )}
+              {recording ? (
+                <div className="voice-recording">
+                  <span className="voice-rec-timer"><span className="voice-rec-dot" aria-hidden />{`${Math.floor(recordSecs / 60)}:${(recordSecs % 60).toString().padStart(2, '0')}`}</span>
+                  <span className="voice-rec-wave" aria-hidden>{VOICE_BARS.map((h, i) => <span key={i} style={{ height: `${h}%` }} />)}</span>
+                  <button type="button" className="voice-rec-cancel" onClick={cancelRecording} title="녹음 취소" aria-label="녹음 취소"><Trash2 size={19} aria-hidden /></button>
+                  <button type="button" className="voice-rec-send" onClick={stopAndSendRecording} title="음성 메시지 보내기" aria-label="음성 메시지 보내기"><Send size={19} aria-hidden /></button>
+                </div>
+              ) : (
+              <>
               <Popover.Root>
                 <Popover.Trigger asChild>
                   <button type="button" className="attach-button" title="첨부 / 게임" aria-label="첨부 메뉴 열기" disabled={!selectedRoomId}>
@@ -4376,7 +4537,13 @@ function App() {
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
-              <button disabled={!selectedRoomId || (!draft.trim() && !attachment)} title="메시지 보내기"><Send size={18} aria-hidden /></button>
+              {draft.trim() || attachment ? (
+                <button disabled={!selectedRoomId} title="메시지 보내기"><Send size={18} aria-hidden /></button>
+              ) : (
+                <button type="button" className="composer-mic-button" onClick={startRecording} disabled={!selectedRoomId} title="음성 메시지" aria-label="음성 메시지 녹음"><Mic size={20} aria-hidden /></button>
+              )}
+              </>
+              )}
             </form>
             <GameOverlay
               open={gameOpen || !!matchSession}
@@ -4907,6 +5074,8 @@ const MessageRow = React.memo(function MessageRow({
                         </button>
                       ) : message.attachmentType?.startsWith('video/') ? (
                         <video className="message-media message-video" src={message.attachmentUrl} controls preload="metadata" />
+                      ) : message.attachmentType?.startsWith('audio/') ? (
+                        <VoiceBubble url={message.attachmentUrl} />
                       ) : (
                         <a className="message-file-chip" href={message.attachmentUrl} target="_blank" rel="noreferrer" download={message.attachmentName ?? undefined}>
                           <FileIcon size={18} aria-hidden />
