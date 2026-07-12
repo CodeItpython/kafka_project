@@ -310,6 +310,15 @@ type Contact = {
   online: boolean;
 };
 
+type GlobalSearchNews = { id?: string; title: string; url: string; press?: string | null };
+type GlobalSearchProduct = { productId: string; title: string; link: string; image?: string; price: number; mallName?: string };
+type GlobalSearchResults = {
+  friends: Contact[];
+  chats: ChatMessage[];
+  news: GlobalSearchNews[];
+  shopping: GlobalSearchProduct[];
+};
+
 type RoomParticipant = {
   id: number;
   email: string;
@@ -581,6 +590,21 @@ function OtpInput({ length, value, onChange, autoFocus, disabled }: {
   );
 }
 
+/** 검색어와 일치하는 첫 구간을 <mark>로 강조한다(대소문자 무시). */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="gs-mark">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState<Mode>('login');
   // 회원가입 모달(동의 → 이메일 인증 → 비밀번호 → 완료)
@@ -644,6 +668,12 @@ function App() {
   const [chatSearchOpen, setChatSearchOpen] = useState(false);
   const [notifCenterOpen, setNotifCenterOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
+  // 통합 검색(친구·채팅·뉴스·쇼핑 4개 소스 팬아웃)
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [gsQuery, setGsQuery] = useState('');
+  const [gsScope, setGsScope] = useState<'all' | 'friends' | 'chats' | 'news' | 'shopping'>('all');
+  const [gsBusy, setGsBusy] = useState(false);
+  const [gsResults, setGsResults] = useState<GlobalSearchResults>({ friends: [], chats: [], news: [], shopping: [] });
   const [roomSuggestions, setRoomSuggestions] = useState<SearchSuggestion[]>([]);
   const [messageSuggestions, setMessageSuggestions] = useState<SearchSuggestion[]>([]);
   const [presence, setPresence] = useState<RoomPresence>({ onlineUsers: [], typingUsers: [] });
@@ -776,6 +806,8 @@ function App() {
   // 인터벌/구독 effect가 이 값들 때문에 재생성되지 않도록 렌더마다 최신값을 ref에 보관해 읽는다.
   const contactQueryRef = useRef(contactQuery);
   contactQueryRef.current = contactQuery;
+  const gsQueryRef = useRef(gsQuery);
+  gsQueryRef.current = gsQuery;
   const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress: directoryScrollYProgress } = useScroll({ container: roomDirectoryRef });
   const directoryProgressScaleX = useSpring(directoryScrollYProgress, {
@@ -2246,6 +2278,40 @@ function App() {
     await runMessageSearch(messageQuery);
   }
 
+  function openGlobalSearch() {
+    setGsQuery('');
+    setGsScope('all');
+    setGsResults({ friends: [], chats: [], news: [], shopping: [] });
+    setGlobalSearchOpen(true);
+  }
+
+  // 통합 검색: 친구/채팅은 인증 request(), 뉴스/쇼핑은 공개 fetch로 병렬 팬아웃.
+  async function runGlobalSearch(query: string) {
+    const q = query.trim();
+    if (!q) {
+      setGsResults({ friends: [], chats: [], news: [], shopping: [] });
+      setGsBusy(false);
+      return;
+    }
+    setGsBusy(true);
+    const enc = encodeURIComponent(q);
+    const [friends, chats, news, shopping] = await Promise.allSettled([
+      request<Contact[]>(`/chat/contacts?query=${enc}`),
+      request<ChatMessage[]>(`/chat/messages/search?query=${enc}`),
+      fetch(`/api/news/search?query=${enc}&display=10`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/shopping/search?query=${enc}&display=10`).then((r) => (r.ok ? r.json() : null)),
+    ]);
+    // 최신 입력이 아니면 폐기(경쟁 상태 방지)
+    if (gsQueryRef.current.trim() !== q) return;
+    setGsResults({
+      friends: friends.status === 'fulfilled' && friends.value ? friends.value.slice(0, 8) : [],
+      chats: chats.status === 'fulfilled' && chats.value ? chats.value.slice(0, 8) : [],
+      news: news.status === 'fulfilled' && news.value?.items ? (news.value.items as GlobalSearchNews[]).slice(0, 6) : [],
+      shopping: shopping.status === 'fulfilled' && Array.isArray(shopping.value) ? (shopping.value as GlobalSearchProduct[]).slice(0, 6) : [],
+    });
+    setGsBusy(false);
+  }
+
   function chooseRoomSuggestion(suggestion: SearchSuggestion) {
     setRoomQuery(suggestion.text);
     setRoomSuggestions([]);
@@ -2496,6 +2562,20 @@ function App() {
     }, 220);
     return () => window.clearTimeout(timer);
   }, [messageQuery, token]);
+
+  useEffect(() => {
+    if (!globalSearchOpen) return;
+    if (!gsQuery.trim()) {
+      setGsResults({ friends: [], chats: [], news: [], shopping: [] });
+      setGsBusy(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      runGlobalSearch(gsQuery).catch(() => setGsBusy(false));
+    }, 280);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gsQuery, globalSearchOpen, token]);
 
   useEffect(() => {
     if (!selectedRoomId || !token) return;
@@ -2888,6 +2968,114 @@ function App() {
         user={{ email: user.email, name: user.name, profileImageUrl: user.profileImageUrl }}
         onExposeStart={(start) => { callStartRef.current = start; }}
       />
+      <AnimatePresence>
+        {globalSearchOpen && (
+          <motion.div className="gs-overlay" role="dialog" aria-modal="true" aria-label="통합 검색"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+            <header className="gs-head">
+              <button type="button" className="gs-back" onClick={() => setGlobalSearchOpen(false)} aria-label="닫기"><ChevronLeft size={24} aria-hidden /></button>
+              <div className="gs-input">
+                <Search size={18} aria-hidden />
+                {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+                <input autoFocus value={gsQuery} onChange={(event) => setGsQuery(event.target.value)} placeholder="친구 · 채팅 · 뉴스 · 쇼핑 검색" />
+                {gsQuery && <button type="button" className="gs-clear" onClick={() => setGsQuery('')} aria-label="지우기"><X size={12} aria-hidden /></button>}
+              </div>
+            </header>
+            <div className="gs-scopes">
+              {([['all', '전체'], ['friends', '친구'], ['chats', '채팅'], ['news', '뉴스'], ['shopping', '쇼핑']] as const).map(([key, label]) => (
+                <button key={key} type="button" className={gsScope === key ? 'gs-scope active' : 'gs-scope'} onClick={() => setGsScope(key)}>{label}</button>
+              ))}
+            </div>
+            <div className="gs-results">
+              {!gsQuery.trim() ? (
+                <div className="gs-hint">검색어를 입력하면 친구·채팅·뉴스·쇼핑을 한 번에 찾아드려요.</div>
+              ) : (
+                <>
+                  {(gsScope === 'all' || gsScope === 'friends') && (
+                    <section className="gs-group">
+                      <div className="gs-group-title">친구</div>
+                      {gsResults.friends.length ? (
+                        <div className="gs-card">
+                          {gsResults.friends.map((f) => (
+                            <div key={f.id} className="gs-friend">
+                              <ProfileAvatar className="gs-avatar" name={f.name} imageUrl={f.profileImageUrl} />
+                              <div className="gs-friend-meta">
+                                <div className="gs-friend-name"><Highlight text={f.name} query={gsQuery} /></div>
+                                {f.statusMessage && <div className="gs-friend-sub">{f.statusMessage}</div>}
+                              </div>
+                              <button type="button" className="gs-chip-btn" onClick={() => { setGlobalSearchOpen(false); switchTab('chats'); openDirectRoom(f); }}>채팅</button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="gs-none">"{gsQuery.trim()}" 관련 친구가 없어요</div>
+                      )}
+                    </section>
+                  )}
+                  {(gsScope === 'all' || gsScope === 'chats') && (
+                    <section className="gs-group">
+                      <div className="gs-group-title">채팅{gsResults.chats.length > 0 && <b>{gsResults.chats.length}</b>}</div>
+                      {gsResults.chats.length ? (
+                        <div className="gs-card">
+                          {gsResults.chats.map((m) => (
+                            <button key={m.id} type="button" className="gs-chat" onClick={() => { setGlobalSearchOpen(false); switchTab('chats'); openRoom(m.roomId); }}>
+                              <span className="gs-chat-ico"><Hash size={18} aria-hidden /></span>
+                              <span className="gs-chat-meta">
+                                <span className="gs-chat-room">{m.roomName || '채팅방'}</span>
+                                <span className="gs-chat-line"><b>{m.senderName}</b>: <Highlight text={m.content || ''} query={gsQuery} /></span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="gs-none">"{gsQuery.trim()}" 관련 채팅이 없어요</div>
+                      )}
+                    </section>
+                  )}
+                  {(gsScope === 'all' || gsScope === 'news') && (
+                    <section className="gs-group">
+                      <div className="gs-group-title">뉴스</div>
+                      {gsResults.news.length ? (
+                        <div className="gs-card">
+                          {gsResults.news.map((n, i) => (
+                            <a key={n.id ?? i} className="gs-news" href={n.url} target="_blank" rel="noreferrer">
+                              <span className="gs-news-title"><Highlight text={n.title} query={gsQuery} /></span>
+                              {n.press && <span className="gs-news-press">{n.press}</span>}
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="gs-none">"{gsQuery.trim()}" 관련 뉴스가 없어요</div>
+                      )}
+                    </section>
+                  )}
+                  {(gsScope === 'all' || gsScope === 'shopping') && (
+                    <section className="gs-group">
+                      <div className="gs-group-title">쇼핑</div>
+                      {gsResults.shopping.length ? (
+                        <div className="gs-card">
+                          {gsResults.shopping.map((p) => (
+                            <a key={p.productId} className="gs-product" href={p.link} target="_blank" rel="noreferrer">
+                              {p.image && <img className="gs-product-img" src={p.image} alt="" loading="lazy" />}
+                              <span className="gs-product-meta">
+                                <span className="gs-product-title"><Highlight text={p.title} query={gsQuery} /></span>
+                                <span className="gs-product-price">{p.price.toLocaleString('ko-KR')}원{p.mallName && <em> · {p.mallName}</em>}</span>
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="gs-none">"{gsQuery.trim()}" 관련 상품이 없어요</div>
+                      )}
+                    </section>
+                  )}
+                  {gsBusy && <div className="gs-hint">검색 중…</div>}
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="undo-snack-wrap" aria-live="polite">
         <AnimatePresence>
           {undoSnack && (
@@ -3323,7 +3511,14 @@ function App() {
       <motion.aside key={activeTab} className="side-pane" custom={tabDirection} variants={TAB_SLIDE} initial="enter" animate="center" exit="exit" transition={TAB_SLIDE_TRANSITION}>
         <section className="sidebar">
           <div className="sidebar-content">
-            <header className="panel-header"><h2>{activeTab === 'friends' ? '친구' : '설정'}</h2></header>
+            <header className="panel-header">
+              <h2>{activeTab === 'friends' ? '친구' : '설정'}</h2>
+              {activeTab === 'friends' && (
+                <button type="button" className="panel-header-action" onClick={openGlobalSearch} title="통합 검색" aria-label="통합 검색">
+                  <Search size={19} aria-hidden />
+                </button>
+              )}
+            </header>
             <div className="profile-card">
               <ProfileAvatar className="avatar" name={user.name} imageUrl={user.profileImageUrl} />
               <div>
