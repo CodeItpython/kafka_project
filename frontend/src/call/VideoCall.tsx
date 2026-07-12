@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Client, IMessage } from '@stomp/stompjs';
-import { Phone, PhoneOff, PhoneIncoming, Video, VideoOff, Mic, MicOff } from 'lucide-react';
+import { Phone, PhoneOff, PhoneIncoming, Video, VideoOff, Mic, MicOff, SwitchCamera } from 'lucide-react';
 import { playSound } from '../sound';
 
 export type CallPeer = { email: string; name: string; image: string | null };
@@ -60,6 +60,8 @@ export default function VideoCall({ token, user, onExposeStart }: Props) {
   const [rtcConnected, setRtcConnected] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [callSecs, setCallSecs] = useState(0);
+  const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [error, setError] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
@@ -317,6 +319,39 @@ export default function VideoCall({ token, user, onExposeStart }: Props) {
     setCamOn(next);
   };
 
+  // 전면/후면 카메라 전환: 새 트랙을 얻어 sender에 교체(replaceTrack)한다.
+  // 카메라가 하나뿐인 기기(데스크톱)에선 실패할 수 있어 안내만 띄운다.
+  const switchCamera = async () => {
+    const pc = pcRef.current;
+    const stream = localStreamRef.current;
+    if (!pc || !stream) return;
+    const next = facing === 'user' ? 'environment' : 'user';
+    try {
+      const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next }, audio: false });
+      const track = cam.getVideoTracks()[0];
+      if (!track) return;
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
+      if (sender) await sender.replaceTrack(track);
+      stream.getVideoTracks().forEach((t) => { stream.removeTrack(t); t.stop(); });
+      track.enabled = camOn;
+      stream.addTrack(track);
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      setFacing(next);
+    } catch {
+      setError('카메라를 전환할 수 없어요.');
+    }
+  };
+
+  // 연결되면 통화 시간 카운트업.
+  useEffect(() => {
+    if (!rtcConnected) { setCallSecs(0); return; }
+    const start = Date.now();
+    const id = window.setInterval(() => setCallSecs(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [rtcConnected]);
+
+  const durationLabel = `${String(Math.floor(callSecs / 60)).padStart(2, '0')}:${String(callSecs % 60).padStart(2, '0')}`;
+
   return (
     <>
       <AnimatePresence>
@@ -349,19 +384,31 @@ export default function VideoCall({ token, user, onExposeStart }: Props) {
                 )}
                 <div className="call-topbar">
                   <strong>{call.peer.name}</strong>
-                  <span>{rtcConnected ? '통화 중' : '연결 중…'}</span>
+                  <span className="call-status">
+                    <span className={`call-dot${rtcConnected ? ' on' : ''}`} aria-hidden />
+                    {rtcConnected ? `${durationLabel} · 연결됨` : '연결 중…'}
+                  </span>
                 </div>
                 <video ref={localVideoRef} className={`call-local${camOn ? '' : ' is-off'}`} autoPlay playsInline muted />
                 <div className="call-controls">
-                  <button type="button" className={`call-ctrl${micOn ? '' : ' is-off'}`} onClick={toggleMic} aria-label={micOn ? '마이크 끄기' : '마이크 켜기'}>
-                    {micOn ? <Mic size={22} aria-hidden /> : <MicOff size={22} aria-hidden />}
-                  </button>
-                  <button type="button" className={`call-ctrl${camOn ? '' : ' is-off'}`} onClick={toggleCamera} aria-label={camOn ? '카메라 끄기' : '카메라 켜기'}>
-                    {camOn ? <Video size={22} aria-hidden /> : <VideoOff size={22} aria-hidden />}
-                  </button>
-                  <button type="button" className="call-ctrl call-hangup" onClick={() => endCall(true)} aria-label="통화 종료">
-                    <PhoneOff size={22} aria-hidden />
-                  </button>
+                  <div className="call-control-bar">
+                    <button type="button" className={`call-ctrl${micOn ? '' : ' is-off'}`} onClick={toggleMic}>
+                      <span className="call-ctrl-ico">{micOn ? <Mic size={22} aria-hidden /> : <MicOff size={22} aria-hidden />}</span>
+                      <span className="call-ctrl-label">음소거</span>
+                    </button>
+                    <button type="button" className={`call-ctrl${camOn ? '' : ' is-off'}`} onClick={toggleCamera}>
+                      <span className="call-ctrl-ico">{camOn ? <Video size={22} aria-hidden /> : <VideoOff size={22} aria-hidden />}</span>
+                      <span className="call-ctrl-label">카메라</span>
+                    </button>
+                    <button type="button" className="call-ctrl" onClick={switchCamera}>
+                      <span className="call-ctrl-ico"><SwitchCamera size={22} aria-hidden /></span>
+                      <span className="call-ctrl-label">전환</span>
+                    </button>
+                    <button type="button" className="call-ctrl call-hangup" onClick={() => endCall(true)}>
+                      <span className="call-ctrl-ico"><PhoneOff size={22} aria-hidden /></span>
+                      <span className="call-ctrl-label">종료</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
