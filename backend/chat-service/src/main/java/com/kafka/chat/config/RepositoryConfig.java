@@ -8,6 +8,7 @@ import com.kafka.chat.repository.ChatMessageRepository;
 import com.kafka.chat.repository.ChatRoomReadStateRepository;
 import com.kafka.chat.repository.ChatRoomRepository;
 import com.kafka.chat.repository.ChatRoomUserPreferenceRepository;
+import com.kafka.chat.repository.FriendRequestRepository;
 import com.kafka.chat.repository.GameMatchRepository;
 import com.kafka.chat.repository.GameScoreRepository;
 import com.kafka.chat.search.ChatMessageSearchRepository;
@@ -32,6 +33,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
                 ChatRoomRepository.class,
                 ChatRoomReadStateRepository.class,
                 ChatRoomUserPreferenceRepository.class,
+                FriendRequestRepository.class,
                 GameScoreRepository.class,
                 GameMatchRepository.class,
                 OutboxEventRepository.class,
@@ -49,6 +51,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
                         ChatMessageDeliveryStateRepository.class,
                         ChatRoomReadStateRepository.class,
                         ChatRoomUserPreferenceRepository.class,
+                        FriendRequestRepository.class,
                         GameScoreRepository.class,
                         GameMatchRepository.class,
                         OutboxEventRepository.class,

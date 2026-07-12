@@ -81,6 +81,25 @@ public final class ChatDtos {
     ) {
     }
 
+    public record SendFriendRequestRequest(
+            @NotBlank String email
+    ) {
+    }
+
+    /** 친구 요청 한 건. direction: "received"(받은) | "sent"(보낸). */
+    public record FriendRequestResponse(
+            Long id,
+            String email,
+            String name,
+            String profileImageUrl,
+            String statusMessage,
+            int mutualFriends,
+            boolean online,
+            String direction,
+            Instant createdAt
+    ) {
+    }
+
     public record RoomParticipantResponse(
             Long id,
             String email,

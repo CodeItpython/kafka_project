@@ -333,6 +333,18 @@ type Contact = {
   online: boolean;
 };
 
+type FriendRequest = {
+  id: number;
+  email: string;
+  name: string;
+  profileImageUrl: string | null;
+  statusMessage: string | null;
+  mutualFriends: number;
+  online: boolean;
+  direction: 'received' | 'sent';
+  createdAt: string;
+};
+
 type GlobalSearchNews = { id?: string; title: string; url: string; press?: string | null };
 type GlobalSearchProduct = { productId: string; title: string; link: string; image?: string; price: number; mallName?: string };
 type GlobalSearchResults = {
@@ -753,6 +765,9 @@ function App() {
   const [profileStatus, setProfileStatus] = useState('');
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  // 친구 요청(받은/보낸)
+  const [receivedRequests, setReceivedRequests] = useState<FriendRequest[]>([]);
+  const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
@@ -1923,6 +1938,59 @@ function App() {
     }
   }
 
+  async function loadFriendRequests() {
+    try {
+      const [received, sent] = await Promise.all([
+        request<FriendRequest[]>('/chat/friend-requests/received'),
+        request<FriendRequest[]>('/chat/friend-requests/sent'),
+      ]);
+      setReceivedRequests(received ?? []);
+      setSentRequests(sent ?? []);
+    } catch {
+      // 친구 요청 로드 실패는 조용히 무시(치명적이지 않음)
+    }
+  }
+
+  async function sendFriendRequest(email: string, name: string) {
+    try {
+      await request<FriendRequest>('/chat/friend-requests', { method: 'POST', body: JSON.stringify({ email }) });
+      setStatus(`${name}님에게 친구 요청을 보냈어요.`);
+      playSound('success');
+      loadFriendRequests();
+    } catch (error) {
+      setStatus(readableError(error, '친구 요청을 보내지 못했습니다.'));
+    }
+  }
+
+  async function acceptFriendRequest(request_: FriendRequest) {
+    try {
+      await request<void>(`/chat/friend-requests/${request_.id}/accept`, { method: 'POST' });
+      setStatus(`${request_.name}님과 친구가 되었어요.`);
+      playSound('success');
+      loadFriendRequests();
+    } catch (error) {
+      setStatus(readableError(error, '요청을 수락하지 못했습니다.'));
+    }
+  }
+
+  async function rejectFriendRequest(request_: FriendRequest) {
+    try {
+      await request<void>(`/chat/friend-requests/${request_.id}/reject`, { method: 'POST' });
+      loadFriendRequests();
+    } catch (error) {
+      setStatus(readableError(error, '요청을 거절하지 못했습니다.'));
+    }
+  }
+
+  async function cancelFriendRequest(request_: FriendRequest) {
+    try {
+      await request<void>(`/chat/friend-requests/${request_.id}`, { method: 'DELETE' });
+      loadFriendRequests();
+    } catch (error) {
+      setStatus(readableError(error, '요청을 취소하지 못했습니다.'));
+    }
+  }
+
   async function loadShoppingCart() {
     try {
       const data = await request<ShoppingCart>('/shopping/cart');
@@ -2605,12 +2673,18 @@ function App() {
     if (user) {
       loadRooms('');
       loadContacts('');
+      loadFriendRequests();
       loadMyProfile().catch(() => undefined);
       loadNotifications().catch(() => undefined);
       loadNotificationSubscription().catch(() => undefined);
       heartbeat().catch(() => undefined);
     }
   }, [user?.email]);
+
+  useEffect(() => {
+    if (activeTab === 'friends' && token) loadFriendRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token]);
 
   useEffect(() => {
     const verificationCode = code.replace(/\D/g, '').slice(0, EMAIL_CODE_LENGTH);
@@ -3999,6 +4073,48 @@ function App() {
               <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="친구 검색" />
             </form>
 
+            {(receivedRequests.length > 0 || sentRequests.length > 0) && (
+              <section className="panel-section friend-requests">
+                {receivedRequests.length > 0 && (
+                  <>
+                    <div className="section-title"><span>받은 요청</span><small className="fr-badge">{receivedRequests.length}</small></div>
+                    <div className="fr-card">
+                      {receivedRequests.map((requestItem) => (
+                        <div key={requestItem.id} className="fr-row">
+                          <ProfileAvatar className="fr-avatar" name={requestItem.name} imageUrl={requestItem.profileImageUrl} />
+                          <div className="fr-meta">
+                            <strong>{requestItem.name}</strong>
+                            <small>{requestItem.mutualFriends > 0 ? `공통 친구 ${requestItem.mutualFriends}명` : (requestItem.statusMessage || requestItem.email)}</small>
+                          </div>
+                          <div className="fr-actions">
+                            <button type="button" className="fr-accept" onClick={() => acceptFriendRequest(requestItem)}>수락</button>
+                            <button type="button" className="fr-reject" onClick={() => rejectFriendRequest(requestItem)} aria-label="거절"><X size={17} aria-hidden /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {sentRequests.length > 0 && (
+                  <>
+                    <div className="section-title"><span>보낸 요청</span></div>
+                    <div className="fr-card">
+                      {sentRequests.map((requestItem) => (
+                        <div key={requestItem.id} className="fr-row">
+                          <ProfileAvatar className="fr-avatar" name={requestItem.name} imageUrl={requestItem.profileImageUrl} />
+                          <div className="fr-meta">
+                            <strong>{requestItem.name}</strong>
+                            <small>수락 대기 중</small>
+                          </div>
+                          <button type="button" className="fr-cancel" onClick={() => cancelFriendRequest(requestItem)}>취소</button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
+
             <section className="panel-section">
               <div className="section-title">
                 <span>친구</span>
@@ -4028,9 +4144,18 @@ function App() {
                             {selectedProfile.statusMessage && <small>{selectedProfile.statusMessage}</small>}
                           </div>
                         </div>
-                        <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
-                          <MessageCircle size={17} aria-hidden />메시지
-                        </button>
+                        <div className="contact-profile-actions">
+                          <button className="primary-button" type="button" onClick={() => openDirectFromProfile(selectedProfile)} disabled={loading}>
+                            <MessageCircle size={17} aria-hidden />메시지
+                          </button>
+                          {sentRequests.some((requestItem) => requestItem.email.toLowerCase() === selectedProfile.email.toLowerCase()) ? (
+                            <button className="ghost-button" type="button" disabled><UserPlus size={17} aria-hidden />요청됨</button>
+                          ) : (
+                            <button className="ghost-button" type="button" onClick={() => sendFriendRequest(selectedProfile.email, selectedProfile.name)}>
+                              <UserPlus size={17} aria-hidden />친구 추가
+                            </button>
+                          )}
+                        </div>
                         <ProfileHistoryList history={selectedProfile.history} />
                       </section>
                     )}
