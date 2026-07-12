@@ -12,6 +12,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
+  Clock,
   ChevronLeft,
   Download,
   Check,
@@ -202,6 +203,24 @@ function orderResponseToSummary(res: OrderResponse): OrderSummary {
   };
 }
 
+type NotificationSettings = {
+  dndEnabled: boolean;
+  dndStart: number;
+  dndEnd: number;
+  notifyMessages: boolean;
+  notifyMentionsOnly: boolean;
+  notifyMarketing: boolean;
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  dndEnabled: false,
+  dndStart: 22,
+  dndEnd: 8,
+  notifyMessages: true,
+  notifyMentionsOnly: false,
+  notifyMarketing: false,
+};
+
 type User = {
   id: number;
   email: string;
@@ -211,6 +230,7 @@ type User = {
   statusMessage: string;
   profileImageUrl: string | null;
   theme?: Theme;
+  notificationSettings?: NotificationSettings;
 };
 
 type AuthResponse = {
@@ -659,6 +679,23 @@ function VoiceBubble({ url }: { url: string }) {
   );
 }
 
+/** 지금 시각이 방해금지(DND) 시간대에 속하는지. 자정을 넘는 구간(예: 22시→8시)도 처리. */
+function isDndActiveNow(s: NotificationSettings): boolean {
+  if (!s.dndEnabled) return false;
+  const hour = new Date().getHours();
+  if (s.dndStart === s.dndEnd) return true; // 종일
+  if (s.dndStart < s.dndEnd) return hour >= s.dndStart && hour < s.dndEnd;
+  return hour >= s.dndStart || hour < s.dndEnd; // 자정 넘김
+}
+
+/** 오전/오후 h시 표기(정시 기준). */
+function formatHour12(hour: number): string {
+  const h = ((hour % 24) + 24) % 24;
+  const period = h < 12 ? '오전' : '오후';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${period} ${display}:00`;
+}
+
 /** 검색어와 일치하는 첫 구간을 <mark>로 강조한다(대소문자 무시). */
 function Highlight({ text, query }: { text: string; query: string }) {
   const q = query.trim();
@@ -807,6 +844,22 @@ function App() {
     if (token) {
       request<UserProfile>('/users/me/theme', { method: 'PATCH', body: JSON.stringify({ theme: next }) }).catch(() => undefined);
     }
+  }
+  // 알림 설정(방해금지 + 알림 종류). 테마와 동일하게 프로필로 기기 간 동기화.
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  useEffect(() => {
+    if (user?.notificationSettings) setNotifSettings(user.notificationSettings);
+  }, [user?.notificationSettings]);
+  function updateNotifSettings(patch: Partial<NotificationSettings>) {
+    setNotifSettings((current) => {
+      const next = { ...current, ...patch };
+      setUser((u) => (u ? { ...u, notificationSettings: next } : u));
+      playSound('toggle');
+      if (token) {
+        request<UserProfile>('/users/me/notification-settings', { method: 'PATCH', body: JSON.stringify(next) }).catch(() => undefined);
+      }
+      return next;
+    });
   }
   const [appToasts, setAppToasts] = useState<AppToast[]>([]);
   // 네이버 쇼핑 장바구니
@@ -1403,13 +1456,17 @@ function App() {
     if (!inAppNotificationsEnabled || isCurrentRoom) {
       return;
     }
+    // 알림 설정 적용: 방해금지 시간대 · 메시지 알림 끔 · 멘션만 받기
+    if (isDndActiveNow(notifSettings)) return;
+    if (!notifSettings.notifyMessages) return;
+    if (notifSettings.notifyMentionsOnly && !notification.body.includes(`@${user?.name ?? ''}`)) return;
     const toastId = `${notification.id}-${Date.now()}`;
     setAppToasts((current) => [
       { id: toastId, notification },
       ...current.filter((toast) => toast.notification.id !== notification.id)
     ].slice(0, 3));
     window.setTimeout(() => dismissAppToast(toastId), 5200);
-  }, [dismissAppToast, inAppNotificationsEnabled, selectedRoomId]);
+  }, [dismissAppToast, inAppNotificationsEnabled, selectedRoomId, notifSettings, user?.name]);
 
   // 알림 소켓 effect가 매 방 전환마다 재연결되지 않도록, 최신 showInAppNotification을 ref로 읽는다.
   const showInAppNotificationRef = useRef(showInAppNotification);
@@ -3730,6 +3787,78 @@ function App() {
                 ))}
                 {notifications.length === 0 && <p className="empty-state">새 알림이 없습니다.</p>}
               </div>
+            </section>
+
+            <section className="panel-section notif-settings">
+              <div className="section-title"><span>방해금지 시간</span></div>
+              <div className="ns-card">
+                <div className="ns-row">
+                  <span className="ns-ico ns-ico-dnd"><Moon size={17} aria-hidden /></span>
+                  <span className="ns-label">방해금지 모드</span>
+                  <button type="button" role="switch" aria-checked={notifSettings.dndEnabled} aria-label="방해금지 모드"
+                    className={notifSettings.dndEnabled ? 'kt-switch on' : 'kt-switch'} onClick={() => updateNotifSettings({ dndEnabled: !notifSettings.dndEnabled })}>
+                    <span className="kt-switch-knob" aria-hidden />
+                  </button>
+                </div>
+                {notifSettings.dndEnabled && (
+                  <div className="ns-row">
+                    <span className="ns-ico ns-ico-time"><Clock size={17} aria-hidden /></span>
+                    <span className="ns-label">시간대</span>
+                    <span className="ns-time">
+                      <select value={notifSettings.dndStart} onChange={(event) => updateNotifSettings({ dndStart: Number(event.target.value) })} aria-label="방해금지 시작">
+                        {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{formatHour12(h)}</option>)}
+                      </select>
+                      <span aria-hidden>–</span>
+                      <select value={notifSettings.dndEnd} onChange={(event) => updateNotifSettings({ dndEnd: Number(event.target.value) })} aria-label="방해금지 종료">
+                        {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{formatHour12(h)}</option>)}
+                      </select>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="section-title"><span>알림 종류</span></div>
+              <div className="ns-card">
+                <div className="ns-row">
+                  <span className="ns-label">메시지</span>
+                  <button type="button" role="switch" aria-checked={notifSettings.notifyMessages} aria-label="메시지 알림"
+                    className={notifSettings.notifyMessages ? 'kt-switch on' : 'kt-switch'} onClick={() => updateNotifSettings({ notifyMessages: !notifSettings.notifyMessages })}>
+                    <span className="kt-switch-knob" aria-hidden />
+                  </button>
+                </div>
+                <div className="ns-row">
+                  <span className="ns-label">멘션만</span>
+                  <button type="button" role="switch" aria-checked={notifSettings.notifyMentionsOnly} aria-label="멘션만 알림"
+                    className={notifSettings.notifyMentionsOnly ? 'kt-switch on' : 'kt-switch'} onClick={() => updateNotifSettings({ notifyMentionsOnly: !notifSettings.notifyMentionsOnly })}>
+                    <span className="kt-switch-knob" aria-hidden />
+                  </button>
+                </div>
+                <div className="ns-row">
+                  <span className="ns-label">마케팅 · 이벤트</span>
+                  <button type="button" role="switch" aria-checked={notifSettings.notifyMarketing} aria-label="마케팅 알림"
+                    className={notifSettings.notifyMarketing ? 'kt-switch on' : 'kt-switch'} onClick={() => updateNotifSettings({ notifyMarketing: !notifSettings.notifyMarketing })}>
+                    <span className="kt-switch-knob" aria-hidden />
+                  </button>
+                </div>
+              </div>
+
+              {rooms.length > 0 && (
+                <>
+                  <div className="section-title"><span>방별 설정</span></div>
+                  <div className="ns-card">
+                    {rooms.slice(0, 8).map((room) => (
+                      <div key={room.id} className="ns-row">
+                        <span className="ns-room-ico">{room.name.slice(0, 1)}</span>
+                        <span className="ns-label">{room.name}</span>
+                        <button type="button" className="ns-bell" aria-label={room.muted ? '알림 켜기' : '알림 끄기'} aria-pressed={!room.muted}
+                          onClick={() => updateRoomPreference(room, { muted: !room.muted })}>
+                          {room.muted ? <BellOff size={18} aria-hidden /> : <Bell size={18} aria-hidden />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </section>
 
             <section className="panel-section theme-panel">

@@ -5,6 +5,7 @@ import com.kafka.auth.dto.AuthDtos.ChangeEmailRequest;
 import com.kafka.auth.dto.AuthDtos.EmailCodeResponse;
 import com.kafka.auth.dto.AuthDtos.EmailLoginRequest;
 import com.kafka.auth.dto.AuthDtos.LoginRequest;
+import com.kafka.auth.dto.AuthDtos.NotificationSettingsResponse;
 import com.kafka.auth.dto.AuthDtos.RegisterRequest;
 import com.kafka.auth.dto.AuthDtos.UserResponse;
 import com.kafka.auth.email.EmailVerificationMailService;
@@ -257,7 +258,15 @@ public class AuthService {
                 user.getRole().name(),
                 user.getStatusMessage(),
                 storageUrlSigner.sign(user.getProfileImageUrl()),
-                user.getTheme()
+                user.getTheme(),
+                new NotificationSettingsResponse(
+                        user.isDndEnabled(),
+                        user.getDndStart(),
+                        user.getDndEnd(),
+                        user.isNotifyMessages(),
+                        user.isNotifyMentionsOnly(),
+                        user.isNotifyMarketing()
+                )
         );
     }
 

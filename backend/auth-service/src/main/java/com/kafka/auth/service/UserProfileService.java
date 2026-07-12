@@ -1,5 +1,7 @@
 package com.kafka.auth.service;
 
+import com.kafka.auth.dto.AuthDtos.NotificationSettingsResponse;
+import com.kafka.auth.dto.AuthDtos.UpdateNotificationSettingsRequest;
 import com.kafka.auth.dto.AuthDtos.UpdateProfileRequest;
 import com.kafka.auth.dto.AuthDtos.UserProfileHistoryResponse;
 import com.kafka.auth.dto.AuthDtos.UserProfileResponse;
@@ -68,6 +70,20 @@ public class UserProfileService {
     }
 
     @Transactional
+    public UserProfileResponse updateNotificationSettings(UpdateNotificationSettingsRequest request, UserAccount user) {
+        user.updateNotificationSettings(
+                request.dndEnabled(),
+                request.dndStart(),
+                request.dndEnd(),
+                request.notifyMessages(),
+                request.notifyMentionsOnly(),
+                request.notifyMarketing()
+        );
+        UserAccount saved = userAccountRepository.save(user);
+        return toProfileResponse(saved);
+    }
+
+    @Transactional
     public UserProfileResponse updateProfileImage(MultipartFile file, UserAccount user) {
         String imageUrl = storeProfileImage(file);
         user.updateProfileImage(imageUrl);
@@ -121,6 +137,14 @@ public class UserProfileService {
                 user.getStatusMessage(),
                 storageUrlSigner.sign(user.getProfileImageUrl()),
                 user.getTheme(),
+                new NotificationSettingsResponse(
+                        user.isDndEnabled(),
+                        user.getDndStart(),
+                        user.getDndEnd(),
+                        user.isNotifyMessages(),
+                        user.isNotifyMentionsOnly(),
+                        user.isNotifyMarketing()
+                ),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 history

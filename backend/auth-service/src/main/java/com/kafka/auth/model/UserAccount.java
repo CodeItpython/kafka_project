@@ -55,6 +55,24 @@ public class UserAccount {
     private String theme = "system";
 
     @Column(nullable = false)
+    private boolean dndEnabled = false;
+
+    @Column(nullable = false)
+    private int dndStart = 22;
+
+    @Column(nullable = false)
+    private int dndEnd = 8;
+
+    @Column(nullable = false)
+    private boolean notifyMessages = true;
+
+    @Column(nullable = false)
+    private boolean notifyMentionsOnly = false;
+
+    @Column(nullable = false)
+    private boolean notifyMarketing = false;
+
+    @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
     @Column
@@ -90,6 +108,26 @@ public class UserAccount {
 
     public String getTheme() {
         return normalizeTheme(theme);
+    }
+
+    public void updateNotificationSettings(
+            boolean dndEnabled, int dndStart, int dndEnd,
+            boolean notifyMessages, boolean notifyMentionsOnly, boolean notifyMarketing
+    ) {
+        this.dndEnabled = dndEnabled;
+        this.dndStart = clampHour(dndStart);
+        this.dndEnd = clampHour(dndEnd);
+        this.notifyMessages = notifyMessages;
+        this.notifyMentionsOnly = notifyMentionsOnly;
+        this.notifyMarketing = notifyMarketing;
+        this.updatedAt = Instant.now();
+    }
+
+    private static int clampHour(int hour) {
+        if (hour < 0) {
+            return 0;
+        }
+        return Math.min(hour, 23);
     }
 
     private static String normalizeTheme(String theme) {

@@ -6172,3 +6172,74 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
 .chat-row.mine .voice-wave span.on { background: #fff; }
 .chat-row.mine .voice-play { background: rgba(255, 255, 255, 0.25); }
 .chat-row.mine .voice-time { color: rgba(255, 255, 255, 0.85); }
+
+/* ===== 알림 설정(#37) ===== */
+.notif-settings .section-title { margin-top: 6px; }
+.ns-card {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(70, 80, 140, 0.05);
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+.ns-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft, #f2f4f6);
+}
+.ns-row:last-child { border-bottom: 0; }
+.ns-label { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-ico {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border-radius: 11px;
+}
+.ns-ico-dnd { background: #f2f0ff; color: #5b53eb; }
+.ns-ico-time { background: #eaf0ff; color: var(--brand); }
+.ns-room-ico {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border-radius: 11px;
+  background: var(--brand-tint, #eaf0ff);
+  color: var(--brand);
+  font-size: 13px; font-weight: 700;
+}
+.ns-time { display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-size: 13px; font-weight: 700; }
+.ns-time select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--surface);
+}
+.ns-bell {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border: 0; border-radius: 10px;
+  background: transparent; color: var(--brand); cursor: pointer;
+}
+.ns-bell[aria-pressed="false"] { color: #b0b8c1; }
+/* 공용 토글 스위치(알림 설정 등) */
+.kt-switch {
+  position: relative;
+  width: 46px; height: 28px; flex: none;
+  border: 0; border-radius: 999px;
+  background: #e5e8eb; cursor: pointer;
+  transition: background 0.18s ease;
+  padding: 0;
+}
+.kt-switch.on { background: var(--brand); }
+.kt-switch-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.kt-switch.on .kt-switch-knob { transform: translateX(18px); }

@@ -1,6 +1,8 @@
 package com.kafka.auth.dto;
 
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -76,7 +78,29 @@ public final class AuthDtos {
             String role,
             String statusMessage,
             String profileImageUrl,
-            String theme
+            String theme,
+            NotificationSettingsResponse notificationSettings
+    ) {
+    }
+
+    /** 알림 설정(방해금지 시간대 + 알림 종류). */
+    public record NotificationSettingsResponse(
+            boolean dndEnabled,
+            int dndStart,
+            int dndEnd,
+            boolean notifyMessages,
+            boolean notifyMentionsOnly,
+            boolean notifyMarketing
+    ) {
+    }
+
+    public record UpdateNotificationSettingsRequest(
+            boolean dndEnabled,
+            @Min(0) @Max(23) int dndStart,
+            @Min(0) @Max(23) int dndEnd,
+            boolean notifyMessages,
+            boolean notifyMentionsOnly,
+            boolean notifyMarketing
     ) {
     }
 
@@ -99,6 +123,7 @@ public final class AuthDtos {
             String statusMessage,
             String profileImageUrl,
             String theme,
+            NotificationSettingsResponse notificationSettings,
             Instant createdAt,
             Instant updatedAt,
             java.util.List<UserProfileHistoryResponse> history
