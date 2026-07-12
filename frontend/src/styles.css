@@ -6088,3 +6088,87 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   cursor: pointer;
 }
 .panel-header-action:hover { background: var(--line-soft, #f2f4f6); color: var(--brand); }
+
+/* ===== 음성 메시지(#35) ===== */
+/* 컴포저 마이크 버튼(이모지 버튼과 동일한 서브틀 톤) */
+.composer > button.composer-mic-button {
+  width: 40px;
+  height: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--gray-500);
+  box-shadow: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.composer > button.composer-mic-button:hover:not(:disabled) { color: var(--brand); background: var(--brand-tint); }
+.composer > button.composer-mic-button:disabled { opacity: 0.5; }
+
+/* 녹음 중 컴포저 바 — 컴포저는 grid라 전체 컬럼을 차지하게 한다 */
+.voice-recording {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.voice-rec-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  color: var(--kt-danger, #e5484d);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.voice-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--kt-danger, #e5484d); animation: ktTwinkle 1.2s ease-in-out infinite; }
+.voice-rec-wave { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; height: 30px; overflow: hidden; }
+.voice-rec-wave span { flex: none; width: 3px; border-radius: 2px; background: var(--kt-danger, #e5484d); animation: ktVoicePulse 1s ease-in-out infinite; }
+.voice-rec-wave span:nth-child(odd) { background: #f0a5a6; animation-delay: 0.15s; }
+.voice-rec-wave span:nth-child(3n) { animation-delay: 0.3s; }
+/* .composer button(0,1,1) 를 이기도록 컨테이너 클래스로 특이도를 올린다 */
+.voice-recording .voice-rec-cancel {
+  display: grid; place-items: center;
+  width: 40px; height: 40px; flex: none;
+  border: 0; border-radius: 12px;
+  background: #f2f4f6; color: var(--gray-500); box-shadow: none; cursor: pointer;
+}
+.voice-recording .voice-rec-send {
+  display: grid; place-items: center;
+  width: 44px; height: 44px; flex: none;
+  border: 0; border-radius: 14px;
+  background: var(--brand); color: #fff;
+  box-shadow: 0 8px 18px rgba(61, 109, 255, 0.35);
+  cursor: pointer;
+}
+@keyframes ktTwinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes ktVoicePulse { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
+
+/* 음성 메시지 재생 버블 */
+.voice-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 250px;
+  padding: 4px 2px;
+}
+.voice-play {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  border: 0; border-radius: 50%;
+  background: var(--brand); color: #fff; cursor: pointer;
+}
+.voice-wave { display: flex; align-items: center; gap: 2px; height: 24px; }
+.voice-wave span { flex: none; width: 3px; border-radius: 2px; background: #c7d0de; transition: background 0.1s ease; }
+.voice-wave span.on { background: var(--brand); }
+.voice-time { flex: none; font-size: 11px; color: var(--gray-500); font-variant-numeric: tabular-nums; }
+/* 내가 보낸 버블 안에서는 파형 미재생 부분을 반투명 흰색으로 */
+.chat-row.mine .voice-wave span { background: rgba(255, 255, 255, 0.5); }
+.chat-row.mine .voice-wave span.on { background: #fff; }
+.chat-row.mine .voice-play { background: rgba(255, 255, 255, 0.25); }
+.chat-row.mine .voice-time { color: rgba(255, 255, 255, 0.85); }

@@ -963,6 +963,10 @@ public class ChatService {
             case "video/mp4" -> ".mp4";
             case "video/webm" -> ".webm";
             case "video/quicktime" -> ".mov";
+            case "audio/webm" -> ".weba";
+            case "audio/ogg" -> ".ogg";
+            case "audio/mpeg" -> ".mp3";
+            case "audio/mp4", "audio/aac" -> ".m4a";
             case "application/pdf" -> ".pdf";
             default -> "";
         };
