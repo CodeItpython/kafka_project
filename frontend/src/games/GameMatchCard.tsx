@@ -16,7 +16,7 @@ export type GameMatchResponse = {
   winnerEmail: string | null;
 };
 
-const GAME_NAMES: Record<GameKey, string> = { SNAKE: '스네이크', TETRIS: '테트리스', G2048: '2048' };
+const GAME_NAMES: Record<GameKey, string> = { SNAKE: '스네이크', TETRIS: '테트리스', G2048: '2048', CARDMATCH: '카드매치' };
 
 type Props = {
   match: GameMatchResponse | null;

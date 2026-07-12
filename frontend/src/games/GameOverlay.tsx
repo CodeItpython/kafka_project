@@ -4,11 +4,19 @@ import { ArrowLeft, X, Swords, ChevronRight, Trophy, Share2, RotateCcw } from 'l
 import SnakeGame from './SnakeGame';
 import TetrisGame from './TetrisGame';
 import Game2048 from './Game2048';
+import CardMatchGame from './CardMatchGame';
 import type { GameMatchResponse } from './GameMatchCard';
 
-export type GameKey = 'SNAKE' | 'TETRIS' | 'G2048';
+export type GameKey = 'SNAKE' | 'TETRIS' | 'G2048' | 'CARDMATCH';
 
 export type GameScoreResult = { bestScore: number; improved: boolean };
+
+// mm:ss for time-based games (card match). 0 → placeholder.
+const mmss = (secs: number) => {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 type Props = {
   open: boolean;
@@ -27,11 +35,28 @@ type Props = {
   myName?: string;
 };
 
-const GAMES: { key: GameKey; name: string; emoji: string; hint: string }[] = [
+// timeBased 게임(카드매치)은 점수가 아니라 '완료 시간'(짧을수록 좋음)이라 최고기록을
+// 로컬(min)로 관리하고 mm:ss로 표시한다. 백엔드 점수/대결 시스템(점수 max)엔 넣지 않는다.
+const GAMES: { key: GameKey; name: string; emoji: string; hint: string; timeBased?: boolean }[] = [
   { key: 'SNAKE', name: '스네이크', emoji: '🐍', hint: '방향키 / 화면 버튼으로 이동' },
   { key: 'TETRIS', name: '테트리스', emoji: '🧱', hint: '← → 이동 · ↑ 회전 · ↓ 내리기 · Space 바닥' },
   { key: 'G2048', name: '2048', emoji: '🔢', hint: '방향키 / 스와이프로 합치기' },
+  { key: 'CARDMATCH', name: '카드매치', emoji: '🃏', hint: '카드를 뒤집어 같은 짝을 찾으세요', timeBased: true },
 ];
+
+const isTimeBased = (key: GameKey | null) => !!GAMES.find((g) => g.key === key)?.timeBased;
+// 표시용: 시간 게임은 mm:ss, 점수 게임은 천단위 콤마.
+const fmtScore = (key: GameKey | null, value: number) =>
+  isTimeBased(key) ? mmss(value) : value.toLocaleString();
+// 시간 게임들의 로컬 최고기록(초)을 읽어 온다.
+const loadLocalBests = (): Record<string, number> => {
+  const out: Record<string, number> = {};
+  GAMES.filter((g) => g.timeBased).forEach((g) => {
+    const v = Number(localStorage.getItem(`gameBest:${g.key}`) || 0);
+    if (v > 0) out[g.key] = v;
+  });
+  return out;
+};
 
 export default function GameOverlay({ open, onClose, submitScore, loadBests, matchMode = false, matchGame = null, onMatchStart, onMatchEnd, onDuel, myEmail = '', myName = '' }: Props) {
   const [selected, setSelected] = useState<GameKey | null>(null);
@@ -54,7 +79,8 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
       return;
     }
     setSelected(null);
-    fns.current.loadBests().then(setBests).catch(() => {});
+    // 서버 점수 최고기록 + 시간 게임 로컬 최고기록을 합쳐 표시.
+    fns.current.loadBests().then((b) => setBests({ ...b, ...loadLocalBests() })).catch(() => setBests(loadLocalBests()));
   }, [open, matchMode, matchGame]);
 
   useEffect(() => {
@@ -93,6 +119,15 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
       Promise.resolve(fns.current.onMatchEnd?.(game, finalScore))
         .then((match) => setOver({ score: finalScore, improved: false, prevBest, match: (match as GameMatchResponse) ?? null }))
         .catch(() => setOver({ score: finalScore, improved: false, prevBest, match: null }));
+      return;
+    }
+    if (isTimeBased(game)) {
+      // 시간 게임: 낮을수록 좋음 → 로컬 최고기록(최소)으로 관리, 서버 제출 안 함.
+      const improved = prevBest === 0 || finalScore < prevBest;
+      const newBest = improved ? finalScore : prevBest;
+      try { localStorage.setItem(`gameBest:${game}`, String(newBest)); } catch { /* storage 불가 무시 */ }
+      setBests((prev) => ({ ...prev, [game]: newBest }));
+      setOver({ score: finalScore, improved, prevBest, match: null });
       return;
     }
     fns.current.submitScore(game, finalScore).then((res) => {
@@ -150,11 +185,14 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
                   </button>
                 )}
                 <div className="game-card-grid">
-                  {GAMES.map((g) => (
+                  {/* 시간 게임(카드매치)은 점수 기반 대결에 맞지 않아 대결 모드에선 제외. */}
+                  {GAMES.filter((g) => !matchMode || !g.timeBased).map((g) => (
                     <button key={g.key} type="button" className="game-card" onClick={() => startGame(g.key)}>
                       <span className="game-card-emoji" aria-hidden>{g.emoji}</span>
                       <strong>{g.name}</strong>
-                      {matchMode ? <small>대결 신청</small> : <small>최고 {bests[g.key] ?? 0}</small>}
+                      {matchMode
+                        ? <small>대결 신청</small>
+                        : <small>최고 {(bests[g.key] ?? 0) > 0 ? fmtScore(g.key, bests[g.key]) : (g.timeBased ? '—' : '0')}</small>}
                     </button>
                   ))}
                 </div>
@@ -162,13 +200,23 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
             ) : (
               <div className="game-stage">
                 <div className="game-scorebar">
-                  <span>점수 <strong>{score}</strong></span>
-                  <span>최고 <strong>{Math.max(best, score)}</strong></span>
+                  {isTimeBased(selected) ? (
+                    <>
+                      <span>시간 <strong>{mmss(score)}</strong></span>
+                      <span>최고 <strong>{best > 0 ? mmss(best) : '—'}</strong></span>
+                    </>
+                  ) : (
+                    <>
+                      <span>점수 <strong>{score}</strong></span>
+                      <span>최고 <strong>{Math.max(best, score)}</strong></span>
+                    </>
+                  )}
                 </div>
                 <div className="game-area">
                   {selected === 'SNAKE' && <SnakeGame key={runId} onScore={handleScore} onGameOver={handleOver} />}
                   {selected === 'TETRIS' && <TetrisGame key={runId} onScore={handleScore} onGameOver={handleOver} />}
                   {selected === 'G2048' && <Game2048 key={runId} onScore={handleScore} onGameOver={handleOver} />}
+                  {selected === 'CARDMATCH' && <CardMatchGame key={runId} onScore={handleScore} onGameOver={handleOver} />}
                   {over && (() => {
                     const m = over.match;
                     const done = matchMode && m && m.status === 'DONE';
@@ -188,10 +236,10 @@ export default function GameOverlay({ open, onClose, submitScore, loadBests, mat
                     <div className="game-over-panel">
                       <span className="game-over-trophy" aria-hidden><Trophy size={38} /></span>
                       <span className="game-over-label">{label}</span>
-                      <span className="game-over-score">{over.score.toLocaleString()}</span>
+                      <span className="game-over-score">{fmtScore(selected, over.score)}</span>
                       {!matchMode && (
                         <span className="game-over-sub">
-                          이전 최고 {over.prevBest.toLocaleString()}{over.improved && <span className="game-over-record"> · 신기록!</span>}
+                          이전 최고 {over.prevBest > 0 ? fmtScore(selected, over.prevBest) : (isTimeBased(selected) ? '없음' : '0')}{over.improved && <span className="game-over-record"> · 신기록!</span>}
                         </span>
                       )}
                       {done && m && (
