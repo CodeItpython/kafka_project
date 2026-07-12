@@ -2659,28 +2659,33 @@ function App() {
 
                   <AnimatePresence mode="wait">
                     {signupStep === 1 && (
-                      <motion.div key="s1" className="signup-step" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
-                        <h2>약관에 동의해 주세요</h2>
-                        <p className="signup-sub">서비스 이용을 위해 아래 약관 동의가 필요해요.</p>
-                        <label className="agree-row agree-all">
-                          <input type="checkbox" checked={agreeTerms && agreePrivacy && agreeMarketing}
-                            onChange={(event) => { const value = event.target.checked; setAgreeTerms(value); setAgreePrivacy(value); setAgreeMarketing(value); }} />
-                          <span>전체 동의</span>
-                        </label>
-                        <label className="agree-row">
-                          <input type="checkbox" checked={agreeTerms} onChange={(event) => setAgreeTerms(event.target.checked)} />
-                          <span><b>[필수]</b> 서비스 이용약관 동의</span>
-                        </label>
-                        <label className="agree-row">
-                          <input type="checkbox" checked={agreePrivacy} onChange={(event) => setAgreePrivacy(event.target.checked)} />
-                          <span><b>[필수]</b> 개인정보 수집·이용 동의</span>
-                        </label>
-                        <label className="agree-row">
-                          <input type="checkbox" checked={agreeMarketing} onChange={(event) => setAgreeMarketing(event.target.checked)} />
-                          <span><b className="optional">[선택]</b> 마케팅 정보 수신 동의</span>
-                        </label>
+                      <motion.div key="s1" className="signup-step signup-terms" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }}>
+                        <h2>약관에 동의해주세요</h2>
+                        <button type="button" className={`agree-all${agreeTerms && agreePrivacy && agreeMarketing ? ' on' : ''}`}
+                          aria-pressed={agreeTerms && agreePrivacy && agreeMarketing}
+                          onClick={() => { const value = !(agreeTerms && agreePrivacy && agreeMarketing); setAgreeTerms(value); setAgreePrivacy(value); setAgreeMarketing(value); }}>
+                          <span className="agree-box"><Check size={17} aria-hidden /></span>
+                          <span className="agree-all-label">전체 동의</span>
+                        </button>
+                        <div className="agree-card">
+                          <button type="button" className={`agree-item${agreeTerms ? ' on' : ''}`} aria-pressed={agreeTerms} onClick={() => setAgreeTerms((v) => !v)}>
+                            <span className="agree-box sm">{agreeTerms && <Check size={15} aria-hidden />}</span>
+                            <span className="agree-item-label">(필수) 서비스 이용약관</span>
+                            <ChevronRight className="agree-chevron" size={17} aria-hidden />
+                          </button>
+                          <button type="button" className={`agree-item${agreePrivacy ? ' on' : ''}`} aria-pressed={agreePrivacy} onClick={() => setAgreePrivacy((v) => !v)}>
+                            <span className="agree-box sm">{agreePrivacy && <Check size={15} aria-hidden />}</span>
+                            <span className="agree-item-label">(필수) 개인정보 처리방침</span>
+                            <ChevronRight className="agree-chevron" size={17} aria-hidden />
+                          </button>
+                          <button type="button" className={`agree-item optional${agreeMarketing ? ' on' : ''}`} aria-pressed={agreeMarketing} onClick={() => setAgreeMarketing((v) => !v)}>
+                            <span className="agree-box sm">{agreeMarketing && <Check size={15} aria-hidden />}</span>
+                            <span className="agree-item-label">(선택) 마케팅 정보 수신</span>
+                            <ChevronRight className="agree-chevron" size={17} aria-hidden />
+                          </button>
+                        </div>
                         <div className="signup-actions">
-                          <button type="button" className="primary-button" disabled={!agreeTerms || !agreePrivacy} onClick={() => { setSignupError(''); setSignupStep(2); }}>다음</button>
+                          <button type="button" className="ink-button" disabled={!agreeTerms || !agreePrivacy} onClick={() => { setSignupError(''); setSignupStep(2); }}>동의하고 계속</button>
                         </div>
                       </motion.div>
                     )}

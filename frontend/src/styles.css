@@ -458,10 +458,10 @@ p {
 }
 .signup-steps { display: flex; gap: 6px; }
 .signup-steps span {
-  width: 22px;
+  width: 24px;
   height: 5px;
   border-radius: 999px;
-  background: var(--line);
+  background: #e3e7f2;
   transition: background 0.2s ease;
 }
 .signup-steps span.active { background: #5b53eb; }
@@ -483,25 +483,58 @@ p {
 .signup-sub { margin: 0 0 14px; color: var(--gray-600); font-size: 13px; line-height: 1.5; }
 .signup-sub b { color: var(--gray-700); }
 
-.agree-row {
+/* 약관 동의(가입 1단계) — 커스텀 체크 타일 + 그룹 카드 */
+.signup-terms { display: flex; flex-direction: column; gap: 10px; }
+.agree-box {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 8px;
+  border: 1.5px solid #d1d6db;
+  color: transparent;
+  background: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.agree-box.sm { width: 24px; height: 24px; border-radius: 7px; }
+.agree-all {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
-  border-radius: 12px;
-  color: #2a2f45;
-  font-size: 14px;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid #c9dbff;
+  background: #eaf0ff;
   cursor: pointer;
+  text-align: left;
 }
-.agree-row:hover { background: #f7f8fc; }
-.agree-row input { width: 18px; height: 18px; accent-color: #5b53eb; }
-.agree-row b { color: #5b53eb; font-weight: 800; margin-right: 2px; }
-.agree-row b.optional { color: var(--gray-500); }
-.agree-all {
+.agree-all-label { font-size: 15px; font-weight: 800; color: var(--ink); }
+.agree-all.on .agree-box { background: var(--brand); border-color: var(--brand); color: #fff; }
+.agree-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(70, 80, 140, 0.05);
   border: 1px solid var(--line);
-  margin-bottom: 6px;
-  font-weight: 800;
 }
+.agree-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid #f2f4f6;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.agree-item:last-child { border-bottom: 0; }
+.agree-item-label { flex: 1; font-size: 14px; font-weight: 600; color: var(--ink); }
+.agree-item.optional .agree-item-label { color: var(--gray-600); }
+.agree-item.on .agree-box { background: var(--brand); border-color: var(--brand); color: #fff; }
+.agree-chevron { flex: none; color: #b0b8c1; }
 
 .signup-field { display: grid; gap: 6px; margin-bottom: 12px; color: var(--gray-700); font-size: 13px; font-weight: 700; }
 .signup-field input, .signup-email-row input {
@@ -558,7 +591,30 @@ p {
 }
 
 .signup-actions { display: flex; gap: 8px; margin-top: 18px; }
-.signup-actions .primary-button { flex: 1; }
+.signup-actions .primary-button,
+.signup-actions .ink-button { flex: 1; }
+/* 다크 버튼(약관 동의·비밀번호 재설정 등) — 브랜드 블루와 구분되는 잉크 톤 */
+.ink-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 12px 26px rgba(25, 31, 40, 0.24);
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+.ink-button:hover { opacity: 0.94; }
+.ink-button:active { transform: scale(0.99); }
+.ink-button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 .ghost-button {
   border: 1px solid var(--line);
   border-radius: 999px;
