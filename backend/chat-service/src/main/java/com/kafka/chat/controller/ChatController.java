@@ -4,6 +4,8 @@ import com.kafka.chat.dto.ChatDtos.ChatMessageResponse;
 import com.kafka.chat.dto.ChatDtos.ChatRoomResponse;
 import com.kafka.chat.dto.ChatDtos.ContactResponse;
 import com.kafka.chat.dto.ChatDtos.ConversationSummaryResponse;
+import com.kafka.chat.dto.ChatDtos.FriendRequestResponse;
+import com.kafka.chat.dto.ChatDtos.SendFriendRequestRequest;
 import com.kafka.chat.dto.ChatDtos.CreateDirectRoomRequest;
 import com.kafka.chat.dto.ChatDtos.CreateRoomRequest;
 import com.kafka.chat.dto.ChatDtos.EditMessageRequest;
@@ -20,6 +22,7 @@ import com.kafka.chat.dto.ChatDtos.AttachmentResponse;
 import com.kafka.chat.dto.ChatDtos.TypingRequest;
 import com.kafka.chat.dto.ChatMessageEvent;
 import com.kafka.chat.service.ChatService;
+import com.kafka.chat.service.FriendService;
 import com.kafka.chat.security.AuthUser;
 import com.kafka.chat.storage.StorageUrlSigner;
 import com.kafka.chat.storage.StoredObject;
@@ -49,6 +52,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Validated
 public class ChatController {
     private final ChatService chatService;
+    private final FriendService friendService;
     private final StorageUrlSigner storageUrlSigner;
 
     @GetMapping("/rooms")
@@ -125,6 +129,47 @@ public class ChatController {
             @AuthenticationPrincipal AuthUser user
     ) {
         return ResponseEntity.ok(chatService.contacts(query, user));
+    }
+
+    @GetMapping("/friends")
+    public ResponseEntity<List<ContactResponse>> friends(@AuthenticationPrincipal AuthUser user) {
+        return ResponseEntity.ok(friendService.friends(user));
+    }
+
+    @PostMapping("/friend-requests")
+    public ResponseEntity<FriendRequestResponse> sendFriendRequest(
+            @Valid @RequestBody SendFriendRequestRequest request,
+            @AuthenticationPrincipal AuthUser user
+    ) {
+        return ResponseEntity.ok(friendService.sendRequest(user, request.email()));
+    }
+
+    @GetMapping("/friend-requests/received")
+    public ResponseEntity<List<FriendRequestResponse>> receivedFriendRequests(@AuthenticationPrincipal AuthUser user) {
+        return ResponseEntity.ok(friendService.received(user));
+    }
+
+    @GetMapping("/friend-requests/sent")
+    public ResponseEntity<List<FriendRequestResponse>> sentFriendRequests(@AuthenticationPrincipal AuthUser user) {
+        return ResponseEntity.ok(friendService.sent(user));
+    }
+
+    @PostMapping("/friend-requests/{id}/accept")
+    public ResponseEntity<Void> acceptFriendRequest(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        friendService.accept(user, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/friend-requests/{id}/reject")
+    public ResponseEntity<Void> rejectFriendRequest(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        friendService.reject(user, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/friend-requests/{id}")
+    public ResponseEntity<Void> cancelFriendRequest(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        friendService.cancel(user, id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/presence/heartbeat")

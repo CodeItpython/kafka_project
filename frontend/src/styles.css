@@ -6243,3 +6243,49 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 .kt-switch.on .kt-switch-knob { transform: translateX(18px); }
+
+/* ===== 친구 요청(#34) ===== */
+.friend-requests .section-title { display: flex; align-items: center; gap: 8px; }
+.fr-badge {
+  min-width: 20px; height: 20px; padding: 0 6px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: #ff4d4f; color: #fff;
+  font-size: 11px; font-weight: 700;
+}
+.fr-card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.fr-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(70, 80, 140, 0.05);
+  border: 1px solid var(--line);
+}
+.fr-avatar { width: 46px; height: 46px; border-radius: 50%; flex: none; }
+.fr-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fr-meta strong { font-size: 15px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-meta small { font-size: 12px; color: var(--gray-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.fr-accept {
+  min-height: 36px; padding: 0 14px;
+  border: 0; border-radius: 10px;
+  background: var(--brand); color: #fff;
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.fr-reject {
+  display: grid; place-items: center;
+  width: 36px; height: 36px; flex: none;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--gray-500); cursor: pointer;
+}
+.fr-cancel {
+  flex: none;
+  min-height: 36px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--gray-600);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.contact-profile-actions { display: flex; gap: 8px; }
+.contact-profile-actions .primary-button,
+.contact-profile-actions .ghost-button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
