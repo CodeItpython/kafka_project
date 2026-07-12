@@ -27,6 +27,7 @@ import {
   Gamepad2,
   KeyRound,
   Link2,
+  LockKeyhole,
   LogOut,
   Mail,
   MessageCircle,
@@ -597,6 +598,18 @@ function App() {
   const [signupResult, setSignupResult] = useState<AuthResponse | null>(null);
   const [signupBusy, setSignupBusy] = useState(false);
   const [signupError, setSignupError] = useState('');
+  // 비밀번호 재설정: 링크 요청 모달 + 링크(?reset=토큰)로 진입하는 새 비밀번호 설정 화면
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get('reset') ?? '');
+  const [resetPassword1, setResetPassword1] = useState('');
+  const [resetPassword2, setResetPassword2] = useState('');
+  const [resetConfirmBusy, setResetConfirmBusy] = useState(false);
+  const [resetConfirmError, setResetConfirmError] = useState('');
+  const [resetDone, setResetDone] = useState(false);
   const [email, setEmail] = useState(SAMPLE_USERS[0].email);
   const [name, setName] = useState(SAMPLE_USERS[0].name);
   const [password, setPassword] = useState('password123');
@@ -979,6 +992,65 @@ function App() {
   function finishSignup() {
     if (signupResult) saveSession(signupResult);
     setSignupOpen(false);
+  }
+
+  function openReset() {
+    setResetEmail(email.trim());
+    setResetSent(false);
+    setResetError('');
+    setResetOpen(true);
+  }
+
+  async function requestPasswordReset() {
+    if (!resetEmail.trim()) {
+      setResetError('이메일을 입력해주세요.');
+      return;
+    }
+    setResetBusy(true);
+    setResetError('');
+    try {
+      await request<void>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email: resetEmail.trim() }) });
+      setResetSent(true);
+      playSound('success');
+    } catch (error) {
+      setResetError(readableError(error, '재설정 링크를 보내지 못했습니다.'));
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
+  async function confirmPasswordReset() {
+    if (resetPassword1.length < 8) {
+      setResetConfirmError('비밀번호는 8자 이상이어야 합니다.');
+      return;
+    }
+    if (resetPassword1 !== resetPassword2) {
+      setResetConfirmError('비밀번호가 일치하지 않습니다.');
+      return;
+    }
+    setResetConfirmBusy(true);
+    setResetConfirmError('');
+    try {
+      await request<void>('/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ token: resetToken, newPassword: resetPassword1 }) });
+      setResetDone(true);
+      playSound('success');
+    } catch (error) {
+      setResetConfirmError(readableError(error, '비밀번호를 재설정하지 못했습니다.'));
+    } finally {
+      setResetConfirmBusy(false);
+    }
+  }
+
+  function closeResetConfirm() {
+    // ?reset= 파라미터를 URL에서 제거하고 로그인 화면으로 돌아간다.
+    setResetToken('');
+    setResetPassword1('');
+    setResetPassword2('');
+    setResetDone(false);
+    setResetConfirmError('');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
   }
 
   async function submitPasswordFlow(event: FormEvent) {
@@ -2548,6 +2620,34 @@ function App() {
     };
   }, [notificationTopic, token]);
 
+  // 이메일 재설정 링크(?reset=토큰)로 진입하면 로그인 여부와 무관하게 새 비밀번호 설정 화면을 보여준다.
+  if (resetToken) {
+    return (
+      <main className="auth-shell auth-shell--login reset-shell">
+        <div className="reset-card">
+          <div className="reset-icon"><LockKeyhole size={28} aria-hidden /></div>
+          {resetDone ? (
+            <>
+              <h2>비밀번호가 변경되었어요</h2>
+              <p className="reset-sub">새 비밀번호로 다시 로그인해 주세요.</p>
+              <button type="button" className="ink-button" onClick={closeResetConfirm}>로그인하러 가기</button>
+            </>
+          ) : (
+            <>
+              <h2>새 비밀번호 설정</h2>
+              <p className="reset-sub">사용할 새 비밀번호를 입력해 주세요.</p>
+              <label className="reset-field">새 비밀번호<input type="password" value={resetPassword1} onChange={(event) => setResetPassword1(event.target.value)} minLength={8} placeholder="8자 이상" /></label>
+              <label className="reset-field">새 비밀번호 확인<input type="password" value={resetPassword2} onChange={(event) => setResetPassword2(event.target.value)} minLength={8} placeholder="다시 입력" /></label>
+              <button type="button" className="ink-button" disabled={resetConfirmBusy} onClick={confirmPasswordReset}>비밀번호 변경</button>
+              <button type="button" className="reset-cancel" onClick={closeResetConfirm}>취소하고 로그인</button>
+              {resetConfirmError && <p className="signup-error">{resetConfirmError}</p>}
+            </>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   if (!user) {
     if (authStage === 'landing') {
       return <WelcomeLanding onStart={() => setAuthStage('login')} />;
@@ -2625,6 +2725,8 @@ function App() {
             <label>비밀번호<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={8} required /></label>
             <button className="primary-button" disabled={loading}><KeyRound size={18} aria-hidden />로그인</button>
           </form>
+
+          <button type="button" className="forgot-link" onClick={openReset}>비밀번호를 잊으셨나요?</button>
 
           <div className="auth-divider"><span>또는</span></div>
 
@@ -2736,6 +2838,34 @@ function App() {
                   </AnimatePresence>
 
                   {signupError && <p className="signup-error">{signupError}</p>}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {resetOpen && (
+              <motion.div className="signup-backdrop" role="presentation" onClick={() => setResetOpen(false)}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div className="signup-modal reset-modal" role="dialog" aria-modal="true" aria-label="비밀번호 재설정"
+                  onClick={(event) => event.stopPropagation()}
+                  initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}>
+                  <header className="signup-modal-head">
+                    <div className="reset-icon"><LockKeyhole size={26} aria-hidden /></div>
+                    <button type="button" className="signup-close" onClick={() => setResetOpen(false)} aria-label="닫기"><X size={18} aria-hidden /></button>
+                  </header>
+                  <h2 className="reset-title">비밀번호 재설정</h2>
+                  <p className="reset-sub">가입한 이메일로 재설정 링크를 보내드려요.</p>
+                  {resetSent ? (
+                    <div className="reset-success"><CheckCircle2 size={17} aria-hidden />메일함으로 링크를 보냈어요</div>
+                  ) : (
+                    <>
+                      <label className="reset-field">이메일<input type="email" value={resetEmail} onChange={(event) => setResetEmail(event.target.value)} placeholder="you@example.com" /></label>
+                      <button type="button" className="ink-button" disabled={resetBusy || !resetEmail.trim()} onClick={requestPasswordReset}>재설정 링크 보내기</button>
+                      {resetError && <p className="signup-error">{resetError}</p>}
+                    </>
+                  )}
                 </motion.div>
               </motion.div>
             )}

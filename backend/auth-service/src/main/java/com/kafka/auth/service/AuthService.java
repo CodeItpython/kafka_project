@@ -12,8 +12,10 @@ import com.kafka.auth.email.EmailVerificationProperties;
 import com.kafka.auth.email.EmailVerificationThrottleService;
 import com.kafka.auth.model.AuthProvider;
 import com.kafka.auth.model.EmailVerificationCode;
+import com.kafka.auth.model.PasswordResetToken;
 import com.kafka.auth.model.UserAccount;
 import com.kafka.auth.repository.EmailVerificationCodeRepository;
+import com.kafka.auth.repository.PasswordResetTokenRepository;
 import com.kafka.auth.repository.UserAccountRepository;
 import com.kafka.auth.security.JwtService;
 import com.kafka.auth.storage.StorageUrlSigner;
@@ -21,7 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -35,9 +39,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthService {
     private static final SecureRandom RANDOM = new SecureRandom();
+    /** 재설정 링크 유효 시간. 이메일 OTP(5분)보다 길게 잡아 메일 확인 지연을 흡수한다. */
+    private static final Duration PASSWORD_RESET_TTL = Duration.ofMinutes(30);
 
     private final UserAccountRepository userAccountRepository;
     private final EmailVerificationCodeRepository emailVerificationCodeRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailVerificationMailService emailVerificationMailService;
@@ -67,6 +74,45 @@ public class AuthService {
             throw new IllegalArgumentException("이미 가입된 이메일입니다.");
         }
         verifyEmailCode(normalizedEmail, code);
+    }
+
+    /**
+     * 비밀번호 재설정 링크 요청. 계정 존재 여부와 무관하게 항상 성공 처리해 이메일
+     * 열거(enumeration)를 막는다. 실제 계정이 있고 비밀번호 로그인 계정(소셜 아님)일
+     * 때만 단발성 토큰을 발급하고 링크를 발송한다.
+     */
+    @Transactional
+    public void requestPasswordReset(String emailRaw, String frontendBaseUrl) {
+        String email = normalizeEmail(emailRaw);
+        userAccountRepository.findByEmail(email).ifPresent(user -> {
+            if (user.getPasswordHash() == null) {
+                // 소셜 로그인 계정은 비밀번호가 없어 재설정 대상이 아니다.
+                return;
+            }
+            String token = generateResetToken();
+            Instant expiresAt = Instant.now().plus(PASSWORD_RESET_TTL);
+            passwordResetTokenRepository.markUnusedTokensAsUsed(email);
+            passwordResetTokenRepository.save(new PasswordResetToken(email, hashToken(token), expiresAt));
+            String link = buildResetLink(frontendBaseUrl, token);
+            emailVerificationMailService.sendPasswordResetLink(email, link, expiresAt);
+        });
+    }
+
+    /** 재설정 링크의 토큰을 검증하고 새 비밀번호를 저장한다(토큰은 1회용). */
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        PasswordResetToken resetToken = passwordResetTokenRepository
+                .findTopByTokenAndUsedFalseOrderByExpiresAtDesc(hashToken(token))
+                .orElseThrow(() -> new IllegalArgumentException("재설정 링크가 올바르지 않거나 이미 사용되었습니다."));
+        if (resetToken.getExpiresAt().isBefore(Instant.now())) {
+            throw new IllegalArgumentException("재설정 링크가 만료되었습니다. 다시 요청해주세요.");
+        }
+        UserAccount user = userAccountRepository.findByEmail(resetToken.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("계정을 찾을 수 없습니다."));
+        user.updatePassword(passwordEncoder.encode(newPassword));
+        userAccountRepository.save(user);
+        resetToken.markUsed();
+        passwordResetTokenRepository.markUnusedTokensAsUsed(resetToken.getEmail());
     }
 
     @Transactional(readOnly = true)
@@ -250,6 +296,28 @@ public class AuthService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 해시를 사용할 수 없습니다.", exception);
         }
+    }
+
+    private String generateResetToken() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 해시를 사용할 수 없습니다.", exception);
+        }
+    }
+
+    private String buildResetLink(String frontendBaseUrl, String token) {
+        String base = frontendBaseUrl == null || frontendBaseUrl.isBlank()
+                ? "http://localhost:8880"
+                : frontendBaseUrl.trim().replaceAll("/+$", "");
+        return base + "/?reset=" + token;
     }
 
     private String maskedEmail(String email) {

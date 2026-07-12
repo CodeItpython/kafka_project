@@ -43,6 +43,44 @@ public class EmailVerificationMailService {
         }
     }
 
+    /**
+     * 비밀번호 재설정 링크를 발송한다. SMTP 미설정(로컬/개발) 환경에서는 예외 대신
+     * 링크를 로그로 남겨 흐름이 끊기지 않도록 우아하게 폴백한다(계정 열거 방지도 겸함).
+     */
+    public void sendPasswordResetLink(String email, String link, Instant expiresAt) {
+        if (mailProperties.getHost() == null || mailProperties.getHost().isBlank()) {
+            log.info("[password-reset] SMTP 미설정 — 재설정 링크를 로그로 대체합니다. email={} link={} expiresAt={}",
+                    email, link, expiresAt);
+            return;
+        }
+        String from = resolveFromAddress();
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(from);
+            helper.setTo(email);
+            helper.setSubject("[%s] 비밀번호 재설정 링크".formatted(properties.getAppName()));
+            helper.setText(passwordResetBody(link, expiresAt));
+            mailSender.send(message);
+            log.info("Password reset link sent. email={} expiresAt={}", email, expiresAt);
+        } catch (MessagingException | MailException exception) {
+            log.warn("Password reset link send failed; link logged instead. email={} link={}", email, link, exception);
+        }
+    }
+
+    private String passwordResetBody(String link, Instant expiresAt) {
+        String formattedExpiresAt = EXPIRES_AT_FORMATTER.format(expiresAt.atZone(SEOUL_ZONE));
+        return """
+                %s 비밀번호 재설정 안내입니다.
+
+                아래 링크에서 새 비밀번호를 설정해 주세요.
+                %s
+
+                이 링크는 %s까지 사용할 수 있습니다.
+                본인이 요청하지 않았다면 이 메일을 무시해주세요.
+                """.formatted(properties.getAppName(), link, formattedExpiresAt);
+    }
+
     private void validateSmtpHost() {
         if (mailProperties.getHost() == null || mailProperties.getHost().isBlank()) {
             throw new IllegalStateException("이메일 발송 설정이 완료되지 않았습니다.");
