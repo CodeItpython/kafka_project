@@ -4236,6 +4236,42 @@ input:focus {
   .landing-shimmer { -webkit-text-fill-color: #ffffff; color: #ffffff; }
 }
 
+/* React Bits GradientText — 히어로 제목용(배지형 래퍼 스타일 무력화, 큰 헤딩으로) */
+.animated-gradient-text.landing-gradient-heading {
+  display: inline-block;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+  cursor: default;
+  overflow: visible;
+  font-weight: inherit;
+}
+.landing-gradient-heading .text-content {
+  filter: drop-shadow(0 12px 48px rgba(91, 83, 235, 0.5));
+}
+
+/* React Bits StarBorder — '시작하기' 버튼을 감싸는 별빛 테두리 */
+.landing-start-star.star-border-container {
+  border-radius: 999px;
+  margin-top: 6px;
+}
+.landing-start-star .inner-content {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+}
+.landing-start-star .landing-start {
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-start-star .border-gradient-top,
+  .landing-start-star .border-gradient-bottom {
+    animation: none;
+  }
+}
+
 /* 로그인 화면 '돌아가기' 버튼 */
 .auth-back {
   display: inline-flex;
