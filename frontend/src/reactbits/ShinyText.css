@@ -1,0 +1,9 @@
+/* Adapted from React Bits (https://reactbits.dev) — MIT. The sweep is JS-driven
+   by ShinyText.tsx (inline gradient + motion background-position), so this file
+   only carries structural styles (no competing CSS keyframe animation). */
+.shiny-text {
+  display: inline-block;
+}
+.shiny-text.disabled {
+  animation: none;
+}

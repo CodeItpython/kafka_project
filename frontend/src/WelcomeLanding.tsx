@@ -2,6 +2,9 @@ import { Component, ReactNode, Suspense, lazy, useRef } from 'react';
 import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, Variants } from 'motion/react';
 import { ArrowRight, ChevronDown, Link2, MessageCircle, Newspaper, ShoppingBag } from 'lucide-react';
 import { landingScroll } from './LandingScene';
+import ShinyText from './reactbits/ShinyText';
+import GradientText from './reactbits/GradientText';
+import StarBorder from './reactbits/StarBorder';
 
 const LandingScene = lazy(() => import('./LandingScene'));
 
@@ -101,8 +104,14 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
 
       <section className="landing-section landing-hero" ref={heroRef}>
         <motion.div className="landing-hero-inner" style={{ y: heroY, opacity: heroOpacity }} {...groupOnMount}>
-          <motion.p className="landing-eyebrow" {...itemV}>KAFKA TALK</motion.p>
-          <motion.h1 className="landing-title landing-shimmer" {...itemV}>대화가<br />시작되는 곳</motion.h1>
+          <motion.p className="landing-eyebrow" {...itemV}>
+            <ShinyText text="KAFKA TALK" speed={4} color="#a5b4fc" shineColor="#ffffff" spread={110} />
+          </motion.p>
+          <motion.h1 className="landing-title" {...itemV}>
+            <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
+              대화가<br />시작되는 곳
+            </GradientText>
+          </motion.h1>
           <motion.p className="landing-lead" {...itemV}>친구와의 순간을 가볍게, 끊김 없이.</motion.p>
         </motion.div>
         <motion.div className="landing-scroll-hint" style={{ opacity: hintOpacity }} aria-hidden>
@@ -137,16 +146,18 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
         <motion.div className="landing-cta-inner" {...groupOnView}>
           <motion.h2 className="landing-cta-title landing-shimmer" {...itemV}>이제,<br />시작해볼까요?</motion.h2>
           <motion.p className="landing-lead" {...itemV}>테스트 계정으로 바로 체험하거나 로그인하세요.</motion.p>
-          <motion.button
-            className="landing-start"
-            type="button"
-            onClick={onStart}
-            {...itemV}
-            whileHover={reduce ? undefined : { y: -3, scale: 1.03 }}
-            whileTap={reduce ? undefined : { scale: 0.96 }}
-          >
-            시작하기 <ArrowRight size={18} aria-hidden />
-          </motion.button>
+          <StarBorder as="div" className="landing-start-star" color="#a5b4fc" speed="5s" thickness={2}>
+            <motion.button
+              className="landing-start"
+              type="button"
+              onClick={onStart}
+              {...itemV}
+              whileHover={reduce ? undefined : { y: -3, scale: 1.03 }}
+              whileTap={reduce ? undefined : { scale: 0.96 }}
+            >
+              시작하기 <ArrowRight size={18} aria-hidden />
+            </motion.button>
+          </StarBorder>
           <motion.button className="landing-login-link" type="button" onClick={onStart} {...itemV}>
             이미 계정이 있으신가요? 로그인
           </motion.button>
