@@ -4189,20 +4189,6 @@ input:focus {
   text-underline-offset: 3px;
 }
 
-/* 제목에 흐르는 그라디언트 시머 (배경 위치만 애니메이트 → 등장 transform과 충돌 없음) */
-.landing-shimmer {
-  background-image: linear-gradient(100deg, #ffffff 10%, #b5adff 30%, #6fe6ff 46%, #ffffff 58%, #dcb8ff 74%, #ffffff 92%);
-  background-size: 220% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  animation: landingShimmer 4.5s linear infinite;
-}
-
-@keyframes landingShimmer {
-  to { background-position: 220% center; }
-}
 @keyframes landingIconPing {
   0% { transform: scale(1); opacity: 0.7; }
   70%, 100% { transform: scale(1.7); opacity: 0; }
@@ -4224,7 +4210,6 @@ input:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-shimmer,
   .landing-feature-icon,
   .landing-feature-icon::before,
   .landing-feature-icon::after,
@@ -4232,8 +4217,6 @@ input:focus {
   .landing-start::before {
     animation: none;
   }
-  /* 시머 정지 시엔 흰색 글자로 또렷하게 */
-  .landing-shimmer { -webkit-text-fill-color: #ffffff; color: #ffffff; }
 }
 
 /* React Bits GradientText — 히어로 제목용(배지형 래퍼 스타일 무력화, 큰 헤딩으로) */

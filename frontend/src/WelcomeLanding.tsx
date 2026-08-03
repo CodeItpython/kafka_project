@@ -134,8 +134,14 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
               <motion.span className="landing-feature-icon" {...iconV}>
                 <Icon size={26} aria-hidden />
               </motion.span>
-              <motion.p className="landing-eyebrow" {...itemV}>{feature.eyebrow}</motion.p>
-              <motion.h2 className="landing-feature-title landing-shimmer" {...itemV}>{feature.title}</motion.h2>
+              <motion.p className="landing-eyebrow" {...itemV}>
+                <ShinyText text={feature.eyebrow} speed={4} color="#a5b4fc" shineColor="#ffffff" spread={110} />
+              </motion.p>
+              <motion.h2 className="landing-feature-title" {...itemV}>
+                <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
+                  {feature.title}
+                </GradientText>
+              </motion.h2>
               <motion.p className="landing-feature-desc" {...itemV}>{feature.desc}</motion.p>
             </motion.div>
           </section>
@@ -144,7 +150,11 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
 
       <section className="landing-section landing-cta">
         <motion.div className="landing-cta-inner" {...groupOnView}>
-          <motion.h2 className="landing-cta-title landing-shimmer" {...itemV}>이제,<br />시작해볼까요?</motion.h2>
+          <motion.h2 className="landing-cta-title" {...itemV}>
+            <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
+              이제,<br />시작해볼까요?
+            </GradientText>
+          </motion.h2>
           <motion.p className="landing-lead" {...itemV}>테스트 계정으로 바로 체험하거나 로그인하세요.</motion.p>
           <StarBorder as="div" className="landing-start-star" color="#a5b4fc" speed="5s" thickness={2}>
             <motion.button
