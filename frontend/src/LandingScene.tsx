@@ -85,16 +85,42 @@ function fract(n: number) {
 
 function Particles() {
   const groupRef = useRef<THREE.Group>(null);
+  const spinRef = useRef(0);
 
   const geometry = useMemo(() => {
     const count = 16000;
     const pos0 = new Float32Array(count * 3); // 구체
-    const pos1 = new Float32Array(count * 3); // 나선 은하 (정면)
-    const pos2 = new Float32Array(count * 3); // 물결 커튼
+    const pos1 = new Float32Array(count * 3); // 채팅 버블
+    const pos2 = new Float32Array(count * 3); // 네트워크 그래프
     const pos3 = new Float32Array(count * 3); // 빛나는 코어
     const scales = new Float32Array(count);
     const seeds = new Float32Array(count);
     const golden = Math.PI * (3 - Math.sqrt(5));
+
+    // 채팅 버블 치수 (둥근 사각형 + 왼쪽 아래 꼬리)
+    const bw = 3.6;
+    const bh = 2.3;
+    const br = 0.68;
+
+    // 네트워크 그래프: 노드 위치와 엣지를 미리 결정적으로 만들어 둔다
+    const nodeCount = 24;
+    const nodes: number[][] = [];
+    for (let n = 0; n < nodeCount; n += 1) {
+      const nt = (n + 0.5) / nodeCount;
+      const incl = Math.acos(1 - 2 * nt);
+      const azi = golden * n * 3.1;
+      const nr = 2.2 * (0.55 + fract(Math.sin(n * 91.7) * 7431.3) * 0.45);
+      nodes.push([
+        Math.sin(incl) * Math.cos(azi) * nr,
+        Math.sin(incl) * Math.sin(azi) * nr * 0.72,
+        Math.cos(incl) * nr * 0.55
+      ]);
+    }
+    const edges: number[][] = [];
+    for (let n = 0; n < nodeCount; n += 1) {
+      edges.push([n, (n + 1) % nodeCount]);
+      edges.push([n, (n * 7 + 3) % nodeCount]);
+    }
 
     for (let i = 0; i < count; i += 1) {
       const t = i / count;
@@ -109,20 +135,51 @@ function Particles() {
       pos0[i * 3 + 1] = Math.sin(incl) * Math.sin(azi) * sr;
       pos0[i * 3 + 2] = Math.cos(incl) * sr;
 
-      // 1) 정면 나선 은하 (x-y 평면)
-      const arm = i % 3;
-      const gr = 0.25 + 2.35 * Math.sqrt(t);
-      const angle = gr * 2.4 + (arm * (Math.PI * 2 / 3)) + rand * 0.5;
-      pos1[i * 3] = Math.cos(angle) * gr;
-      pos1[i * 3 + 1] = Math.sin(angle) * gr;
-      pos1[i * 3 + 2] = (rand2 - 0.5) * 0.5;
+      // 1) 채팅 버블 — 둥근 사각형 본체 + 왼쪽 아래 꼬리
+      if (i % 11 === 0) {
+        // 꼬리: 삼각형 안을 무게중심 좌표로 채운다
+        let u = rand;
+        let v = rand2;
+        if (u + v > 1) { u = 1 - u; v = 1 - v; }
+        const t0x = -bw * 0.16, t0y = -bh / 2;
+        const t1x = -bw * 0.02, t1y = -bh / 2;
+        const t2x = -bw * 0.26, t2y = -bh / 2 - 0.78;
+        pos1[i * 3] = t0x + (t1x - t0x) * u + (t2x - t0x) * v;
+        pos1[i * 3 + 1] = t0y + (t1y - t0y) * u + (t2y - t0y) * v;
+        pos1[i * 3 + 2] = (rand - 0.5) * 0.18;
+      } else {
+        let bx = (rand - 0.5) * bw;
+        let by = (rand2 - 0.5) * bh;
+        // 모서리 밖으로 나간 점은 라운드 반경 위로 당겨 둥근 사각형을 만든다
+        const qx = Math.abs(bx) - (bw / 2 - br);
+        const qy = Math.abs(by) - (bh / 2 - br);
+        if (qx > 0 && qy > 0) {
+          const d = Math.hypot(qx, qy);
+          if (d > br) {
+            const s = br / d;
+            bx = Math.sign(bx) * (bw / 2 - br + qx * s);
+            by = Math.sign(by) * (bh / 2 - br + qy * s);
+          }
+        }
+        pos1[i * 3] = bx;
+        pos1[i * 3 + 1] = by;
+        pos1[i * 3 + 2] = (rand - 0.5) * 0.22;
+      }
 
-      // 2) 물결 커튼 (x-y 그리드 + z 리플)
-      const gx = (rand - 0.5) * 5.4;
-      const gy = (rand2 - 0.5) * 3.2;
-      pos2[i * 3] = gx;
-      pos2[i * 3 + 1] = gy;
-      pos2[i * 3 + 2] = Math.sin(gx * 1.6) * 0.5 + Math.cos(gy * 1.8) * 0.5;
+      // 2) 네트워크 그래프 — 노드(뭉침) + 엣지(선분)
+      if (i % 6 === 0) {
+        const nd = nodes[i % nodeCount];
+        pos2[i * 3] = nd[0] + (rand - 0.5) * 0.17;
+        pos2[i * 3 + 1] = nd[1] + (rand2 - 0.5) * 0.17;
+        pos2[i * 3 + 2] = nd[2] + (rand - 0.5) * 0.17;
+      } else {
+        const e = edges[i % edges.length];
+        const a = nodes[e[0]];
+        const b = nodes[e[1]];
+        pos2[i * 3] = a[0] + (b[0] - a[0]) * rand + (rand2 - 0.5) * 0.045;
+        pos2[i * 3 + 1] = a[1] + (b[1] - a[1]) * rand + (rand - 0.5) * 0.045;
+        pos2[i * 3 + 2] = a[2] + (b[2] - a[2]) * rand + (rand2 - 0.5) * 0.045;
+      }
 
       // 3) 빛나는 코어 (조밀한 작은 구)
       const cr = 0.85 * (0.5 + rand * 0.5);
@@ -189,7 +246,10 @@ function Particles() {
 
     if (groupRef.current) {
       const spin = prefersReducedMotion ? 0.01 : 0.075;
-      groupRef.current.rotation.y += delta * spin;
+      spinRef.current += delta * spin;
+      // 채팅 버블(진행도 1/3) 구간에선 평평한 형태가 옆으로 서지 않도록 정면으로 수렴시킨다
+      const faceFront = Math.max(0, 1 - Math.abs(landingScroll.current - 1 / 3) * 5);
+      groupRef.current.rotation.y = spinRef.current * (1 - faceFront);
       groupRef.current.rotation.x += (pointer.y * 0.2 - groupRef.current.rotation.x) * Math.min(1, delta * 2);
     }
     // 스크롤에 따라 카메라 살짝 당겨졌다 물러남 (형태 전환을 강조)
