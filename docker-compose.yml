@@ -20,7 +20,10 @@ services:
     ports:
       - "8890:8890"
     environment:
-      SPRING_PROFILES_ACTIVE: logstash
+      # 관측 스택은 observability 프로파일에서만 뜬다. 기본은 비활성(콘솔 로깅) —
+      # 켜려면 .env 에 SPRING_PROFILES_ACTIVE=logstash, TRACING_SAMPLING=1.0 을 넣고
+      # `docker compose --profile observability up -d` 로 실행한다.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       # mem_limit(768m)의 70%(~538MB)로 힙 상한. 나머지는 메타스페이스/스레드/네이티브 여유로 남긴다.
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
@@ -60,7 +63,7 @@ services:
       APP_STORAGE_S3_ACCESS_KEY: kafka-talk
       APP_STORAGE_S3_SECRET_KEY: kafka-talk-secret
       APP_STORAGE_S3_PATH_STYLE_ACCESS: "true"
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: 1.0
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING:-0.0}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
@@ -132,7 +135,10 @@ services:
     ports:
       - "8892:8892"
     environment:
-      SPRING_PROFILES_ACTIVE: logstash
+      # 관측 스택은 observability 프로파일에서만 뜬다. 기본은 비활성(콘솔 로깅) —
+      # 켜려면 .env 에 SPRING_PROFILES_ACTIVE=logstash, TRACING_SAMPLING=1.0 을 넣고
+      # `docker compose --profile observability up -d` 로 실행한다.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
@@ -156,7 +162,7 @@ services:
       APP_STORAGE_S3_ACCESS_KEY: kafka-talk
       APP_STORAGE_S3_SECRET_KEY: kafka-talk-secret
       APP_STORAGE_S3_PATH_STYLE_ACCESS: "true"
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: 1.0
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING:-0.0}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
@@ -179,7 +185,10 @@ services:
     ports:
       - "8893:8893"
     environment:
-      SPRING_PROFILES_ACTIVE: logstash
+      # 관측 스택은 observability 프로파일에서만 뜬다. 기본은 비활성(콘솔 로깅) —
+      # 켜려면 .env 에 SPRING_PROFILES_ACTIVE=logstash, TRACING_SAMPLING=1.0 을 넣고
+      # `docker compose --profile observability up -d` 로 실행한다.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
@@ -193,7 +202,7 @@ services:
       # 쿠팡 파트너스 — 카탈로그 소스. 설정 시 네이버 대신 사용한다. .env 로만 주입.
       COUPANG_ACCESS_KEY: ${COUPANG_ACCESS_KEY:-}
       COUPANG_SECRET_KEY: ${COUPANG_SECRET_KEY:-}
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: 1.0
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING:-0.0}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
@@ -213,12 +222,15 @@ services:
     ports:
       - "8894:8894"
     environment:
-      SPRING_PROFILES_ACTIVE: logstash
+      # 관측 스택은 observability 프로파일에서만 뜬다. 기본은 비활성(콘솔 로깅) —
+      # 켜려면 .env 에 SPRING_PROFILES_ACTIVE=logstash, TRACING_SAMPLING=1.0 을 넣고
+      # `docker compose --profile observability up -d` 로 실행한다.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       # auth-service와 동일한 시크릿이어야 같은 토큰을 검증할 수 있다.
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: 1.0
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING:-0.0}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
@@ -244,7 +256,10 @@ services:
     ports:
       - "8895:8895"
     environment:
-      SPRING_PROFILES_ACTIVE: logstash
+      # 관측 스택은 observability 프로파일에서만 뜬다. 기본은 비활성(콘솔 로깅) —
+      # 켜려면 .env 에 SPRING_PROFILES_ACTIVE=logstash, TRACING_SAMPLING=1.0 을 넣고
+      # `docker compose --profile observability up -d` 로 실행한다.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
       APP_CORS_ALLOWED_ORIGINS: http://localhost:8880,http://127.0.0.1:8880
       JWT_SECRET: local-compose-secret-change-me-local-compose-secret
@@ -252,7 +267,7 @@ services:
       SPRING_DATASOURCE_USERNAME: kafka
       SPRING_DATASOURCE_PASSWORD: kafka
       APP_SERVICES_SHOPPING_SERVICE_URL: http://shopping-service:8893
-      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: 1.0
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING:-0.0}
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://tempo:4318/v1/traces
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
