@@ -44,4 +44,23 @@ public final class NewsDtos {
                     && (image == null || image.isBlank());
         }
     }
+
+    /**
+     * 인앱 리더용 기사 본문 블록. 원본 HTML을 그대로 내려주지 않고 문단/이미지로 구조화해
+     * 클라이언트가 안전하게(=dangerouslySetInnerHTML 없이) 렌더할 수 있게 한다.
+     * type: "p"(문단, text 사용) | "img"(이미지, src 사용)
+     */
+    public record ArticleBlock(String type, String text, String src) {
+    }
+
+    /** 인앱 리더 기사. blocks가 비면 추출 실패 → 프론트는 원문 링크로 안내한다. */
+    public record Article(
+            String url,
+            String title,
+            String siteName,
+            String publishedAt,
+            String leadImage,
+            List<ArticleBlock> blocks
+    ) {
+    }
 }
