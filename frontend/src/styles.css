@@ -4219,6 +4219,70 @@ input:focus {
   }
 }
 
+/* 제품 목업 쇼케이스 — 스크롤에 맞춰 정면으로 세워지는 CSS 3D 프레임 */
+.landing-showcase { align-content: center; grid-auto-rows: max-content; }
+/* perspective는 프레임의 '직계 부모'에 있어야 rotateX가 원근으로 보인다 */
+.landing-showcase-inner { display: grid; gap: 22px; justify-items: center; perspective: 1200px; }
+.landing-frame {
+  width: min(560px, 88vw);
+  border-radius: 22px;
+  overflow: hidden;
+  text-align: left;
+  background: rgba(16, 20, 34, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 40px 90px rgba(8, 10, 30, 0.6);
+  backdrop-filter: blur(10px);
+  transform-origin: center 78%;
+}
+.lf-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.lf-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, #7c74ff, #5b53eb);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+}
+.lf-who { display: grid; }
+.lf-who strong { color: #eef2ff; font-size: 14px; font-weight: 800; }
+.lf-who small { color: #6fe6b0; font-size: 11px; font-weight: 700; }
+.lf-body { display: grid; gap: 8px; padding: 16px; justify-items: start; }
+.lf-msg {
+  margin: 0;
+  max-width: 78%;
+  padding: 10px 13px;
+  border-radius: 16px 16px 16px 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e6ebf7;
+  font-size: 14px;
+  font-weight: 600;
+}
+.lf-msg.mine {
+  justify-self: end;
+  border-radius: 16px 16px 5px 16px;
+  background: linear-gradient(150deg, #7c74ff, #5b53eb);
+  color: #ffffff;
+}
+.lf-composer {
+  margin: 0 16px 16px;
+  padding: 11px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: rgba(226, 232, 255, 0.45);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* React Bits GradientText — 히어로 제목용(배지형 래퍼 스타일 무력화, 큰 헤딩으로) */
 .animated-gradient-text.landing-gradient-heading {
   display: inline-block;
