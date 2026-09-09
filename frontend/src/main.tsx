@@ -1044,10 +1044,14 @@ function App() {
         ...init?.headers
       }
     });
-    const data = response.status === 204 ? null : await response.json();
+    // 오류는 본문 파싱보다 먼저 판정한다. 오류 응답은 본문이 비어 있거나(빈 401/403, 프록시 502)
+    // JSON이 아닐 수 있어, 먼저 json()을 부르면 파싱 실패가 그대로 터져 사용자에게
+    // 'Unexpected end of JSON input' 같은 날것의 에러가 노출된다.
     if (!response.ok) {
-      throw new ApiClientError(data ?? {}, '요청을 처리하지 못했습니다.');
+      const errorBody = await response.json().catch(() => ({}));
+      throw new ApiClientError(errorBody ?? {}, '요청을 처리하지 못했습니다.');
     }
+    const data = response.status === 204 ? null : await response.json();
     return data as T;
   }, [token]);
 
