@@ -10,17 +10,20 @@ import com.kafka.shopping.security.AuthUser;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClientException;
 
 /** Public catalog endpoints (no auth): categories, per-category feed, search, popular keywords. */
 @RestController
 @RequestMapping("/api/shopping")
 @RequiredArgsConstructor
+@Slf4j
 public class ShoppingController {
     private final ShoppingService shoppingService;
     private final ProductSearchService productSearchService;
@@ -32,6 +35,11 @@ public class ShoppingController {
         return shoppingService.categories();
     }
 
+    /**
+     * 카테고리 피드. 기본은 네이버 실시간 조회이지만, 업스트림 장애(쇼핑 검색 API 차단·5xx 등)로 실패하면
+     * 배치가 채워둔 Elasticsearch 카탈로그 색인으로 폴백한다 — 외부 API가 죽어도 마지막 색인분은 계속 서빙된다.
+     * (알 수 없는 카테고리는 그대로 400으로 남긴다: 업스트림 장애가 아니라 잘못된 요청이므로.)
+     */
     @GetMapping("/feed")
     public List<ProductResponse> feed(
             @RequestParam @NotBlank String category,
@@ -40,7 +48,16 @@ public class ShoppingController {
             @RequestParam(defaultValue = "1") int start,
             @RequestParam(defaultValue = "false") boolean refresh
     ) {
-        return shoppingService.feed(category, sort, display, start, refresh);
+        try {
+            return shoppingService.feed(category, sort, display, start, refresh);
+        } catch (RestClientException upstreamFailure) {
+            List<ProductResponse> indexed = ShoppingCategory.fromCode(category)
+                    .map(resolved -> productSearchService.search(resolved.query(), sort, display, start))
+                    .orElseGet(List::of);
+            log.warn("Shopping feed: 네이버 조회 실패 → ES 색인 폴백 (category={}, 색인 {}건): {}",
+                    category, indexed.size(), upstreamFailure.getMessage());
+            return indexed;
+        }
     }
 
     /** Elasticsearch-backed product search (falls back to Naver when the index is cold). */
