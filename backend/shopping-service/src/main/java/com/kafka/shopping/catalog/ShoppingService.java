@@ -3,6 +3,7 @@ package com.kafka.shopping.catalog;
 import com.kafka.shopping.catalog.ShoppingDtos.CategoryResponse;
 import com.kafka.shopping.catalog.ShoppingDtos.ProductResponse;
 import com.kafka.shopping.naver.NaverSearchResponse;
+import com.kafka.shopping.naver.CoupangProductClient;
 import com.kafka.shopping.naver.NaverShoppingClient;
 import com.kafka.shopping.search.ProductIndexService;
 import java.time.Duration;
@@ -28,16 +29,19 @@ public class ShoppingService {
     private static final int MAX_DISPLAY = 100;
 
     private final NaverShoppingClient naverClient;
+    private final CoupangProductClient coupangClient;
     private final ProductIndexService productIndexService;
     private final Duration cacheTtl;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
     public ShoppingService(
             NaverShoppingClient naverClient,
+            CoupangProductClient coupangClient,
             ProductIndexService productIndexService,
             @Value("${app.naver.cache-ttl-seconds:300}") long cacheTtlSeconds
     ) {
         this.naverClient = naverClient;
+        this.coupangClient = coupangClient;
         this.productIndexService = productIndexService;
         this.cacheTtl = Duration.ofSeconds(cacheTtlSeconds);
     }
@@ -79,6 +83,11 @@ public class ShoppingService {
      * Spring Batch 카탈로그 색인 잡의 Reader처럼, 색인을 Writer가 담당하는 경로에서 사용한다.
      */
     public List<ProductResponse> fetchRaw(String query, String sort, int display, int start) {
+        // 카탈로그 소스: 쿠팡 파트너스가 설정돼 있으면 우선 사용한다.
+        // 네이버 쇼핑 검색 API 는 SE05(Invalid search api)로 중단돼 사실상 동작하지 않는다.
+        if (coupangClient.isConfigured()) {
+            return coupangClient.search(query, clampDisplay(display), clampStart(start));
+        }
         NaverSearchResponse response = naverClient.search(query, clampDisplay(display), clampStart(start), normalizeSort(sort));
         if (response == null || response.items() == null) {
             return List.of();
