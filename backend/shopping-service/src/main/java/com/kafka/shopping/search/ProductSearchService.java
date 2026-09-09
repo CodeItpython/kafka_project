@@ -24,6 +24,7 @@ import org.springframework.data.elasticsearch.client.elc.NativeQueryBuilder;
 import org.springframework.data.elasticsearch.core.AggregationsContainer;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.web.client.RestClientException;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 
@@ -171,9 +172,17 @@ public class ProductSearchService {
                 return hits;
             }
         } catch (RuntimeException exception) {
-            log.debug("Elasticsearch product search failed, falling back to Naver: {}", exception.getMessage());
+            log.debug("Elasticsearch product search failed, falling back to upstream: {}", exception.getMessage());
         }
-        return shoppingService.search(normalized, sort, display, start, false);
+        try {
+            return shoppingService.search(normalized, sort, display, start, false);
+        } catch (RestClientException upstreamFailure) {
+            // 색인이 비었고 업스트림(네이버 쇼핑 API)도 죽은 상태에서 예외가 그대로 올라가 500 이 났다.
+            // 검색은 "결과 없음"으로 degrade 하는 편이 맞다 — 프론트가 빈 상태를 안내한다.
+            log.warn("Product search: 색인·업스트림 모두 사용 불가 → 빈 결과 (query={}): {}",
+                    normalized, upstreamFailure.getMessage());
+            return List.of();
+        }
     }
 
     /**

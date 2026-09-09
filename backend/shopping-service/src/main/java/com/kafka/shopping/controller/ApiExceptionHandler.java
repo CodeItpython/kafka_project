@@ -36,6 +36,16 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
+        // Spring MVC 표준 예외(파라미터 누락·타입 불일치·미지원 메서드 등)는 스스로 올바른 4xx 상태를
+        // 들고 온다. catch-all 이 이걸 뭉뚱그려 500으로 만들면 클라이언트 오류가 서버 오류로 보고돼
+        // 클라이언트가 무의미한 재시도를 하고 에러 지표도 오염된다. 예외를 하나씩 열거하는 대신
+        // Spring 이 매긴 상태를 그대로 존중한다.
+        if (exception instanceof org.springframework.web.ErrorResponse errorResponse) {
+            HttpStatus status = HttpStatus.valueOf(errorResponse.getStatusCode().value());
+            if (status.is4xxClientError()) {
+                return error(status, "BAD_REQUEST", exception.getMessage(), request, List.of());
+            }
+        }
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "잠시 후 다시 시도해주세요.", request, List.of(), exception);
     }
 
