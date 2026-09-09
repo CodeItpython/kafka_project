@@ -51,8 +51,16 @@ public class ShoppingController {
         try {
             return shoppingService.feed(category, sort, display, start, refresh);
         } catch (RestClientException upstreamFailure) {
+            // 분류 필터로 먼저 조회한다. 대표 검색어로 전문검색하면 그 단어가 제목에 든 다른 분류
+            // 상품이 섞인다(HOBBY의 "베스트셀러"가 의류를 잡던 문제). 분류로 못 찾으면 검색어로 폴백.
             List<ProductResponse> indexed = ShoppingCategory.fromCode(category)
-                    .map(resolved -> productSearchService.search(resolved.query(), sort, display, start))
+                    .map(resolved -> {
+                        List<ProductResponse> byCategory =
+                                productSearchService.byCategories(resolved.naverCategories(), sort, display, start);
+                        return byCategory.isEmpty()
+                                ? productSearchService.search(resolved.query(), sort, display, start)
+                                : byCategory;
+                    })
                     .orElseGet(List::of);
             log.warn("Shopping feed: 네이버 조회 실패 → ES 색인 폴백 (category={}, 색인 {}건): {}",
                     category, indexed.size(), upstreamFailure.getMessage());

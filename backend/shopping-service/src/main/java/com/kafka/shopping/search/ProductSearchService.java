@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchAggregation;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchAggregations;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.client.elc.NativeQueryBuilder;
 import org.springframework.data.elasticsearch.core.AggregationsContainer;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
@@ -238,6 +239,48 @@ public class ProductSearchService {
         }
     }
 
+    /**
+     * 카테고리(네이버 분류값)로만 필터해 색인에서 상품을 가져온다. 업스트림(네이버) 장애 시
+     * 카테고리 피드를 색인으로 서빙하는 경로에서 쓴다 — 대표 검색어로 전문검색하면 그 단어가
+     * 제목에 들어간 다른 분류 상품이 섞이므로 분류 필터가 더 정확하다.
+     */
+    public List<ProductResponse> byCategories(List<String> categories, String sort, int display, int start) {
+        if (categories == null || categories.isEmpty()) {
+            return List.of();
+        }
+        int size = clampDisplay(display);
+        int page = Math.max(0, (clampStart(start) - 1) / size);
+        try {
+            var builder = NativeQuery.builder()
+                    .withQuery(root -> root.bool(bool -> {
+                        for (String category : categories) {
+                            bool.should(should -> should.term(term -> term.field("category").value(category)));
+                        }
+                        return bool.minimumShouldMatch("1");
+                    }))
+                    .withPageable(PageRequest.of(page, size));
+            applySort(builder, sort);
+            return elasticsearchOperations.search(builder.build(), ProductDocument.class)
+                    .stream()
+                    .map(SearchHit::getContent)
+                    .map(ProductDocument::toProduct)
+                    .toList();
+        } catch (RuntimeException exception) {
+            log.debug("Elasticsearch category feed failed: {}", exception.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 가격 정렬(asc/dsc)만 지원. 그 외에는 ES 관련도 순서를 그대로 쓴다. */
+    private static void applySort(NativeQueryBuilder builder, String sort) {
+        String normalizedSort = sort == null ? "" : sort.trim().toLowerCase(Locale.ROOT);
+        if (normalizedSort.equals("asc")) {
+            builder.withSort(sortBuilder -> sortBuilder.field(field -> field.field("price").order(SortOrder.Asc)));
+        } else if (normalizedSort.equals("dsc")) {
+            builder.withSort(sortBuilder -> sortBuilder.field(field -> field.field("price").order(SortOrder.Desc)));
+        }
+    }
+
     private List<ProductResponse> executeEs(String query, String sort, int size, int page) {
         var builder = NativeQuery.builder()
                 .withQuery(root -> root.bool(bool -> bool
@@ -251,12 +294,7 @@ public class ProductSearchService {
                         .minimumShouldMatch("1")))
                 .withPageable(PageRequest.of(page, size));
 
-        String normalizedSort = sort == null ? "" : sort.trim().toLowerCase(Locale.ROOT);
-        if (normalizedSort.equals("asc")) {
-            builder.withSort(sortBuilder -> sortBuilder.field(field -> field.field("price").order(SortOrder.Asc)));
-        } else if (normalizedSort.equals("dsc")) {
-            builder.withSort(sortBuilder -> sortBuilder.field(field -> field.field("price").order(SortOrder.Desc)));
-        }
+        applySort(builder, sort);
 
         return elasticsearchOperations.search(builder.build(), ProductDocument.class)
                 .stream()
