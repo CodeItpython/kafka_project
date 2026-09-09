@@ -41,11 +41,11 @@ public class CatalogIndexJobConfig {
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
             NaverProductItemReader naverProductItemReader,
-            ItemProcessor<ProductResponse, ProductDocument> catalogItemProcessor,
+            ItemProcessor<NaverProductItemReader.CategorizedProduct, ProductDocument> catalogItemProcessor,
             ItemWriter<ProductDocument> catalogItemWriter
     ) {
         return new StepBuilder("indexProductsStep", jobRepository)
-                .<ProductResponse, ProductDocument>chunk(CHUNK_SIZE, transactionManager)
+                .<NaverProductItemReader.CategorizedProduct, ProductDocument>chunk(CHUNK_SIZE, transactionManager)
                 .reader(naverProductItemReader)
                 .processor(catalogItemProcessor)
                 .writer(catalogItemWriter)
@@ -59,12 +59,13 @@ public class CatalogIndexJobConfig {
     }
 
     @Bean
-    public ItemProcessor<ProductResponse, ProductDocument> catalogItemProcessor() {
-        return product -> {
+    public ItemProcessor<NaverProductItemReader.CategorizedProduct, ProductDocument> catalogItemProcessor() {
+        return item -> {
+            ProductResponse product = item.product();
             if (product.productId() == null || product.productId().isBlank()) {
                 return null; // null 반환 = 해당 항목 필터링(색인 제외)
             }
-            return ProductDocument.from(product, Instant.now());
+            return ProductDocument.from(product, item.categoryCode(), Instant.now());
         };
     }
 

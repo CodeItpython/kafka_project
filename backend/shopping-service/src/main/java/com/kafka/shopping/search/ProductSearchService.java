@@ -240,24 +240,20 @@ public class ProductSearchService {
     }
 
     /**
-     * 카테고리(네이버 분류값)로만 필터해 색인에서 상품을 가져온다. 업스트림(네이버) 장애 시
-     * 카테고리 피드를 색인으로 서빙하는 경로에서 쓴다 — 대표 검색어로 전문검색하면 그 단어가
-     * 제목에 들어간 다른 분류 상품이 섞이므로 분류 필터가 더 정확하다.
+     * 우리 카테고리 코드로 색인에서 상품을 가져온다. 업스트림 장애 시 카테고리 피드를 색인으로
+     * 서빙하는 경로에서 쓴다. 대표 검색어로 전문검색하면 그 단어가 제목에 든 다른 분류 상품이
+     * 섞이고(HOBBY의 "베스트셀러" 문제), 소스별 분류 문자열에 의존하면 소스를 바꿀 때 깨진다.
+     * 색인 시점에 박아둔 categoryCode 로 필터하면 둘 다 피할 수 있다.
      */
-    public List<ProductResponse> byCategories(List<String> categories, String sort, int display, int start) {
-        if (categories == null || categories.isEmpty()) {
+    public List<ProductResponse> byCategoryCode(String categoryCode, String sort, int display, int start) {
+        if (categoryCode == null || categoryCode.isBlank()) {
             return List.of();
         }
         int size = clampDisplay(display);
         int page = Math.max(0, (clampStart(start) - 1) / size);
         try {
             var builder = NativeQuery.builder()
-                    .withQuery(root -> root.bool(bool -> {
-                        for (String category : categories) {
-                            bool.should(should -> should.term(term -> term.field("category").value(category)));
-                        }
-                        return bool.minimumShouldMatch("1");
-                    }))
+                    .withQuery(root -> root.term(term -> term.field("categoryCode").value(categoryCode)))
                     .withPageable(PageRequest.of(page, size));
             applySort(builder, sort);
             return elasticsearchOperations.search(builder.build(), ProductDocument.class)

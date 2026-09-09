@@ -15,7 +15,12 @@ import org.springframework.batch.item.ItemReader;
  * StepScope로 매 실행마다 새 인스턴스가 생성되어 반복자가 초기화된다.
  */
 @Slf4j
-public class NaverProductItemReader implements ItemReader<ProductResponse> {
+public class NaverProductItemReader implements ItemReader<NaverProductItemReader.CategorizedProduct> {
+
+    /** 수집한 상품과 "어느 카테고리로 수집했는지"를 함께 전달한다(색인에 코드를 박기 위함). */
+    public record CategorizedProduct(String categoryCode, ProductResponse product) {
+    }
+
     private static final int PER_CATEGORY = 100;
 
     private final ShoppingService shoppingService;
@@ -26,11 +31,14 @@ public class NaverProductItemReader implements ItemReader<ProductResponse> {
         this.shoppingService = shoppingService;
     }
 
+    private String currentCode;
+
     @Override
-    public ProductResponse read() {
+    public CategorizedProduct read() {
         while (!current.hasNext() && categories.hasNext()) {
             ShoppingCategory category = categories.next();
             try {
+                currentCode = category.code();
                 current = shoppingService.fetchRaw(category.query(), "sim", PER_CATEGORY, 1).iterator();
             } catch (RuntimeException exception) {
                 // 한 카테고리 fetch 실패(Naver 오류/타임아웃 등)가 잡 전체를 FAILED로 만들지 않도록
@@ -39,6 +47,6 @@ public class NaverProductItemReader implements ItemReader<ProductResponse> {
                 current = Collections.emptyIterator();
             }
         }
-        return current.hasNext() ? current.next() : null;
+        return current.hasNext() ? new CategorizedProduct(currentCode, current.next()) : null;
     }
 }
