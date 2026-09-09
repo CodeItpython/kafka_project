@@ -122,6 +122,11 @@ public class ArticleReaderService {
                     attr(doc, "time[datetime]", "datetime"),
                     text(doc, ".media_end_head_info_datestamp_time"));
             String leadImage = absolute(doc, meta(doc, "og:image"));
+            if (isInBody(leadImage, blocks)) {
+                // 대표이미지가 본문 첫 사진과 같은 기사가 흔하다(네이버 등). 그대로 두면
+                // 리더에서 같은 사진이 연달아 두 번 그려진다.
+                leadImage = null;
+            }
             return new Article(url, clean(title), clean(siteName), clean(publishedAt), leadImage, blocks);
         } catch (Exception exception) {
             log.warn("Failed to read article {}: {}", url, exception.toString());
@@ -250,6 +255,25 @@ public class ArticleReaderService {
 
     private static String clean(String value) {
         return value == null ? null : value.replaceAll("\\s+", " ").trim();
+    }
+
+    /** 대표이미지가 본문 이미지와 같은지(크기 파라미터 차이는 무시). */
+    private static boolean isInBody(String leadImage, List<ArticleBlock> blocks) {
+        if (leadImage == null || leadImage.isBlank()) {
+            return false;
+        }
+        String lead = stripQuery(leadImage);
+        for (ArticleBlock block : blocks) {
+            if ("img".equals(block.type()) && block.src() != null && stripQuery(block.src()).equals(lead)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String stripQuery(String url) {
+        int mark = url.indexOf('?');
+        return mark < 0 ? url : url.substring(0, mark);
     }
 
     /** 리더로 띄울 만한 본문이 있는지(문단 텍스트 총량 기준). 아니면 컨트롤러가 204로 응답한다. */
