@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ExternalLink, Newspaper, RefreshCcw, Search, Share2, X } from 'lucide-react';
 import ThumbImage from './ThumbImage';
 import YouthPanel from './YouthPanel';
+import ArticleReader from './ArticleReader';
 
 type NewsCategory = { code: string; label: string };
 export type NewsItem = {
@@ -95,6 +96,8 @@ function stripBreaking(title: string) {
 }
 
 export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => void }) {
+  // 뉴스는 외부 페이지로 나가지 않고 인앱 리더로 연다(원문 링크는 리더 안에 유지).
+  const [reader, setReader] = useState<NewsItem | null>(null);
   const reduceMotion = useReducedMotion();
   const [categories, setCategories] = useState<NewsCategory[]>([]);
   const [active, setActive] = useState<string>('');
@@ -598,7 +601,18 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
                   whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
                   whileTap={{ scale: 0.99, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
                 >
-                  <a className={featured ? 'news-card news-card--featured' : 'news-card'} href={item.url} target="_blank" rel="noreferrer noopener">
+                  <a
+                    className={featured ? 'news-card news-card--featured' : 'news-card'}
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    onClick={(event) => {
+                      // 새 탭으로 열려는 조작(ctrl/cmd/휠클릭)은 브라우저 기본 동작 유지.
+                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                      event.preventDefault();
+                      setReader(item);
+                    }}
+                  >
                     <div className="news-card-thumb-wrap">
                       <NewsThumb url={item.url} fallback={item.thumbnail} />
                       {breaking && <span className="news-breaking-badge">속보</span>}
@@ -635,6 +649,10 @@ export default function NewsFeed({ onShare }: { onShare?: (item: NewsItem) => vo
       )}
       </>
       )}
+
+      <AnimatePresence>
+        {reader && <ArticleReader item={reader} onClose={() => setReader(null)} />}
+      </AnimatePresence>
     </div>
   );
 }

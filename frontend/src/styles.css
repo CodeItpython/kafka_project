@@ -6372,3 +6372,115 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
 .contact-profile-actions { display: flex; gap: 8px; }
 .contact-profile-actions .primary-button,
 .contact-profile-actions .ghost-button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* ── 인앱 기사 리더 ──────────────────────────────────────────────
+   뉴스 카드를 누르면 외부 페이지로 나가지 않고 앱 안에서 본문을 읽는다.
+   본문은 서버가 문단/이미지 블록으로 내려주므로 HTML 주입이 없다. */
+.reader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+}
+.reader-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #e9ecef);
+  background: var(--surface, #fff);
+  flex: 0 0 auto;
+}
+.reader-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2, #f1f3f5);
+  color: var(--text, #212529);
+  cursor: pointer;
+}
+.reader-bar-press {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted, #868e96);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reader-origin,
+.reader-origin-foot,
+.reader-fallback-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand, #3d6dff);
+  text-decoration: none;
+}
+.reader-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.reader-article {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 18px 56px;
+}
+.reader-title {
+  margin: 0 0 10px;
+  font-size: 22px;
+  line-height: 1.35;
+  font-weight: 800;
+  color: var(--text, #212529);
+  word-break: keep-all;
+}
+.reader-meta {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  font-size: 12.5px;
+  color: var(--text-muted, #868e96);
+}
+.reader-p {
+  margin: 0 0 15px;
+  font-size: 16px;
+  line-height: 1.78;
+  color: var(--text, #212529);
+  word-break: keep-all;
+}
+.reader-lead,
+.reader-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 6px 0 18px;
+  border-radius: 12px;
+}
+.reader-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.reader-fallback {
+  padding: 28px 0;
+  text-align: center;
+  color: var(--text-muted, #868e96);
+}
+.reader-fallback-link {
+  margin-top: 10px;
+}
+.reader-origin-foot {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e9ecef);
+}
