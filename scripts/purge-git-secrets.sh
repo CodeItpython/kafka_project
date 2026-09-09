@@ -29,17 +29,22 @@ fi
 
 # 실제 시크릿 값을 이 파일에 하드코딩하지 않는다. 정규식으로 '키=값' 의 값 부분만
 # 히스토리 전체에서 __REDACTED__ 로 치환한다(로테이션된 과거 값들도 함께 정리됨).
+#
+# ⚠️ 각 규칙의 (?!\$\{) 는 필수다. filter-repo 는 HEAD 를 포함한 "모든" 커밋의 블롭을 치환하므로,
+#    이게 없으면 현재 코드의 `client-secret=${KAKAO_CLIENT_SECRET:}` 같은 ENV 참조까지
+#    __REDACTED__ 로 덮어써서 설정이 깨진다(로그인·JWT·DB 전부). 실제 리터럴 값만 잡는다.
 REPLACE_FILE="$(mktemp)"
 trap 'rm -f "$REPLACE_FILE"' EXIT
 cat > "$REPLACE_FILE" <<'EOF'
-regex:app\.jwtSecret=\S+==>app.jwtSecret=__REDACTED__
-regex:app\.jwt\.secret=\S+==>app.jwt.secret=__REDACTED__
-regex:APP_JWT_SECRET=\S+==>APP_JWT_SECRET=__REDACTED__
-regex:client-secret=\S+==>client-secret=__REDACTED__
-regex:client-id=\S+==>client-id=__REDACTED__
-regex:KAKAO_CLIENT_SECRET=\S+==>KAKAO_CLIENT_SECRET=__REDACTED__
-regex:KAKAO_CLIENT_ID=\S+==>KAKAO_CLIENT_ID=__REDACTED__
-regex:spring\.datasource\.password=root==>spring.datasource.password=__REDACTED__
+regex:app\.jwtSecret=(?!\$\{)\S+==>app.jwtSecret=__REDACTED__
+regex:app\.jwt\.secret=(?!\$\{)\S+==>app.jwt.secret=__REDACTED__
+regex:APP_JWT_SECRET=(?!\$\{)\S+==>APP_JWT_SECRET=__REDACTED__
+regex:client-secret=(?!\$\{)\S+==>client-secret=__REDACTED__
+regex:client-id=(?!\$\{)\S+==>client-id=__REDACTED__
+regex:KAKAO_CLIENT_SECRET=(?!\$\{)\S+==>KAKAO_CLIENT_SECRET=__REDACTED__
+regex:KAKAO_CLIENT_ID=(?!\$\{)\S+==>KAKAO_CLIENT_ID=__REDACTED__
+regex:spring\.datasource\.password=(?!\$\{)\S+==>spring.datasource.password=__REDACTED__
+regex:SPRING_MAIL_PASSWORD=(?!\$\{)\S+==>SPRING_MAIL_PASSWORD=__REDACTED__
 EOF
 
 echo "[1/2] .env 파일을 히스토리에서 완전히 제거(.env.example 은 유지)"
