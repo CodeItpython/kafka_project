@@ -51,12 +51,11 @@ public class ShoppingController {
         try {
             return shoppingService.feed(category, sort, display, start, refresh);
         } catch (RestClientException upstreamFailure) {
-            // 업스트림이 죽은 상황이므로 ES 색인만 본다(분류 필터). productSearchService.search 는
-            // 색인이 비면 다시 업스트림으로 폴백해 같은 예외를 던지므로 이 경로에서는 쓰지 않는다.
+            // 업스트림이 죽은 상황이므로 ES 색인만 본다. productSearchService.search 는 색인이 비면
+            // 다시 업스트림으로 폴백해 같은 예외를 던지므로 이 경로에서는 쓰지 않는다.
             // 색인까지 비면 빈 목록 → 프론트가 "표시할 상품이 없습니다"로 안내(500 대신).
-            List<ProductResponse> indexed = ShoppingCategory.fromCode(category)
-                    .map(resolved -> productSearchService.byCategories(resolved.naverCategories(), sort, display, start))
-                    .orElseGet(List::of);
+            // (여기 도달했다면 category 는 이미 feed() 에서 검증됨 — 잘못된 값은 400으로 먼저 걸린다)
+            List<ProductResponse> indexed = productSearchService.byCategoryCode(category, sort, display, start);
             log.warn("Shopping feed: 네이버 조회 실패 → ES 색인 폴백 (category={}, 색인 {}건): {}",
                     category, indexed.size(), upstreamFailure.getMessage());
             return indexed;
