@@ -85,8 +85,8 @@ public class LinkPreviewService {
         }
     }
 
-    /** http(s)만 허용하고 사설/로컬 대역 IP를 차단한다. */
-    private boolean isFetchable(String url) {
+    /** http(s)만 허용하고 사설/로컬 대역 IP를 차단한다. ArticleReaderService도 이 가드를 공유한다. */
+    static boolean isFetchable(String url) {
         try {
             URI uri = URI.create(url);
             String scheme = uri.getScheme();

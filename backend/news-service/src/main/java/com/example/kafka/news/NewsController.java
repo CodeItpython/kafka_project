@@ -2,6 +2,7 @@ package com.example.kafka.news;
 
 import com.example.kafka.news.NewsDtos.CategoryResponse;
 import com.example.kafka.news.NewsDtos.FeedResponse;
+import com.example.kafka.news.NewsDtos.Article;
 import com.example.kafka.news.NewsDtos.LinkPreview;
 import com.example.kafka.news.NewsDtos.NewsItem;
 import java.util.Arrays;
@@ -19,17 +20,20 @@ public class NewsController {
 
     private final NewsService newsService;
     private final LinkPreviewService linkPreviewService;
+    private final ArticleReaderService articleReaderService;
     private final NewsSearchService newsSearchService;
     private final int relatedSize;
 
     public NewsController(
             NewsService newsService,
             LinkPreviewService linkPreviewService,
+            ArticleReaderService articleReaderService,
             NewsSearchService newsSearchService,
             @Value("${app.news.related-size:8}") int relatedSize
     ) {
         this.newsService = newsService;
         this.linkPreviewService = linkPreviewService;
+        this.articleReaderService = articleReaderService;
         this.newsSearchService = newsSearchService;
         this.relatedSize = relatedSize;
     }
@@ -88,6 +92,15 @@ public class NewsController {
     @GetMapping("/link-preview")
     public ResponseEntity<LinkPreview> linkPreview(@RequestParam(name = "url") String url) {
         return linkPreviewService.preview(url)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    /** 인앱 리더: 기사 본문을 문단/이미지 블록으로 추출. 추출 불가면 204(프론트가 원문 링크 안내). */
+    @GetMapping("/article")
+    public ResponseEntity<Article> article(@RequestParam(name = "url") String url) {
+        return articleReaderService.read(url)
+                .filter(ArticleReaderService::hasReadableBody)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
