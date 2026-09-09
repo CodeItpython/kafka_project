@@ -63,6 +63,11 @@ const popIcon: Variants = {
   hidden: { opacity: 0, scale: 0.35, rotate: -35 },
   show: { opacity: 1, scale: 1, rotate: 0, transition: { type: 'spring', stiffness: 260, damping: 15 } }
 };
+// 제품 목업: 뒤로 기울어진 채 들어와 정면으로 세워진다(CSS 3D).
+const tiltFrame: Variants = {
+  hidden: { opacity: 0, rotateX: 26, scale: 0.9 },
+  show: { opacity: 1, rotateX: 0, scale: 1, transition: { duration: 0.9, ease: EASE } }
+};
 
 export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,6 +89,7 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const heroOpacity = useTransform(heroProgress, [0, 0.7], [1, 0]);
   const hintOpacity = useTransform(heroProgress, [0, 0.3], [1, 0]);
 
+
   // reduce 모드에선 등장 연출 없이 정적으로 보여준다.
   const groupOnView = reduce
     ? {}
@@ -91,6 +97,7 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const groupOnMount = reduce ? {} : { variants: revealGroup, initial: 'hidden', animate: 'show' };
   const itemV = reduce ? {} : { variants: riseItem };
   const iconV = reduce ? {} : { variants: popIcon };
+  const frameV = reduce ? {} : { variants: tiltFrame };
 
   return (
     <div className="landing" ref={containerRef}>
@@ -123,6 +130,35 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
           >
             <ChevronDown size={22} />
           </motion.span>
+        </motion.div>
+      </section>
+
+      <section className="landing-section landing-showcase">
+        <motion.div className="landing-showcase-inner" {...groupOnView}>
+          <motion.p className="landing-eyebrow" {...itemV}>
+            <ShinyText text="PRODUCT" speed={4} color="#a5b4fc" shineColor="#ffffff" spread={110} />
+          </motion.p>
+          <motion.h2 className="landing-feature-title" {...itemV}>
+            <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
+              열면, 바로 대화
+            </GradientText>
+          </motion.h2>
+          <motion.div className="landing-frame" {...frameV}>
+            <div className="lf-head">
+              <span className="lf-avatar" aria-hidden>민</span>
+              <span className="lf-who">
+                <strong>민지</strong>
+                <small>온라인</small>
+              </span>
+            </div>
+            <div className="lf-body">
+              <p className="lf-msg">주말에 뭐해?</p>
+              <p className="lf-msg mine">등산 가려고 🏔️</p>
+              <p className="lf-msg">오 좋다, 같이 가자</p>
+              <p className="lf-msg mine">콜! 7시에 봐</p>
+            </div>
+            <div className="lf-composer" aria-hidden>메시지를 입력하세요</div>
+          </motion.div>
         </motion.div>
       </section>
 
