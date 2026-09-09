@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Briefcase, ExternalLink, Newspaper, RefreshCcw, Search, Share2, Sparkles, X } from 'lucide-react';
 import { NewsItem, NewsThumb } from './NewsFeed';
+import ArticleReader from './ArticleReader';
 
 const NEWS_ROOT = '/api/news';
 const DISPLAY = 20;
@@ -63,6 +64,8 @@ function ageText(min: number | null, max: number | null): string | null {
  */
 export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => void }) {
   const reduceMotion = useReducedMotion();
+  // 뉴스 카드는 외부로 나가지 않고 인앱 리더로 연다(뉴스 탭과 동일 동작).
+  const [reader, setReader] = useState<NewsItem | null>(null);
   const [region, setRegion] = useState('all');
   const [segment, setSegment] = useState('policies');
   const [policyQuery, setPolicyQuery] = useState(''); // 제출된 정책 검색어
@@ -436,7 +439,18 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
                 animate={{ y: 0 }}
                 transition={{ duration: 0.28, delay: Math.min((index % DISPLAY) * 0.02, 0.3) }}
               >
-                <a className="news-card" href={item.url} target="_blank" rel="noreferrer noopener">
+                <a
+                  className="news-card"
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(event) => {
+                    // 새 탭으로 열려는 조작(ctrl/cmd/shift·휠클릭)은 브라우저 기본 동작 유지.
+                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                    event.preventDefault();
+                    setReader(item);
+                  }}
+                >
                   <NewsThumb url={item.url} fallback={item.thumbnail} />
                   <div className="news-card-body">
                     <strong className="news-card-title">{item.title}</strong>
@@ -462,6 +476,10 @@ export default function YouthPanel({ onShare }: { onShare?: (item: NewsItem) => 
           {renderMore()}
         </>
       )}
+
+      <AnimatePresence>
+        {reader && <ArticleReader item={reader} onClose={() => setReader(null)} />}
+      </AnimatePresence>
     </div>
   );
 
