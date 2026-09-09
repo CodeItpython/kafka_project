@@ -1,10 +1,7 @@
 import { Component, ReactNode, Suspense, lazy, useRef } from 'react';
 import { motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, Variants } from 'motion/react';
-import { ArrowRight, ChevronDown, Link2, MessageCircle, Newspaper, ShoppingBag } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { landingScroll } from './LandingScene';
-import ShinyText from './reactbits/ShinyText';
-import GradientText from './reactbits/GradientText';
-import StarBorder from './reactbits/StarBorder';
 
 const LandingScene = lazy(() => import('./LandingScene'));
 
@@ -19,54 +16,20 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
   }
 }
 
+const NAV = ['대화', '뉴스', '쇼핑', '게임'];
+
 const FEATURES = [
-  {
-    icon: MessageCircle,
-    eyebrow: 'REALTIME',
-    title: '대화가 흐르는 곳',
-    desc: '실시간으로 이어지는 1:1·그룹 대화. 읽음, 답장, 반응까지 끊김 없이.'
-  },
-  {
-    icon: Newspaper,
-    eyebrow: 'NEWS',
-    title: '뉴스도 한눈에',
-    desc: '경제·증시·IT·세계까지, 주요 뉴스를 카드로 넘겨보고 원문으로 바로.'
-  },
-  {
-    icon: ShoppingBag,
-    eyebrow: 'SHOPPING',
-    title: '쇼핑까지 한 곳에서',
-    desc: '카테고리별 인기·최저가 상품을 둘러보고, 검색해 장바구니에 바로 담으세요.'
-  },
-  {
-    icon: Link2,
-    eyebrow: 'LINK',
-    title: '링크는 카드처럼',
-    desc: '링크를 보내면 제목·썸네일이 담긴 미리보기 카드로 예쁘게 펼쳐집니다.'
-  }
+  { no: '01', label: 'REALTIME', title: '보내는 순간,\n그대로 도착합니다.', desc: '1:1도 그룹도 끊김 없이. 읽음·답장·반응까지 대화의 결을 그대로 옮겼습니다.' },
+  { no: '02', label: 'NEWS', title: '오늘을 아는\n가장 빠른 방법.', desc: '경제·증시·IT·세계. 카드로 넘겨보고, 마음이 가는 기사는 원문으로 바로 이어집니다.' },
+  { no: '03', label: 'COMMERCE', title: '검색부터 장바구니까지,\n대화를 벗어나지 않고.', desc: '카테고리별 인기 상품을 둘러보고 검색해 담으세요. 앱을 옮겨 다닐 필요가 없습니다.' },
+  { no: '04', label: 'CONNECT', title: '영상통화와\n음성 메시지까지.', desc: '목소리도 얼굴도 같은 자리에서. 대화를 끊지 않고 그대로 이어집니다.' }
 ];
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-
-// 등장 애니메이션 — 컨테이너가 자식을 순차(stagger)로 드러낸다.
-const revealGroup: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.11, delayChildren: 0.06 } }
-};
-// 텍스트류: 아래에서 살짝 흐릿하게 떠오름.
+const revealGroup: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } };
 const riseItem: Variants = {
-  hidden: { opacity: 0, y: 34, filter: 'blur(6px)' },
-  show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.65, ease: EASE } }
-};
-// 아이콘: 작게 회전한 채 튀어나오는 스프링 팝.
-const popIcon: Variants = {
-  hidden: { opacity: 0, scale: 0.35, rotate: -35 },
-  show: { opacity: 1, scale: 1, rotate: 0, transition: { type: 'spring', stiffness: 260, damping: 15 } }
-};
-// 제품 목업: 뒤로 기울어진 채 들어와 정면으로 세워진다(CSS 3D).
-const tiltFrame: Variants = {
-  hidden: { opacity: 0, rotateX: 26, scale: 0.9 },
-  show: { opacity: 1, rotateX: 0, scale: 1, transition: { duration: 0.9, ease: EASE } }
+  hidden: { opacity: 0, y: 26 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } }
 };
 
 export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
@@ -75,7 +38,7 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const reduce = useReducedMotion();
 
   const { scrollYProgress } = useScroll({ container: containerRef });
-  // 스크롤 진행도를 3D 씬으로 전달 → 파티클 형태가 스크롤에 맞춰 스크러빙된다.
+  // 스크롤 진행도를 3D 씬으로 전달 → 형태가 스크롤에 맞춰 스크러빙된다.
   useMotionValueEvent(scrollYProgress, 'change', (value) => {
     landingScroll.target = value;
   });
@@ -85,128 +48,77 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
     target: heroRef,
     offset: ['start start', 'end start']
   });
-  const heroY = useTransform(heroProgress, [0, 1], [0, reduce ? 0 : -120]);
+  const heroY = useTransform(heroProgress, [0, 1], [0, reduce ? 0 : -70]);
   const heroOpacity = useTransform(heroProgress, [0, 0.7], [1, 0]);
-  const hintOpacity = useTransform(heroProgress, [0, 0.3], [1, 0]);
 
-
-  // reduce 모드에선 등장 연출 없이 정적으로 보여준다.
-  const groupOnView = reduce
+  const group = reduce
     ? {}
-    : { variants: revealGroup, initial: 'hidden', whileInView: 'show', viewport: { root: containerRef, amount: 0.5, once: false } };
-  const groupOnMount = reduce ? {} : { variants: revealGroup, initial: 'hidden', animate: 'show' };
+    : { variants: revealGroup, initial: 'hidden', whileInView: 'show', viewport: { root: containerRef, amount: 0.4, once: true } };
   const itemV = reduce ? {} : { variants: riseItem };
-  const iconV = reduce ? {} : { variants: popIcon };
-  const frameV = reduce ? {} : { variants: tiltFrame };
 
   return (
-    <div className="landing" ref={containerRef}>
+    <div className="uc" ref={containerRef}>
       <SceneBoundary>
         <Suspense fallback={null}>
           <LandingScene />
         </Suspense>
       </SceneBoundary>
-      <div className="landing-scrim" aria-hidden />
-      <motion.span className="landing-progress" style={{ scaleX: scrollYProgress }} aria-hidden />
+      <div className="uc-scrim" aria-hidden />
+      <div className="uc-rim" aria-hidden />
+      <motion.span className="uc-progress" style={{ scaleX: scrollYProgress }} aria-hidden />
 
-      <section className="landing-section landing-hero" ref={heroRef}>
-        <motion.div className="landing-hero-inner" style={{ y: heroY, opacity: heroOpacity }} {...groupOnMount}>
-          <motion.p className="landing-eyebrow" {...itemV}>
-            <ShinyText text="KAFKA TALK" speed={4} color="#a5b4fc" shineColor="#ffffff" spread={110} />
+      <div className="uc-ticker" aria-hidden>
+        <span>REALTIME MESSAGING · NEWS · COMMERCE · VIDEO CALL — ONE APP</span>
+      </div>
+
+      <header className="uc-top">
+        <span className="uc-brand">KAFKATALK</span>
+        <nav className="uc-nav" aria-label="랜딩 내비게이션">
+          {NAV.map((n) => <span key={n}>{n}</span>)}
+        </nav>
+        <button type="button" className="uc-pill solid" onClick={onStart}>시작하기</button>
+      </header>
+
+      <section className="uc-hero" ref={heroRef}>
+        <motion.div className="uc-hero-copy" style={{ y: heroY, opacity: heroOpacity }}>
+          <motion.p className="uc-eyebrow" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}>
+            ONE APP
           </motion.p>
-          <motion.h1 className="landing-title" {...itemV}>
-            <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
-              대화가<br />시작되는 곳
-            </GradientText>
+          <motion.h1 initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.85, ease: EASE, delay: 0.08 }}>
+            대화부터<br />뉴스, 쇼핑까지.
           </motion.h1>
-          <motion.p className="landing-lead" {...itemV}>친구와의 순간을 가볍게, 끊김 없이.</motion.p>
-        </motion.div>
-        <motion.div className="landing-scroll-hint" style={{ opacity: hintOpacity }} aria-hidden>
-          <span>스크롤</span>
-          <motion.span
-            className="landing-scroll-chevron"
-            animate={reduce ? undefined : { y: [0, 8, 0] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <ChevronDown size={22} />
-          </motion.span>
-        </motion.div>
-      </section>
-
-      <section className="landing-section landing-showcase">
-        <motion.div className="landing-showcase-inner" {...groupOnView}>
-          <motion.p className="landing-eyebrow" {...itemV}>
-            <ShinyText text="PRODUCT" speed={4} color="#a5b4fc" shineColor="#ffffff" spread={110} />
+          <motion.p className="uc-lead" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.16 }}>
+            실시간 메신저에 뉴스와 쇼핑을 더했습니다.<br />앱을 옮겨 다니지 않아도 됩니다.
           </motion.p>
-          <motion.h2 className="landing-feature-title" {...itemV}>
-            <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
-              열면, 바로 대화
-            </GradientText>
-          </motion.h2>
-          <motion.div className="landing-frame" {...frameV}>
-            <div className="lf-head">
-              <span className="lf-avatar" aria-hidden>민</span>
-              <span className="lf-who">
-                <strong>민지</strong>
-                <small>온라인</small>
-              </span>
-            </div>
-            <div className="lf-body">
-              <p className="lf-msg">주말에 뭐해?</p>
-              <p className="lf-msg mine">등산 가려고 🏔️</p>
-              <p className="lf-msg">오 좋다, 같이 가자</p>
-              <p className="lf-msg mine">콜! 7시에 봐</p>
-            </div>
-            <div className="lf-composer" aria-hidden>메시지를 입력하세요</div>
+          <motion.div className="uc-actions" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.24 }}>
+            <button type="button" className="uc-pill solid" onClick={onStart}>시작하기 <ArrowRight size={15} aria-hidden /></button>
+            <button type="button" className="uc-pill" onClick={onStart}>둘러보기</button>
           </motion.div>
         </motion.div>
       </section>
 
-      {FEATURES.map((feature) => {
-        const Icon = feature.icon;
-        return (
-          <section className="landing-section landing-feature" key={feature.eyebrow}>
-            <motion.div className="landing-feature-inner" {...groupOnView}>
-              <motion.span className="landing-feature-icon" {...iconV}>
-                <Icon size={26} aria-hidden />
-              </motion.span>
-              <motion.p className="landing-eyebrow" {...itemV}>
-                <ShinyText text={feature.eyebrow} speed={4} color="#a5b4fc" shineColor="#ffffff" spread={110} />
-              </motion.p>
-              <motion.h2 className="landing-feature-title" {...itemV}>
-                <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
-                  {feature.title}
-                </GradientText>
-              </motion.h2>
-              <motion.p className="landing-feature-desc" {...itemV}>{feature.desc}</motion.p>
+      {FEATURES.map((f) => (
+        <section className="uc-section" key={f.no}>
+          <motion.div className="uc-row" {...group}>
+            <motion.div className="uc-row-head" {...itemV}>
+              <span className="uc-no">{f.no}</span>
+              <span className="uc-label">{f.label}</span>
             </motion.div>
-          </section>
-        );
-      })}
+            <motion.h2 {...itemV}>
+              {f.title.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)}
+            </motion.h2>
+            <motion.p className="uc-body" {...itemV}>{f.desc}</motion.p>
+          </motion.div>
+        </section>
+      ))}
 
-      <section className="landing-section landing-cta">
-        <motion.div className="landing-cta-inner" {...groupOnView}>
-          <motion.h2 className="landing-cta-title" {...itemV}>
-            <GradientText className="landing-gradient-heading" colors={['#8fb0ff', '#7c74ff', '#67e8f9', '#c4b5fd', '#8fb0ff']} animationSpeed={7}>
-              이제,<br />시작해볼까요?
-            </GradientText>
-          </motion.h2>
-          <motion.p className="landing-lead" {...itemV}>테스트 계정으로 바로 체험하거나 로그인하세요.</motion.p>
-          <StarBorder as="div" className="landing-start-star" color="#a5b4fc" speed="5s" thickness={2}>
-            <motion.button
-              className="landing-start"
-              type="button"
-              onClick={onStart}
-              {...itemV}
-              whileHover={reduce ? undefined : { y: -3, scale: 1.03 }}
-              whileTap={reduce ? undefined : { scale: 0.96 }}
-            >
-              시작하기 <ArrowRight size={18} aria-hidden />
-            </motion.button>
-          </StarBorder>
-          <motion.button className="landing-login-link" type="button" onClick={onStart} {...itemV}>
-            이미 계정이 있으신가요? 로그인
-          </motion.button>
+      <section className="uc-section uc-final">
+        <motion.div className="uc-row" {...group}>
+          <motion.p className="uc-eyebrow" {...itemV}>GET STARTED</motion.p>
+          <motion.h2 {...itemV}>지금 바로<br />시작해보세요.</motion.h2>
+          <motion.div className="uc-actions" {...itemV}>
+            <button type="button" className="uc-pill solid lg" onClick={onStart}>시작하기 <ArrowRight size={16} aria-hidden /></button>
+          </motion.div>
         </motion.div>
       </section>
     </div>

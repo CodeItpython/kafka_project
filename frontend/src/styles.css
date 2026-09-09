@@ -136,14 +136,11 @@ p {
 }
 .auth-shell--login .auth-back:hover { background: var(--fill); }
 
-/* ── 풀스크린 3D 파티클 웰컴 씬 ── */
-.welcome-canvas {
-  position: fixed !important;
+/* ── 풀스크린 3D 웰컴 씬 ── */
+.uc-canvas {
+  position: fixed;
   inset: 0;
-  width: 100vw !important;
-  height: 100vh !important;
   z-index: 0;
-  display: block;
   pointer-events: none;
 }
 
@@ -6483,4 +6480,168 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   margin-top: 22px;
   padding-top: 16px;
   border-top: 1px solid var(--border, #e9ecef);
+}
+
+/* ===== 랜딩(United Carriers 톤): 블랙 + 모노 크롬 + 좌하단 초대형 타이포 ===== */
+.uc {
+  position: relative;
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #04050a;
+  color: #ffffff;
+  scrollbar-width: none;
+  --uc-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+}
+.uc::-webkit-scrollbar { display: none; }
+/* 3D 위로 깔아 좌측 카피의 가독성을 지키는 스크림 */
+.uc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(100deg, rgba(4, 5, 10, 0.94) 0%, rgba(4, 5, 10, 0.78) 30%, rgba(4, 5, 10, 0.28) 52%, transparent 66%);
+}
+/* 하단 파란 림라이트 */
+.uc-rim {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 46vh;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(60% 100% at 50% 130%, rgba(61, 109, 255, 0.55), rgba(61, 109, 255, 0.12) 45%, transparent 70%);
+}
+.uc-progress {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 40;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #3d6dff, #ff7a2f);
+}
+.uc-ticker {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 30;
+  padding: 7px 18px;
+  overflow: hidden;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(4, 5, 10, 0.72);
+  backdrop-filter: blur(8px);
+  font-family: var(--uc-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.uc-top {
+  position: fixed;
+  top: 30px; left: 0; right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  gap: 30px;
+  padding: 12px 22px;
+}
+.uc-brand { font-family: var(--uc-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.14em; }
+.uc-nav { display: grid; gap: 5px; font-family: var(--uc-mono); font-size: 10px; letter-spacing: 0.16em; color: rgba(255,255,255,0.55); }
+.uc-top .uc-pill { margin-left: auto; }
+
+.uc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-family: var(--uc-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.uc-pill:hover { background: rgba(255, 255, 255, 0.1); }
+.uc-pill.solid { background: #ffffff; color: #04050a; border-color: #ffffff; font-weight: 700; }
+.uc-pill.solid:hover { background: rgba(255, 255, 255, 0.86); }
+.uc-pill.lg { min-height: 46px; padding: 0 24px; font-size: 12px; }
+
+/* 히어로 — 콘텐츠는 좌하단 */
+.uc-hero {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 22px 74px;
+}
+.uc-hero-copy { max-width: 760px; }
+.uc-eyebrow {
+  margin: 0 0 14px;
+  font-family: var(--uc-mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.62);
+}
+.uc-hero h1 {
+  margin: 0;
+  font-size: clamp(46px, 9vw, 108px);
+  line-height: 0.98;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+.uc-lead {
+  margin: 20px 0 0;
+  max-width: 430px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.62);
+}
+.uc-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+
+/* 본문 섹션 — 좌측정렬, 기술적 라벨 */
+.uc-section {
+  position: relative;
+  z-index: 2;
+  min-height: 78vh;
+  display: flex;
+  align-items: center;
+  padding: 90px 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.uc-row { width: 100%; max-width: 900px; }
+.uc-row-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  font-family: var(--uc-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+}
+.uc-no { color: #ff7a2f; }
+.uc-label { color: rgba(255, 255, 255, 0.5); }
+.uc-section h2 {
+  margin: 0;
+  font-size: clamp(30px, 5.4vw, 60px);
+  line-height: 1.08;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+.uc-body {
+  margin: 20px 0 0;
+  max-width: 500px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.6);
+}
+.uc-final { min-height: 88vh; }
+.uc-final .uc-actions { margin-top: 30px; }
+
+@media (max-width: 720px) {
+  .uc-nav { display: none; }
+  .uc-hero { padding-bottom: 56px; }
 }
