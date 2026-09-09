@@ -4,7 +4,7 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
 // 랜딩 스크롤 진행도(0..1)를 씬으로 전달하는 공유 상태. WelcomeLanding이 target을 갱신하고
-// 씬은 current를 부드럽게 따라가며 지오메트리 회전/카메라를 스크러빙한다.
+// 씬은 current를 부드럽게 따라가며 파티클 형태(uProgress)를 스크러빙한다.
 export const landingScroll = { target: 0, current: 0 };
 
 const prefersReducedMotion =
@@ -14,24 +14,157 @@ const prefersReducedMotion =
 
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 
-/**
- * 단일 지오메트리 + 광원 하나. 색은 브랜드 블루 한 포인트뿐이고, 형태는
- * 면이 각진 이십면체 하나. 광원이 주위를 돌며 면을 훑어(raking light) 분위기를 만든다.
- */
-function Monolith() {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const lightRef = useRef<THREE.PointLight>(null);
+const vertexShader = /* glsl */ `
+  uniform float uTime;
+  uniform float uSize;
+  uniform float uPixelRatio;
+  uniform float uProgress;
+  uniform vec2 uMouse;
+  attribute vec3 aPos0;
+  attribute vec3 aPos1;
+  attribute vec3 aPos2;
+  attribute vec3 aPos3;
+  attribute float aScale;
+  attribute float aSeed;
+  varying float vT;
+  varying float vGlow;
 
-  const geometry = useMemo(() => new THREE.IcosahedronGeometry(2.05, 1), []);
+  vec3 morph(float p){
+    float s = clamp(p, 0.0, 1.0) * 3.0;
+    float seg = floor(s);
+    float t = smoothstep(0.0, 1.0, fract(s));
+    vec3 a; vec3 b;
+    if (seg < 0.5) { a = aPos0; b = aPos1; }
+    else if (seg < 1.5) { a = aPos1; b = aPos2; }
+    else { a = aPos2; b = aPos3; }
+    return mix(a, b, t);
+  }
+
+  void main(){
+    vec3 pos = morph(uProgress);
+    float wobble = sin(uTime * 0.75 + aSeed * 6.2831) * 0.07;
+    pos += normalize(pos + 0.0001) * wobble;
+    pos.xy += uMouse * (0.22 + aSeed * 0.28);
+    vT = clamp(uProgress, 0.0, 1.0);
+    // 개별 파티클이 이따금 번쩍이는 반짝임(twinkle) — pow로 날카로운 피크
+    float twinkle = pow(max(0.0, sin(uTime * 1.7 + aSeed * 43.0)), 14.0);
+    vGlow = 0.5 + aSeed * 0.85 + twinkle * 2.2;
+    // 전체가 은은하게 숨쉬듯 커졌다 작아지는 크기 브리딩
+    float breathe = 1.0 + sin(uTime * 0.9) * 0.06;
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_PointSize = uSize * aScale * uPixelRatio * breathe * (1.0 / -mv.z);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const fragmentShader = /* glsl */ `
+  precision highp float;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uColorC;
+  uniform vec3 uColorD;
+  varying float vT;
+  varying float vGlow;
+
+  void main(){
+    float d = length(gl_PointCoord - 0.5);
+    float alpha = smoothstep(0.5, 0.05, d);
+    if (alpha <= 0.001) discard;
+    float s = vT * 3.0;
+    vec3 col;
+    if (s < 1.0) col = mix(uColorA, uColorB, s);
+    else if (s < 2.0) col = mix(uColorB, uColorC, s - 1.0);
+    else col = mix(uColorC, uColorD, s - 2.0);
+    gl_FragColor = vec4(col * vGlow, alpha);
+  }
+`;
+
+function fract(n: number) {
+  return n - Math.floor(n);
+}
+
+function Particles() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const geometry = useMemo(() => {
+    const count = 16000;
+    const pos0 = new Float32Array(count * 3); // 구체
+    const pos1 = new Float32Array(count * 3); // 나선 은하 (정면)
+    const pos2 = new Float32Array(count * 3); // 물결 커튼
+    const pos3 = new Float32Array(count * 3); // 빛나는 코어
+    const scales = new Float32Array(count);
+    const seeds = new Float32Array(count);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+
+    for (let i = 0; i < count; i += 1) {
+      const t = i / count;
+      const rand = fract(Math.sin(i * 12.9898) * 43758.5453);
+      const rand2 = fract(Math.sin(i * 78.233) * 12543.632);
+
+      // 0) 구체 셸
+      const incl = Math.acos(1 - 2 * t);
+      const azi = golden * i;
+      const sr = 2.25 * (0.9 + rand * 0.2);
+      pos0[i * 3] = Math.sin(incl) * Math.cos(azi) * sr;
+      pos0[i * 3 + 1] = Math.sin(incl) * Math.sin(azi) * sr;
+      pos0[i * 3 + 2] = Math.cos(incl) * sr;
+
+      // 1) 정면 나선 은하 (x-y 평면)
+      const arm = i % 3;
+      const gr = 0.25 + 2.35 * Math.sqrt(t);
+      const angle = gr * 2.4 + (arm * (Math.PI * 2 / 3)) + rand * 0.5;
+      pos1[i * 3] = Math.cos(angle) * gr;
+      pos1[i * 3 + 1] = Math.sin(angle) * gr;
+      pos1[i * 3 + 2] = (rand2 - 0.5) * 0.5;
+
+      // 2) 물결 커튼 (x-y 그리드 + z 리플)
+      const gx = (rand - 0.5) * 5.4;
+      const gy = (rand2 - 0.5) * 3.2;
+      pos2[i * 3] = gx;
+      pos2[i * 3 + 1] = gy;
+      pos2[i * 3 + 2] = Math.sin(gx * 1.6) * 0.5 + Math.cos(gy * 1.8) * 0.5;
+
+      // 3) 빛나는 코어 (조밀한 작은 구)
+      const cr = 0.85 * (0.5 + rand * 0.5);
+      pos3[i * 3] = Math.sin(incl) * Math.cos(azi) * cr;
+      pos3[i * 3 + 1] = Math.sin(incl) * Math.sin(azi) * cr;
+      pos3[i * 3 + 2] = Math.cos(incl) * cr;
+
+      scales[i] = 0.45 + rand2 * 1.7;
+      seeds[i] = rand;
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos0, 3));
+    geo.setAttribute('aPos0', new THREE.BufferAttribute(pos0, 3));
+    geo.setAttribute('aPos1', new THREE.BufferAttribute(pos1, 3));
+    geo.setAttribute('aPos2', new THREE.BufferAttribute(pos2, 3));
+    geo.setAttribute('aPos3', new THREE.BufferAttribute(pos3, 3));
+    geo.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    return geo;
+  }, []);
+
   const material = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
-        color: '#141a33',
-        metalness: 0.5,
-        roughness: 0.38,
-        emissive: new THREE.Color('#3d6dff'),
-        emissiveIntensity: 0.24,
-        flatShading: true
+      new THREE.ShaderMaterial({
+        vertexShader,
+        fragmentShader,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: { value: 0 },
+          uProgress: { value: 0 },
+          uSize: { value: 24 },
+          uPixelRatio: { value: Math.min(window.devicePixelRatio, 1.75) },
+          uMouse: { value: new THREE.Vector2() },
+          uColorA: { value: new THREE.Color('#5b53eb') },
+          uColorB: { value: new THREE.Color('#38bdf8') },
+          uColorC: { value: new THREE.Color('#a855f7') },
+          uColorD: { value: new THREE.Color('#e6e9ff') }
+        }
       }),
     []
   );
@@ -42,42 +175,32 @@ function Monolith() {
   }, [geometry, material]);
 
   useFrame((state, delta) => {
-    // 스크롤 진행도를 부드럽게 추종
+    const u = material.uniforms;
+    u.uTime.value = state.clock.elapsedTime;
+
+    // 스크롤 진행도를 부드럽게 추종 → uProgress
     landingScroll.current += (landingScroll.target - landingScroll.current) * Math.min(1, delta * 4.5);
-    const progress = landingScroll.current;
+    u.uProgress.value = landingScroll.current;
 
     // 마우스 패럴랙스
     pointer.x += (pointer.tx - pointer.x) * Math.min(1, delta * 3);
     pointer.y += (pointer.ty - pointer.y) * Math.min(1, delta * 3);
+    (u.uMouse.value as THREE.Vector2).set(pointer.x, pointer.y);
 
-    const mesh = meshRef.current;
-    if (mesh) {
-      mesh.rotation.y += delta * (prefersReducedMotion ? 0.02 : 0.11);
-      // 스크롤이 진행될수록 형태가 더 굴러가며 다른 면을 보여준다
-      mesh.rotation.x = progress * Math.PI * 0.55 + pointer.y * 0.16;
-      mesh.rotation.z = pointer.x * 0.1;
+    if (groupRef.current) {
+      const spin = prefersReducedMotion ? 0.01 : 0.075;
+      groupRef.current.rotation.y += delta * spin;
+      groupRef.current.rotation.x += (pointer.y * 0.2 - groupRef.current.rotation.x) * Math.min(1, delta * 2);
     }
-
-    // 광원이 형태 주위를 돌며 면을 훑는다
-    const light = lightRef.current;
-    if (light) {
-      const a = state.clock.elapsedTime * (prefersReducedMotion ? 0.05 : 0.26);
-      light.position.set(Math.cos(a) * 4.4, 2.2 + Math.sin(a * 0.7) * 1.4, Math.sin(a) * 4.4);
-    }
-
-    const z = 6.4 - Math.sin(progress * Math.PI) * 0.9;
+    // 스크롤에 따라 카메라 살짝 당겨졌다 물러남 (형태 전환을 강조)
+    const z = 6.2 - Math.sin(landingScroll.current * Math.PI) * 1.1;
     state.camera.position.z += (z - state.camera.position.z) * Math.min(1, delta * 3);
   });
 
   return (
-    <>
-      <ambientLight intensity={0.35} />
-      {/* 이 씬의 유일한 색 — 브랜드 블루. 면을 훑으며 입체를 만든다 */}
-      <pointLight ref={lightRef} color="#3d6dff" intensity={520} distance={24} decay={2} />
-      {/* 반대편 화이트 림 — 면 경계가 읽히도록 */}
-      <directionalLight position={[-5, -2, -3]} intensity={1.4} color="#cfe0ff" />
-      <mesh ref={meshRef} geometry={geometry} material={material} />
-    </>
+    <group ref={groupRef}>
+      <points geometry={geometry} material={material} frustumCulled={false} />
+    </group>
   );
 }
 
@@ -95,13 +218,12 @@ export default function LandingScene() {
     <Canvas
       className="welcome-canvas"
       dpr={[1, 1.75]}
-      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      camera={{ position: [0, 0, 6.4], fov: 55 }}
+      gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
+      camera={{ position: [0, 0, 6.2], fov: 55 }}
     >
-      <Monolith />
+      <Particles />
       <EffectComposer>
-        {/* 파티클 가산합성이 아니라 밝은 하이라이트만 번지도록 임계값을 올린다 */}
-        <Bloom mipmapBlur intensity={1.25} luminanceThreshold={0.32} luminanceSmoothing={0.3} radius={0.9} />
+        <Bloom mipmapBlur intensity={1.45} luminanceThreshold={0.015} luminanceSmoothing={0.28} radius={0.95} />
       </EffectComposer>
     </Canvas>
   );
