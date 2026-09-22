@@ -8,7 +8,7 @@
 # 출력 위치: frontend/public/media/landing/
 set -euo pipefail
 cd "$(dirname "$0")/.."
-OUT=frontend/public/media/landing
+OUT=${OUT:-frontend/public/media/landing}
 mkdir -p "$OUT"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "$1 이 필요합니다 (brew install ffmpeg)" >&2; exit 1; }; }
@@ -24,7 +24,7 @@ qa() {
   local i=1
   for pct in 0 0.25 0.5 0.75 1; do
     local idx; idx=$(python3 -c "n=$n;p=$pct;print(max(0,min(n-1,round((n-1)*p))))")
-    ffmpeg -loglevel error -y -i "$src" -vf "select=eq(n\,$idx)" -vsync vfr -frames:v 1 -q:v 2 "$dir/qa_$i.jpg"
+    ffmpeg -loglevel error -y -i "$src" -vf "select=eq(n\,$idx)" -fps_mode vfr -frames:v 1 -q:v 2 "$dir/qa_$i.jpg"
     i=$((i+1))
   done
   # 키프레임 개수(스크러빙 부드러움 지표)
@@ -39,16 +39,18 @@ h264() { # src out scale
   ffmpeg -loglevel error -y -i "$1" -an "${vf[@]}" -c:v libx264 -profile:v high -preset slow -crf 18 \
     -g 6 -keyint_min 6 -sc_threshold 0 -movflags +faststart "$2"
 }
-vp9() { ffmpeg -loglevel error -y -i "$1" -an -c:v libvpx-vp9 -b:v 0 -crf 30 -g 6 -row-mt 1 -pix_fmt yuv420p "$2"; }
+vp9() { # src out [scale]
+  local vf=("-pix_fmt" "yuv420p"); [ -n "${3:-}" ] && vf=("-vf" "scale=$3" "-pix_fmt" "yuv420p")
+  ffmpeg -loglevel error -y -i "$1" -an "${vf[@]}" -c:v libvpx-vp9 -b:v 0 -crf 30 -g 6 -row-mt 1 "$2"; }
 poster() { ffmpeg -loglevel error -y -i "$1" -frames:v 1 -q:v 2 "$2"; }
 frame_at() { ffmpeg -loglevel error -y -ss "$2" -i "$1" -frames:v 1 -q:v 2 "$3"; }
 
 hero() {
   local src=$1
   local dur; dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src")
-  h264 "$src" "$OUT/hero.mp4"
+  h264 "$src" "$OUT/hero.mp4" "1920:-2:flags=lanczos"
   h264 "$src" "$OUT/hero-720.mp4" "1280:-2"
-  vp9  "$src" "$OUT/hero.webm"
+  vp9  "$src" "$OUT/hero.webm" "1920:-2:flags=lanczos"
   poster "$OUT/hero.mp4" "$OUT/hero.jpg"
   ffmpeg -loglevel error -y -sseof -0.05 -i "$OUT/hero.mp4" -frames:v 1 -q:v 2 "$OUT/hero-last.jpg"
   # reduced-motion 스틸: 스트림 내부(12%) / 코어(58%) / 완성 기기(마지막)
