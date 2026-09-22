@@ -6479,6 +6479,7 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
 .uc {
   position: relative;
   height: 100vh;
+  height: 100dvh;
   overflow-x: hidden;
   overflow-y: auto;
   background: #04050a;
@@ -6498,9 +6499,9 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
 /* 아주 미세한 필름 그레인 */
 .uc-grain {
   position: fixed;
-  inset: -50%;
-  width: 200%;
-  height: 200%;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
   z-index: 50;
   pointer-events: none;
   opacity: 0.045;
@@ -6532,7 +6533,7 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   border-bottom: 1px solid transparent;
   transition: background 0.35s var(--uc-ease), border-color 0.35s var(--uc-ease);
 }
-.uc-nav.solid { background: rgba(4, 5, 10, 0.92); border-bottom-color: var(--uc-line); backdrop-filter: blur(10px); }
+.uc-nav.solid { background: rgba(4, 5, 10, 0.94); border-bottom-color: var(--uc-line); }
 .uc-brand { font-family: var(--uc-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.16em; color: #fff; text-decoration: none; }
 .uc-nav nav { display: flex; gap: 22px; margin-left: 12px; }
 .uc-nav-link {
@@ -6584,6 +6585,7 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #04050a url('/media/landing/hero.jpg') center / cover no-repeat;
 }
@@ -6772,11 +6774,12 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   .uc-sec { padding: 72px var(--uc-pad); }
   .uc-stage-1, .uc-stage-2, .uc-stage-3 { right: var(--uc-pad); }
   .uc-stage-3 { bottom: 40px; max-width: none; }
-  .uc-stage-3 h1 { font-size: clamp(34px, 11vw, 56px); }
+  .uc-stage-3 h1 { font-size: clamp(30px, 9.6vw, 52px); }
   .uc-hero-hint { bottom: 84px; }
   .uc-hero-load { bottom: 14px; }
   /* 세로 화면 크롭: 기기 피사체(프레임 우측)가 잘리지 않게 오른쪽 기준으로 자른다 */
   .uc-hero-video, .uc-hero-stills img { object-position: 62% 50%; }
+  .uc-hero-sticky { background-position: 62% 50%; }
   .uc-steps li { grid-template-columns: 34px 1fr; }
   .uc-footer ul:last-child { margin-left: 0; }
 }

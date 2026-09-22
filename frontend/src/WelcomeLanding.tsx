@@ -32,11 +32,11 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
-    const targets = [heroRef.current, ...SECTIONS.map((s) => document.getElementById(s.id))].filter(Boolean) as HTMLElement[];
+    const targets = [heroRef.current, ...SECTIONS.map((s) => document.getElementById(s.id)), document.getElementById('start')].filter(Boolean) as HTMLElement[];
     const io = new IntersectionObserver(
       (entries) => {
         const top = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (top) setActive(top.target === heroRef.current ? null : top.target.id);
+        if (top) setActive(top.target === heroRef.current || top.target.id === 'start' ? null : top.target.id);
       },
       { root, threshold: [0.2, 0.45, 0.7] }
     );

@@ -34,8 +34,9 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
 
   // reduced-motion 또는 영상 로드 실패: 3장의 스틸(스트림 내부 / 코어 / 완성 기기)이 진행률에 따라 전환.
   // 영상 실패 시에는 스크롤에 맞춰 아주 느리게 확대해 정지 화면처럼 보이지 않게 한다.
-  const stillA = useTransform(p, [0, 0.3, 0.4], [1, 1, 0]);
-  const stillB = useTransform(p, [0.3, 0.4, 0.65, 0.75], [0, 1, 1, 0]);
+  // 뒤 장을 지우지 않고 앞 장이 덮는 방식 — 전환 중 poster 가 비치지 않는다
+  const stillA = useTransform(p, [0, 1], [1, 1]);
+  const stillB = useTransform(p, [0.3, 0.4], [0, 1]);
   const stillC = useTransform(p, [0.65, 0.75], [0, 1]);
   const stillScale = useTransform(p, [0, 1], [1.06, 1]);
   const showStills = reduce || failed;
