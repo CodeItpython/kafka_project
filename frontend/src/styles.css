@@ -6586,6 +6586,7 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   overflow: hidden;
   background: #04050a url('/media/landing/hero.jpg') center / cover no-repeat;
 }
+.uc-hero-stills { position: absolute; inset: 0; transform-origin: 50% 50%; will-change: transform; }
 .uc-hero-video, .uc-hero-stills img {
   position: absolute;
   inset: 0;

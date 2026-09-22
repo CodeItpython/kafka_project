@@ -30,21 +30,18 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
   const ctaPointer = useTransform(cta, (v) => (v > 0.5 ? 'auto' : 'none'));
   const y3 = useTransform(p, [0.75, 0.9], [24, 0]);
 
-  // reduced-motion: 영상 대신 3장의 스틸이 진행률에 따라 부드럽게 전환
+  // reduced-motion 또는 영상 로드 실패: 3장의 스틸(스트림 내부 / 코어 / 완성 기기)이 진행률에 따라 전환.
+  // 영상 실패 시에는 스크롤에 맞춰 아주 느리게 확대해 정지 화면처럼 보이지 않게 한다.
   const stillA = useTransform(p, [0, 0.3, 0.4], [1, 1, 0]);
   const stillB = useTransform(p, [0.3, 0.4, 0.65, 0.75], [0, 1, 1, 0]);
   const stillC = useTransform(p, [0.65, 0.75], [0, 1]);
+  const stillScale = useTransform(p, [0, 1], [1.06, 1]);
+  const showStills = reduce || failed;
 
   return (
     <section className="uc-hero" ref={sectionRef} id="top" aria-label="KAFKATALK 소개 영상">
       <div className="uc-hero-sticky">
-        {reduce ? (
-          <div className="uc-hero-stills" aria-hidden>
-            <motion.img src={MEDIA.hero.stills[0]} alt="" style={{ opacity: stillA }} />
-            <motion.img src={MEDIA.hero.stills[1]} alt="" style={{ opacity: stillB }} />
-            <motion.img src={MEDIA.hero.stills[2]} alt="" style={{ opacity: stillC }} />
-          </div>
-        ) : (
+        {reduce ? null : (
           <>
             <video
               ref={videoRef}
@@ -67,6 +64,13 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
               </div>
             )}
           </>
+        )}
+        {showStills && (
+          <motion.div className="uc-hero-stills" aria-hidden style={{ scale: reduce ? 1 : stillScale }}>
+            <motion.img src={MEDIA.hero.stills[0]} alt="" style={{ opacity: stillA }} />
+            <motion.img src={MEDIA.hero.stills[1]} alt="" style={{ opacity: stillB }} />
+            <motion.img src={MEDIA.hero.stills[2]} alt="" style={{ opacity: stillC }} />
+          </motion.div>
         )}
         <div className="uc-hero-shade" aria-hidden />
 

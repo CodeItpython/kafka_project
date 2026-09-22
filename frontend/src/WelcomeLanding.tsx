@@ -13,7 +13,8 @@ import Footer from './landing/Footer';
 export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
-  const reduce = !!useReducedMotion();
+  // dev 서버에서 ?reduce 로 감소 모션 대체 화면을 미리 볼 수 있다 (프로덕션 빌드에서는 제거됨)
+  const reduce = !!useReducedMotion() || (import.meta.env.DEV && new URLSearchParams(window.location.search).has('reduce'));
   const [solid, setSolid] = useState(false);
   const [active, setActive] = useState<string | null>(null);
 

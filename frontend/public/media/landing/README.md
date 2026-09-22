@@ -2,6 +2,16 @@
 
 이 디렉터리의 파일은 `WelcomeLanding`이 그대로 참조한다 (`/media/landing/...`).
 
+## 현재 상태 (2026-09-23)
+
+- **영상 파일(`hero.mp4` 등)은 아직 없다.** 힉스필드 무료 플랜(잔액 46 크레딧)에서는 영상 모델이 전부 "Requires basic plan or higher"로 거부됨
+  (Kling 3.0 Turbo, Seedance 2.0, Seedance 2.0 Mini 모두 제출 단계에서 거부 — `get_cost`는 통과하므로 비용 조회로는 알 수 없음).
+- 대신 힉스필드 **Nano Banana Pro(2K)**로 만든 스틸 3장을 사용 중: `hero.jpg`/`hero-still-a.jpg`(키캡 조립), `hero-still-b.jpg`(스트림 통로), `hero-last.jpg`/`hero-still-c.jpg`(완성 기기).
+  영상이 없으면 `Hero`가 자동으로 이 3장을 스크롤 크로스페이드로 보여준다(`useScrubVideo.failed`). reduced-motion 대체 화면과 같은 경로.
+- 영상을 넣으려면: 아래 프롬프트로 생성 → `scripts/landing-media.sh qa <src> <dir>` 로 6항목 검수 → `scripts/landing-media.sh hero <src>` 로 재인코딩·poster·스틸 자동 생성.
+  힉스필드 MCP에는 "3일 무료 Plus 트라이얼(100 크레딧 ≈ Seedance 2.0 4편, 카드 필요, 3일 후 $49 자동 결제)"이 있다 — 결제 행위이므로 사용자가 직접 결정.
+  비용 참고: Seedance 2.0 720p 10s=45 / 6s=27, 1080p 8s=72; Kling 3.0 Turbo 1080p 10s=20; `bytedance_video_upscale` 1080p=0.1.
+
 | 파일 | 용도 | 규격 |
 |---|---|---|
 | `hero.mp4` / `hero.webm` | HERO FILM — 스크롤 스크러빙 | 1920×1080, 24fps+, 8~10s, 무음, H.264 `-g 6` + `+faststart` / VP9 `-g 6` |
