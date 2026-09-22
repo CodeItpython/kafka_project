@@ -5,39 +5,46 @@ import { MotionValue, useMotionValueEvent } from 'motion/react';
  * 스크롤 진행도(0..1)로 <video>의 currentTime을 스크러빙한다.
  *
  * 브라우저 seek 알고리즘의 함정을 피하는 규칙:
- *  - readyState < HAVE_METADATA(1) 이거나 seekable 범위가 없으면 대입이 조용히 무시된다 → 가드
+ *  - readyState < HAVE_METADATA(1) 이거나 seekable 범위가 없으면 대입이 조용히 무시된다 → 가드 + seekable 이 생기면 다시 깨운다
  *  - seeking 중 다시 대입하면 진행 중인 seek이 취소된다 → pending 1개만 유지, `seeked` 후 다음 seek 발행(chase 패턴)
+ *  - currentTime 은 대입 직후 요청값을 그대로 돌려주므로 "마지막 요청값"을 따로 기억해 중복 seek 을 판정한다
  *  - 목표값은 lerp로 따라가되, 멈추면 정확히 수렴시켜 되감기/빨리 감기가 어긋나지 않게 한다
  */
 export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
-  const [buffered, setBuffered] = useState(0); // 0..1
+  const [buffered, setBuffered] = useState(0); // 0..1, 버퍼된 구간 합
   const [failed, setFailed] = useState(false); // 모든 소스 로드 실패 → poster 만 남긴다
   const target = useRef(0);
   const current = useRef(0);
   const seekPending = useRef(false);
   const seekIssuedAt = useRef(0);
+  const lastRequested = useRef(NaN);
   const lastTick = useRef(0);
   const raf = useRef(0);
 
   const schedule = () => {
+    if (!enabled) return;
     if (!raf.current) raf.current = requestAnimationFrame(tick);
   };
 
   const trySeek = () => {
     const video = videoRef.current;
-    if (!video || !enabled) return;
+    if (!video) return;
     if (video.readyState < 1 || !video.seekable.length || !Number.isFinite(video.duration)) return;
     const now = performance.now();
-    // 드물게 seeked 가 오지 않는 경우(모바일 Safari)를 위한 데드락 해제
-    if (seekPending.current && now - seekIssuedAt.current > 300) seekPending.current = false;
+    // 드물게 seeked 가 오지 않는 경우(모바일 Safari)를 위한 데드락 해제 — 다음 판정이 통과하도록 기억값을 지운다
+    if (seekPending.current && now - seekIssuedAt.current > 300) {
+      seekPending.current = false;
+      lastRequested.current = NaN;
+    }
     if (seekPending.current) return;
     const end = video.seekable.end(video.seekable.length - 1);
     const t = Math.min(end - 0.001, current.current * video.duration);
-    if (Math.abs(video.currentTime - t) < 1 / 120) return;
+    if (Math.abs(lastRequested.current - t) < 1 / 120) return;
     seekPending.current = true;
     seekIssuedAt.current = now;
+    lastRequested.current = t;
     video.currentTime = t;
   };
 
@@ -63,11 +70,19 @@ export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !enabled) {
+      return () => {
+        if (raf.current) cancelAnimationFrame(raf.current);
+        raf.current = 0;
+      };
+    }
+    const wake = () => {
+      target.current = Math.min(1, Math.max(0, progress.get()));
+      schedule(); // 메타데이터·seekable·버퍼가 생길 때마다 현재 스크롤 위치 프레임을 다시 시도
+    };
     const onMeta = () => {
       setReady(true);
-      target.current = Math.min(1, Math.max(0, progress.get()));
-      schedule(); // 메타데이터가 오면 현재 스크롤 위치 프레임을 즉시 표시
+      wake();
     };
     const onSeeked = () => {
       seekPending.current = false;
@@ -75,7 +90,10 @@ export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
     };
     const onProgress = () => {
       if (!Number.isFinite(video.duration) || !video.buffered.length) return;
-      setBuffered(Math.min(1, video.buffered.end(video.buffered.length - 1) / video.duration));
+      let sum = 0;
+      for (let i = 0; i < video.buffered.length; i += 1) sum += video.buffered.end(i) - video.buffered.start(i);
+      setBuffered(Math.min(1, sum / video.duration));
+      wake();
     };
     // <source> 자식을 쓰면 마지막 source 에서 error 가 나고 video 는 NETWORK_NO_SOURCE(3) 가 된다
     const sources = Array.from(video.querySelectorAll('source'));
@@ -83,6 +101,9 @@ export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
       if (video.networkState === 3 || video.error) setFailed(true);
     };
     video.addEventListener('loadedmetadata', onMeta);
+    video.addEventListener('loadeddata', wake);
+    video.addEventListener('durationchange', wake);
+    video.addEventListener('canplay', wake);
     video.addEventListener('seeked', onSeeked);
     video.addEventListener('progress', onProgress);
     video.addEventListener('canplaythrough', onProgress);
@@ -92,6 +113,9 @@ export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
     if (video.networkState === 3) setFailed(true);
     return () => {
       video.removeEventListener('loadedmetadata', onMeta);
+      video.removeEventListener('loadeddata', wake);
+      video.removeEventListener('durationchange', wake);
+      video.removeEventListener('canplay', wake);
       video.removeEventListener('seeked', onSeeked);
       video.removeEventListener('progress', onProgress);
       video.removeEventListener('canplaythrough', onProgress);

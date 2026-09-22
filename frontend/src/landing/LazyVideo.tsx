@@ -2,22 +2,22 @@ import { RefObject, useEffect, useRef, useState } from 'react';
 
 type Src = { mp4: string; webm: string; poster: string };
 
-// 뷰포트에 가까워질 때만 소스를 붙이는 무음 루프 영상. 히어로 이외의 영상은 전부 이걸 쓴다.
+// 뷰포트에 가까워질 때만 소스를 붙이는 무음 루프 영상(장식). 히어로 이외의 영상은 전부 이걸 쓴다.
+// 5초 넘게 움직이는 콘텐츠에는 멈출 수단이 있어야 하므로(WCAG 2.2.2) 작은 토글을 함께 렌더한다.
 export default function LazyVideo({
   container,
   src,
   className,
-  label,
   reduce
 }: {
   container: RefObject<HTMLDivElement | null>;
   src: Src;
   className?: string;
-  label: string;
   reduce: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [near, setNear] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -43,24 +43,33 @@ export default function LazyVideo({
     el.play().catch(() => {});
   }, [near]);
 
+  const toggle = () => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.paused) {
+      el.play().catch(() => {});
+      setPaused(false);
+    } else {
+      el.pause();
+      setPaused(true);
+    }
+  };
+
   return (
-    <video
-      ref={ref}
-      className={className}
-      poster={src.poster}
-      preload="none"
-      muted
-      loop
-      playsInline
-      disablePictureInPicture
-      aria-label={label}
-    >
+    <div className={`uc-video${className ? ` ${className}` : ''}`}>
+      <video ref={ref} poster={src.poster} preload="none" muted loop playsInline disablePictureInPicture aria-hidden tabIndex={-1}>
+        {near && !reduce && (
+          <>
+            <source src={src.webm} type="video/webm" />
+            <source src={src.mp4} type="video/mp4" />
+          </>
+        )}
+      </video>
       {near && !reduce && (
-        <>
-          <source src={src.webm} type="video/webm" />
-          <source src={src.mp4} type="video/mp4" />
-        </>
+        <button type="button" className="uc-video-toggle" onClick={toggle} aria-pressed={paused} aria-label={paused ? '배경 영상 재생' : '배경 영상 일시정지'}>
+          {paused ? 'PLAY' : 'PAUSE'}
+        </button>
       )}
-    </video>
+    </div>
   );
 }

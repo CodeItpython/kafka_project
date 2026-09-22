@@ -50,12 +50,15 @@ export default function WelcomeLanding({ onStart }: { onStart: () => void }) {
       const el = id === 'top' ? heroRef.current : document.getElementById(id);
       if (!root || !el) return;
       root.scrollTo({ top: el.offsetTop, behavior: reduce ? 'auto' : 'smooth' });
+      // 키보드 사용자를 위해 포커스도 함께 옮긴다 (섹션은 프로그램적 포커스만 받는다)
+      el.tabIndex = -1;
+      el.focus({ preventScroll: true });
     },
     [reduce]
   );
 
   return (
-    <div className="uc" ref={containerRef}>
+    <div className="uc" ref={containerRef} tabIndex={0}>
       <motion.span className="uc-progress" style={{ scaleX: scrollYProgress }} aria-hidden />
       <Nav solid={solid} active={active} onStart={onStart} onJump={jump} />
       <main>

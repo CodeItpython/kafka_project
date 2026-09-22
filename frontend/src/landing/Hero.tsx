@@ -28,6 +28,8 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
   const s3 = useTransform(p, [0.75, 0.86], [0, 1]);
   const cta = useTransform(p, [0.85, 0.94], [0, 1]);
   const ctaPointer = useTransform(cta, (v) => (v > 0.5 ? 'auto' : 'none'));
+  // 보이지 않는 동안엔 탭 순서에서도 빠지도록 visibility 로 함께 숨긴다
+  const ctaVisibility = useTransform(cta, (v) => (v > 0.02 ? 'visible' : 'hidden'));
   const y3 = useTransform(p, [0.75, 0.9], [24, 0]);
 
   // reduced-motion 또는 영상 로드 실패: 3장의 스틸(스트림 내부 / 코어 / 완성 기기)이 진행률에 따라 전환.
@@ -45,7 +47,7 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
           <>
             <video
               ref={videoRef}
-              className={`uc-hero-video${ready ? ' ready' : ''}`}
+              className="uc-hero-video"
               poster={MEDIA.hero.poster}
               preload="auto"
               muted
@@ -58,9 +60,9 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
               <source src={lowBw ? MEDIA.hero.mp4Mobile : MEDIA.hero.mp4} type="video/mp4" />
             </video>
             {!failed && buffered < 0.999 && (
-              <div className="uc-hero-load" role="status" aria-live="polite">
+              <div className="uc-hero-load" aria-hidden>
                 <span>{ready ? 'BUFFERING' : 'LOADING'}</span>
-                <i style={{ transform: `scaleX(${Math.max(0.04, buffered)})` }} aria-hidden />
+                <i style={{ transform: `scaleX(${Math.max(0.04, buffered)})` }} />
               </div>
             )}
           </>
@@ -81,7 +83,7 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
           <p className="uc-eyebrow">KAFKATALK</p>
           <h1>연결은,<br />보이지 않는 곳에서<br />시작된다.</h1>
           <p className="uc-lead">실시간 메신저 · 뉴스 · 쇼핑 · 영상통화 — ONE APP</p>
-          <motion.div className="uc-actions" style={{ opacity: cta, pointerEvents: ctaPointer }}>
+          <motion.div className="uc-actions" style={{ opacity: cta, pointerEvents: ctaPointer, visibility: ctaVisibility }}>
             <button type="button" className="uc-pill solid lg" onClick={onStart}>시작하기 <ArrowRight size={16} aria-hidden /></button>
             <button type="button" className="uc-pill lg" onClick={onExplore}>둘러보기</button>
           </motion.div>

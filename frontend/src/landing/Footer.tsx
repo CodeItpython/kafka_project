@@ -5,9 +5,10 @@ export default function Footer() {
       <ul aria-label="제품">
         {['대화', '뉴스', '쇼핑', '게임', '통화'].map((t) => <li key={t}>{t}</li>)}
       </ul>
+      {/* 정책 페이지는 아직 없어 링크 대신 텍스트로 둔다 — 페이지가 생기면 <a> 로 바꾼다 */}
       <ul aria-label="정책">
-        <li><a href="#privacy" onClick={(e) => e.preventDefault()}>개인정보 처리방침</a></li>
-        <li><a href="#terms" onClick={(e) => e.preventDefault()}>이용약관</a></li>
+        <li>개인정보 처리방침</li>
+        <li>이용약관</li>
       </ul>
     </footer>
   );

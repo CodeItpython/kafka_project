@@ -6493,6 +6493,7 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   --uc-pad: 28px;
 }
 .uc::-webkit-scrollbar { display: none; }
+.uc:focus, .uc-sec:focus, .uc-hero:focus { outline: none; }
 .uc main { display: block; }
 /* 아주 미세한 필름 그레인 */
 .uc-grain {
@@ -6677,36 +6678,55 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
 /* THE STREAM FILM — 영상 60%+ , 옆에 단계 */
 .uc-film-head { max-width: 1280px; margin: 0 auto 44px; }
 .uc-film-stage { display: grid; grid-template-columns: minmax(0, 62fr) minmax(0, 38fr); gap: 44px; max-width: 1280px; margin: 0 auto; align-items: start; }
-.uc-film-video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; border: 1px solid var(--uc-line); }
+.uc-video { position: relative; }
+.uc-video > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.uc-film-video { width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--uc-line); }
+.uc-film-video > video { position: absolute; inset: 0; }
+.uc-video-toggle {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(4, 5, 10, 0.55);
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-family: var(--uc-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+}
+.uc-video-toggle:hover { background: rgba(4, 5, 10, 0.8); color: #fff; }
+.uc-video-toggle:focus-visible { outline: 2px solid var(--uc-blue); outline-offset: 2px; }
 .uc-steps { position: relative; list-style: none; margin: 0; padding: 4px 0 4px 28px; display: grid; gap: 34px; }
 .uc-steps-line { position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--uc-blue); transform-origin: 50% 0; }
 .uc-steps li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; }
 
 /* THE ROOM — 배경 영상 + 호버 설명 */
 .uc-room { min-height: 100vh; display: flex; align-items: center; overflow: hidden; }
-.uc-room-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.uc-room-video { position: absolute; inset: 0; }
+.uc-room-video > video { position: absolute; inset: 0; }
+.uc-room .uc-video-toggle { right: var(--uc-pad); bottom: 18px; }
 .uc-room-shade { position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(4, 5, 10, 0.94) 0%, rgba(4, 5, 10, 0.66) 52%, rgba(4, 5, 10, 0.34) 100%); }
 .uc-room-grid { position: relative; z-index: 2; width: 100%; }
 .uc-room-list { list-style: none; margin: 0; padding: 0; }
 .uc-room-item {
   display: grid;
   gap: 8px;
-  width: 100%;
   padding: 22px 0;
-  border: 0;
   border-top: 1px solid var(--uc-line);
-  background: none;
   color: #fff;
-  font: inherit;
-  text-align: left;
   cursor: default;
 }
 .uc-room-list li:last-child .uc-room-item { border-bottom: 1px solid var(--uc-line); }
 .uc-room-item span { font-size: clamp(20px, 2.4vw, 30px); font-weight: 700; letter-spacing: -0.02em; transition: color 0.2s; }
 .uc-room-item small { display: block; max-height: 0; overflow: hidden; opacity: 0; font-size: 14px; line-height: 1.6; color: var(--uc-dim); transition: max-height 0.35s var(--uc-ease), opacity 0.3s; }
-.uc-room-item:hover small, .uc-room-item:focus-visible small { max-height: 80px; opacity: 1; }
-.uc-room-item:hover span { color: var(--uc-blue); }
-@media (hover: none) { .uc-room-item small { max-height: 80px; opacity: 1; } }
+.uc-room-item:hover small, .uc-room-item:focus-visible small, .uc-room-item:focus-within small { max-height: 12em; opacity: 1; }
+.uc-room-item:hover span, .uc-room-item:focus-visible span { color: var(--uc-blue); }
+@media (hover: none) { .uc-room-item small { max-height: 12em; opacity: 1; } }
 
 /* GET STARTED */
 .uc-start { display: grid; gap: 44px; background: #000; padding-bottom: 120px; }

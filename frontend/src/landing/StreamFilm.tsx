@@ -34,7 +34,7 @@ export default function StreamFilm({ container, reduce }: { container: RefObject
         <p className="uc-body">보낸 것이 아니라, 도착한 것이다.</p>
       </div>
       <div className="uc-film-stage">
-        <LazyVideo container={container} src={MEDIA.stream} className="uc-film-video" label="두 기기 사이를 지나는 메시지 펄스" reduce={reduce} />
+        <LazyVideo container={container} src={MEDIA.stream} className="uc-film-video" reduce={reduce} />
         <ol className="uc-steps" aria-label="전달 과정">
           <motion.i className="uc-steps-line" style={{ scaleY: reduce ? 1 : line }} aria-hidden />
           {STEPS.map((s, i) => <Step key={s.k} p={p} at={0.1 + i * 0.22} idx={i} k={s.k} d={s.d} reduce={reduce} />)}
