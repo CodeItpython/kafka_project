@@ -19,10 +19,11 @@ function useStage(p: MotionValue<number>, from: number, to: number, fadeIn = 0.0
 
 export default function Hero({ container, sectionRef, reduce, onStart, onExplore }: Props) {
   const { scrollYProgress: p } = useScroll({ container, target: sectionRef, offset: ['start start', 'end end'] });
-  const { videoRef, ready, buffered } = useScrubVideo(p, !reduce);
+  const { videoRef, ready, buffered, failed } = useScrubVideo(p, !reduce);
   const lowBw = useMemo(prefersLowBandwidth, []);
 
-  const s1 = useStage(p, 0.0, 0.3, 0.02, 0.08);
+  // 첫 카피는 0%부터 보이고 30% 직전에 사라진다
+  const s1 = useTransform(p, [0, 0.22, 0.3], [1, 1, 0]);
   const s2 = useStage(p, 0.35, 0.65, 0.08, 0.1);
   const s3 = useTransform(p, [0.75, 0.86], [0, 1]);
   const cta = useTransform(p, [0.85, 0.94], [0, 1]);
@@ -59,7 +60,7 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
               {!lowBw && <source src={MEDIA.hero.webm} type="video/webm" />}
               <source src={lowBw ? MEDIA.hero.mp4Mobile : MEDIA.hero.mp4} type="video/mp4" />
             </video>
-            {buffered < 0.999 && (
+            {!failed && buffered < 0.999 && (
               <div className="uc-hero-load" role="status" aria-live="polite">
                 <span>{ready ? 'BUFFERING' : 'LOADING'}</span>
                 <i style={{ transform: `scaleX(${Math.max(0.04, buffered)})` }} aria-hidden />

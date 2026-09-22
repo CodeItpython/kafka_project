@@ -13,6 +13,7 @@ export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [buffered, setBuffered] = useState(0); // 0..1
+  const [failed, setFailed] = useState(false); // 모든 소스 로드 실패 → poster 만 남긴다
   const target = useRef(0);
   const current = useRef(0);
   const seekPending = useRef(false);
@@ -76,21 +77,31 @@ export function useScrubVideo(progress: MotionValue<number>, enabled = true) {
       if (!Number.isFinite(video.duration) || !video.buffered.length) return;
       setBuffered(Math.min(1, video.buffered.end(video.buffered.length - 1) / video.duration));
     };
+    // <source> 자식을 쓰면 마지막 source 에서 error 가 나고 video 는 NETWORK_NO_SOURCE(3) 가 된다
+    const sources = Array.from(video.querySelectorAll('source'));
+    const onError = () => {
+      if (video.networkState === 3 || video.error) setFailed(true);
+    };
     video.addEventListener('loadedmetadata', onMeta);
     video.addEventListener('seeked', onSeeked);
     video.addEventListener('progress', onProgress);
     video.addEventListener('canplaythrough', onProgress);
+    video.addEventListener('error', onError);
+    sources.forEach((s) => s.addEventListener('error', onError));
     if (video.readyState >= 1) onMeta();
+    if (video.networkState === 3) setFailed(true);
     return () => {
       video.removeEventListener('loadedmetadata', onMeta);
       video.removeEventListener('seeked', onSeeked);
       video.removeEventListener('progress', onProgress);
       video.removeEventListener('canplaythrough', onProgress);
+      video.removeEventListener('error', onError);
+      sources.forEach((s) => s.removeEventListener('error', onError));
       if (raf.current) cancelAnimationFrame(raf.current);
       raf.current = 0;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
-  return { videoRef, ready, buffered };
+  return { videoRef, ready, buffered, failed };
 }
