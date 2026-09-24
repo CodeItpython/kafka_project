@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { Component, ReactNode, Suspense, useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import { useGLTF } from '@react-three/drei';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import * as THREE from 'three';
 import { heroState, ramp } from './heroState';
@@ -141,13 +142,85 @@ function makeScreenTexture() {
   return tex;
 }
 
+// 폰 몸체: 오픈소스 GLB(heygen-com/hyperframes, Apache-2.0 — public/media/landing/LICENSES.md)를 그래파이트로 재도색하고
+// 로고·카메라·버튼 등 브랜드 식별 부품은 숨겨 일반적인 얇은 스마트폰 형태로만 쓴다. 로드 실패 시 RoundedBox 로 대체.
+const PHONE_GLB = '/media/landing/phone.glb';
+const HIDE_NODE = /^(apple-logo|camera-|lens-|flash-|lidar|action-button|camera-control|microphone|usb-c|antenna-)/;
+const PHONE_H = 1.54;
+// 씬 청크가 로드되는 즉시 GLB 도 받아 두어, 3막 진입 시 멈춤이 없게
+useGLTF.preload(PHONE_GLB);
+
+function GlbBody({ onReady }: { onReady: (frontZ: number) => void }) {
+  const { scene } = useGLTF(PHONE_GLB);
+  const body = useMemo(() => {
+    const root = scene.clone(true);
+    const graphite = new THREE.MeshStandardMaterial({ color: '#262c3a', roughness: 0.32, metalness: 0.88 });
+    const band = new THREE.MeshStandardMaterial({ color: '#1a1f2a', roughness: 0.4, metalness: 0.7 });
+    const glass = new THREE.MeshStandardMaterial({ color: '#05070c', roughness: 0.12, metalness: 0.1 });
+    root.traverse((o) => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      const mesh = o as THREE.Mesh;
+      if (HIDE_NODE.test(mesh.name)) { mesh.visible = false; return; }
+      const name = (mesh.material as THREE.Material)?.name ?? '';
+      mesh.material = /ceramic-shield-front|lens-glass|sensor/.test(name) ? glass : /antenna/.test(name) ? band : graphite;
+    });
+    // 높이를 PHONE_H 에 맞춰 스케일 (원본은 미터 단위 ≈ 0.15m)
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const s = PHONE_H / size.y;
+    root.scale.setScalar(s);
+    const center = box.getCenter(new THREE.Vector3()).multiplyScalar(s);
+    root.position.set(-center.x, -center.y, -center.z);
+    // 앞면(front-glass)이 +z(카메라 쪽)를 보도록 맞춘다
+    let frontZ = size.z * s * 0.5;
+    const front = root.getObjectByName('front-glass');
+    if (front) {
+      root.updateMatrixWorld(true);
+      const fz = new THREE.Box3().setFromObject(front).getCenter(new THREE.Vector3()).z;
+      if (fz < 0) {
+        root.rotation.y = Math.PI;
+        root.position.x = center.x;
+        root.position.z = center.z;
+      }
+      frontZ = Math.abs(fz);
+    }
+    return { root, frontZ };
+  }, [scene]);
+  useEffect(() => onReady(body.frontZ), [body, onReady]);
+  return <primitive object={body.root} />;
+}
+
+function BoxBody() {
+  const bodyGeo = useMemo(() => new RoundedBoxGeometry(0.74, PHONE_H, 0.075, 4, 0.085), []);
+  useEffect(() => () => bodyGeo.dispose(), [bodyGeo]);
+  return (
+    <mesh geometry={bodyGeo}>
+      <meshStandardMaterial color="#262c3a" roughness={0.3} metalness={0.85} />
+    </mesh>
+  );
+}
+
+class BodyBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? <BoxBody /> : this.props.children;
+  }
+}
+
 function Phone() {
   const groupRef = useRef<THREE.Group>(null);
   const screenMat = useRef<THREE.MeshStandardMaterial>(null);
   const sweepRef = useRef<THREE.PointLight>(null);
-  const bodyGeo = useMemo(() => new RoundedBoxGeometry(0.74, 1.54, 0.075, 4, 0.085), []);
   const screenTex = useMemo(makeScreenTexture, []);
-  useEffect(() => () => { bodyGeo.dispose(); screenTex.dispose(); }, [bodyGeo, screenTex]);
+  const screenRef = useRef<THREE.Mesh>(null);
+  useEffect(() => () => screenTex.dispose(), [screenTex]);
+  // GLB 앞면 위치를 알게 되면 화면 평면을 그 바로 앞으로 옮긴다
+  const onBodyReady = useMemo(() => (frontZ: number) => {
+    if (screenRef.current) screenRef.current.position.z = frontZ + 0.004;
+  }, []);
 
   useFrame((state) => {
     const p = heroState.current;
@@ -174,10 +247,12 @@ function Phone() {
 
   return (
     <group ref={groupRef} visible={false}>
-      <mesh geometry={bodyGeo}>
-        <meshStandardMaterial color="#262c3a" roughness={0.3} metalness={0.85} />
-      </mesh>
-      <mesh position={[0, 0, 0.039]}>
+      <BodyBoundary>
+        <Suspense fallback={<BoxBody />}>
+          <GlbBody onReady={onBodyReady} />
+        </Suspense>
+      </BodyBoundary>
+      <mesh ref={screenRef} position={[0, 0, 0.044]}>
         <planeGeometry args={[0.67, 1.45]} />
         <meshStandardMaterial ref={screenMat} color="#000000" emissive="#ffffff" emissiveMap={screenTex} emissiveIntensity={0} roughness={0.15} metalness={0} />
       </mesh>
