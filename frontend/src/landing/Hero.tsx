@@ -1,8 +1,21 @@
-import { RefObject, useMemo } from 'react';
-import { motion, MotionValue, useScroll, useTransform } from 'motion/react';
+import { Component, ReactNode, RefObject, Suspense, lazy, useMemo } from 'react';
+import { motion, MotionValue, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { MEDIA, prefersLowBandwidth } from './media';
 import { useScrubVideo } from './useScrubVideo';
+import { heroState } from './scene/heroState';
+
+// 영상이 없을 때만 내려받는 실시간 3D 히어로(three.js). WebGL 실패 시 스틸 폴백으로 넘긴다.
+const HeroScene = lazy(() => import('./scene/HeroScene'));
+class SceneBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 type Props = {
   container: RefObject<HTMLDivElement | null>;
@@ -39,16 +52,28 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
   const stillB = useTransform(p, [0.3, 0.4], [0, 1]);
   const stillC = useTransform(p, [0.65, 0.75], [0, 1]);
   const stillScale = useTransform(p, [0, 1], [1.06, 1]);
-  const showStills = reduce || failed;
+  // 영상 없음 + 모션 허용 → 실시간 3D. reduced-motion → 스틸.
+  const show3d = failed && !reduce;
+  useMotionValueEvent(p, 'change', (v) => {
+    heroState.target = Math.min(1, Math.max(0, v));
+  });
+  const stills = (
+    <motion.div className="uc-hero-stills" aria-hidden style={{ scale: reduce ? 1 : stillScale }}>
+      <motion.img src={MEDIA.hero.stills[0]} alt="" style={{ opacity: stillA }} />
+      <motion.img src={MEDIA.hero.stills[1]} alt="" style={{ opacity: stillB }} />
+      <motion.img src={MEDIA.hero.stills[2]} alt="" style={{ opacity: stillC }} />
+    </motion.div>
+  );
 
   return (
     <section className="uc-hero" ref={sectionRef} id="top" aria-label="KAFKATALK 소개 영상">
-      <div className="uc-hero-sticky">
+      <div className={`uc-hero-sticky${show3d ? ' is-3d' : ''}`}>
         {reduce ? null : (
           <>
             <video
               ref={videoRef}
               className="uc-hero-video"
+              hidden={failed}
               poster={MEDIA.hero.poster}
               preload="auto"
               muted
@@ -68,12 +93,13 @@ export default function Hero({ container, sectionRef, reduce, onStart, onExplore
             )}
           </>
         )}
-        {showStills && (
-          <motion.div className="uc-hero-stills" aria-hidden style={{ scale: reduce ? 1 : stillScale }}>
-            <motion.img src={MEDIA.hero.stills[0]} alt="" style={{ opacity: stillA }} />
-            <motion.img src={MEDIA.hero.stills[1]} alt="" style={{ opacity: stillB }} />
-            <motion.img src={MEDIA.hero.stills[2]} alt="" style={{ opacity: stillC }} />
-          </motion.div>
+        {reduce && stills}
+        {show3d && (
+          <SceneBoundary fallback={stills}>
+            <Suspense fallback={stills}>
+              <HeroScene />
+            </Suspense>
+          </SceneBoundary>
         )}
         <div className="uc-hero-shade" aria-hidden />
 

@@ -6590,6 +6590,10 @@ button.message-media { border: 0; padding: 0; cursor: pointer; font: inherit; }
   background: #04050a url('/media/landing/hero.jpg') center / cover no-repeat;
 }
 .uc-hero-stills { position: absolute; inset: 0; transform-origin: 50% 50%; will-change: transform; }
+.uc-hero-sticky.is-3d { background-image: radial-gradient(70% 60% at 30% 40%, rgba(61, 109, 255, 0.10), transparent 70%); }
+.uc-hero-video[hidden] { display: none; }
+.uc-hero-3d { position: absolute; inset: 0; }
+.uc-hero-3d canvas { display: block; width: 100% !important; height: 100% !important; }
 .uc-hero-video, .uc-hero-stills img {
   position: absolute;
   inset: 0;
