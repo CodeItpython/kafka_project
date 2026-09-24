@@ -196,6 +196,12 @@ function Rig() {
     const p = heroState.current;
     CAM_PATH.getPointAt(p, pos);
     LOOK_PATH.getPointAt(p, look);
+    // 세로 화면(aspect<1)은 수평 시야가 좁다: 카메라를 뒤로 빼고, 마지막엔 폰을 가운데·위쪽에 둔다
+    const narrow = THREE.MathUtils.clamp((1.05 - state.viewport.aspect) / 0.55, 0, 1);
+    pos.z += narrow * 1.6;
+    pos.y += narrow * 0.2;
+    look.x += narrow * 0.62 * ramp(p, 0.6, 0.9);
+    look.y -= narrow * 0.55 * ramp(p, 0.6, 0.9);
     state.camera.position.lerp(pos, Math.min(1, delta * 8));
     state.camera.lookAt(look);
   });
